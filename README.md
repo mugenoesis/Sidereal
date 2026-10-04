@@ -41,7 +41,9 @@
 
 ## Requirements
 
-- A DJI Osmo Pro with a Zenmuse X5 (other MSDK v4 Osmo models may work but haven't been tested)
+- A DJI Osmo Pro with a Zenmuse X5. Only the DJI MFT 15mm f/1.7 lens has
+  been tested so far, and other MSDK v4 Osmo models may work but haven't
+  been tried.
 - An Android phone running Android 6.0 (API 23) or newer. The app needs real
   hardware, so it won't work in an emulator.
 - A DJI developer App Key (free)
@@ -73,18 +75,51 @@ tests in `app/src/androidTest` are hardware probes that need a connected Osmo.
    live view appears.
 3. Choose a gimbal mode (Manual, A→B, or Face Track) from the control bar.
 
-## Known limitations
+## Feature status
 
-- **Stopping a video recording from the app is unreliable.** On the X5 the
-  camera usually ignores the SDK's stop command, so press the physical record
-  button on the Osmo to stop. The shutter button turns orange while the app
-  is waiting for the camera to actually stop.
-- Digital zoom and auto-zoom are implemented but untested, because the X5
-  doesn't support digital zoom.
-- Some value ranges (sharpness/contrast/saturation, video resolution and
-  frame-rate combinations) are best guesses, because the SDK provides no way
-  to query them.
-- The face-tracking PID gains haven't been tuned on real hardware yet.
+Everything below was tested on an Osmo Pro with a Zenmuse X5 and the DJI
+MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
+
+### ✅ Working
+
+- Connecting over WiFi, DJI SDK registration and live preview
+- Virtual joystick gimbal control and double-tap recenter
+- A→B timed moves
+- Face detection and tap-to-lock
+- Exposure modes P / A / S / M with ISO, shutter, aperture and EV
+- White balance, metering modes and tap-to-spot-meter
+- Focus modes and tap-to-focus
+- Sharpness, contrast and saturation
+- Photo format and aspect ratio
+- Locking out settings the camera can't change mid-recording
+- Starting video recording and taking photos from the app
+- Browsing and downloading photos and videos from the SD card
+
+### 🧪 Beta
+
+- **Face tracking:** follows a locked face, but it still needs tuning to be
+  smooth and accurate.
+- **Software continuous autofocus:** works for photos, but it hunts a
+  little even once settled. It hasn't been tested while recording video or
+  in bright light.
+- **Phone audio recording:** records from the phone's mic or a Bluetooth
+  mic alongside the video. Lining the audio up with the video is a manual
+  job in your editor for now.
+- **Histogram:** shows live data, but the graph's scaling is a best guess.
+- **Video resolution and frame rate, and image tuning ranges:** the
+  options are best guesses, because the SDK has no way to ask the camera
+  which values it supports. Unsupported values show an error message.
+- **Face tracking after the subject leaves the frame:** the tracker doesn't
+  recognise the same person when they come back, so tap them again to
+  relock.
+
+### ❌ Not working
+
+- **Stopping a video recording from the app:** the X5 usually ignores the
+  stop command. Press the physical record button on the Osmo to stop. The
+  shutter button turns orange while the app waits for the camera to stop.
+- **Digital zoom and auto-zoom:** they're built but untested, because the
+  X5 doesn't support digital zoom.
 
 ## Project layout
 
