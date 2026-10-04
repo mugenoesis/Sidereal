@@ -281,6 +281,7 @@ class MainActivity : AppCompatActivity() {
         // screen dim or lock out from under the operator.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
+        SystemBars.applyInsets(this, immersive = true)
 
         gimbalModeController = GimbalModeController(
             manualController, timedMoveController, faceTrackingController

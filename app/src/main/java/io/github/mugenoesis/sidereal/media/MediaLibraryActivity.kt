@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.github.mugenoesis.sidereal.R
+import io.github.mugenoesis.sidereal.SystemBars
 import io.github.mugenoesis.sidereal.camera.DownloadStatus
 import io.github.mugenoesis.sidereal.camera.MediaLibraryController
 import io.github.mugenoesis.sidereal.camera.MediaLoadState
@@ -63,6 +64,7 @@ class MediaLibraryActivity : AppCompatActivity() {
         // wrong time for the screen to be allowed to sleep.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_media_library)
+        SystemBars.applyInsets(this, immersive = false)
 
         adapter = MediaFileAdapter(onItemClick = ::onItemTapped)
         findViewById<RecyclerView>(R.id.mediaRecyclerView).apply {
