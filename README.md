@@ -65,6 +65,18 @@
    Or just open the project in Android Studio and set *Settings → Build Tools →
    Gradle → Gradle JDK* to a JDK 17.
 
+### Release builds
+
+To make a signed release, copy `keystore.properties.example` to
+`keystore.properties` (gitignored), point it at your own keystore, then run:
+
+```sh
+./gradlew assembleRelease   # signed APK, for GitHub releases
+./gradlew bundleRelease     # signed app bundle (.aab), for Google Play
+```
+
+Without a `keystore.properties`, release builds are produced unsigned.
+
 Run the unit tests with `./gradlew testDebugUnitTest`. The instrumented
 tests in `app/src/androidTest` are hardware probes that need a connected Osmo.
 
