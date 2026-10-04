@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        // DJI Mobile SDK v4 artifacts (com.dji:dji-sdk / dji-sdk-provided) are
+        // published directly to Maven Central — no separate DJI repo needed.
+        mavenCentral()
+    }
+}
+
+rootProject.name = "Sidereal"
+include ':app'

@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- Point A to point B path glyph for the timed-move mode -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M5,17m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M19,7m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M7.2,15.4l9.6,-8.8 1.4,1.4 -9.6,8.8z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M14.5,5.8l4.3,0.6 -0.6,4.3 -1.6,-0.2 0.4,-2.7 -2.7,-0.4z" />
+</vector>

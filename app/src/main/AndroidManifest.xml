@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Required by DJI MSDK -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- Only for AudioSourceController's Bluetooth-mic device name lookup
+         (API 31+) - not needed by the DJI MSDK itself. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.USB_PERMISSION" />
+
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <application
+        android:name=".SiderealApp"
+        android:allowBackup="false"
+        android:label="Sidereal"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"
+        tools:targetApi="34">
+
+        <!--
+          DJI MSDK v4's internal HTTP client (dji.thirdparty.afinal.FinalHttp)
+          still uses the legacy org.apache.http.* classes, which Android
+          stopped putting on the default classpath from API 28 onward.
+          Without this, DJISDKManager.registerApp() throws
+          NoClassDefFoundError on BasicHttpParams and crashes at launch.
+        -->
+        <uses-library
+            android:name="org.apache.http.legacy"
+            android:required="false" />
+
+        <!--
+          DJI App Key goes here. Get one from developer.dji.com, tied to this
+          applicationId + your release/debug signing cert SHA256.
+          NEVER hardcode this in source; this manifest placeholder reads from
+          gradle.properties / local.properties so it's not committed to git.
+        -->
+        <meta-data
+            android:name="com.dji.sdk.API_KEY"
+            android:value="${DJI_APP_KEY}" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|keyboardHidden|screenSize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".media.MediaLibraryActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape" />
+
+        <!-- Required by DJI MSDK's internal USB accessory handling -->
+        <activity android:name="dji.sdk.sdkmanager.DJIAoaControllerActivity"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

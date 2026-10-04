@@ -1,0 +1,116 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'io.github.mugenoesis.sidereal'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.github.mugenoesis.sidereal"
+        // DJI MSDK v4 / legacy Osmo hardware plays safest on older API levels.
+        // Bump minSdk if you confirm your target phones are fine, but don't go below 23.
+        minSdk 23
+        targetSdk 33
+        versionCode 1
+        versionName "0.1"
+
+        manifestPlaceholders = [DJI_APP_KEY: DJI_APP_KEY]
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    // DJI MSDK v4 ships native .so libs per-ABI; without this you'll get
+    // "no implementation found" crashes at runtime on some devices.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    testOptions {
+        unitTests {
+            // Every controller's error path calls android.util.Log.w(...) -
+            // AGP's default android.jar stub for unit tests throws
+            // RuntimeException("not mocked") on any android.* call rather
+            // than silently no-opping. This makes Log/etc. calls return
+            // harmless defaults instead, which is all any test here needs
+            // (nothing asserts on log output).
+            returnDefaultValues = true
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'com.google.android.material:material:1.11.0'
+
+    // --- DJI Mobile SDK v4 ---
+    // v4 is the last MSDK line with Zenmuse X5 / original Osmo support.
+    // Tried pinning to earlier releases (4.4.0, 4.13, 4.15) to test whether
+    // an older SDK build avoids the stopRecordVideo bug (see
+    // CameraModeController's doc comment) - all of them fail to even launch
+    // on this Android 12 test phone, crashing in DJI's own bundled SecNeo
+    // app-hardening native loader (com.secneo.sdk.Helper) with a JNI array
+    // error against Android 12's ART. Whatever fixed that landed right
+    // around 4.16.x, so every SDK build actually compatible with Android 12
+    // is clustered around the version we're already on - there's no older,
+    // meaningfully-different build this phone can run. Staying on 4.16.4.
+    compileOnly 'com.dji:dji-sdk-provided:4.16.4'
+    implementation 'com.dji:dji-sdk:4.16.4'
+    implementation 'com.squareup.okhttp3:okhttp:3.12.13' // version pinned; DJI SDK is picky about this
+
+    // --- Face detection ---
+    implementation 'com.google.mlkit:face-detection:16.1.6'
+
+    // Coroutines for the gimbal control loop / interpolation timers
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // --- Unit tests (app/src/test, plain JVM - no device/emulator) ---
+    // Deliberately NOT depending on dji-sdk-provided here: loading its
+    // classes from a plain JVM unit test throws java.lang.VerifyError
+    // (that jar is packaged for Android's ART runtime, not a desktop JVM
+    // bytecode verifier) - confirmed by actually trying it. Every testable
+    // piece of pure logic built around DJI SDK enums (CameraLabels,
+    // MediaTypeFilter) works off the enum's .name String instead of the
+    // live enum type specifically to avoid ever needing this dependency -
+    // see CameraLabels' doc comment for the fuller story.
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'com.dji:dji-sdk-provided:4.16.4'
+
+    // --- Instrumented tests (app/src/androidTest, run on-device via
+    // connectedDebugAndroidTest) - the counterpart to the JVM unit tests
+    // above. These run under real ART with a real DJISDKManager/Camera/
+    // Gimbal (registration kicks off automatically via SiderealApp's own
+    // Application.onCreate(), same as the real app), so touching live DJI
+    // SDK types here is safe - unlike the JVM unit tests, there's no
+    // VerifyError risk. Only useful with the Osmo actually connected and
+    // WiFi-bound at run time; without it they just confirm "no camera
+    // connected" rather than exercising real hardware. compileOnly here
+    // (not implementation) since the real dji-sdk classes are already
+    // packaged into the app under test's own APK - see main's compileOnly
+    // dji-sdk-provided for the same reasoning.
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test:runner:1.5.2'
+    androidTestCompileOnly 'com.dji:dji-sdk-provided:4.16.4'
+}

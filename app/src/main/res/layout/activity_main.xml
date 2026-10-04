@@ -1,0 +1,1439 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <!-- DJI's live-feed surface. TextureView backs DJICodecManager's decoder output. -->
+    <TextureView
+        android:id="@+id/videoPreview"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/controlBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <io.github.mugenoesis.sidereal.tracking.FaceOverlayView
+        android:id="@+id/faceOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview"
+        app:layout_constraintStart_toStartOf="@id/videoPreview"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview" />
+
+    <!-- On-screen virtual joystick for manual gimbal control - drawn on top
+         of everything else in the video area, but declines touches (see
+         JoystickView.armed) whenever the current mode isn't MANUAL, so they
+         fall through to faceOverlay's tap-to-select underneath. -->
+    <io.github.mugenoesis.sidereal.gimbal.JoystickView
+        android:id="@+id/joystickView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview"
+        app:layout_constraintStart_toStartOf="@id/videoPreview"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview" />
+
+    <!-- Persistent exposure readout strip - a mirrorless camera's
+         viewfinder info bar: mode + shutter + aperture + ISO + EV + WB +
+         metering/focus glyphs, always visible once connected, display-only
+         (tapping the categories to edit them happens via settingsRail on
+         the left, not here - keeps this strip from being a second,
+         confusing set of tap targets for the same settings). Histogram
+         toggle lives at the strip's end since it's the one interactive
+         control that belongs with a live readout. Hidden whenever
+         connectionStatus is showing - see MainActivity. -->
+    <LinearLayout
+        android:id="@+id/exposureReadoutStrip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_pill_container"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="6dp"
+        android:layout_marginTop="8dp"
+        android:visibility="gone"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintStart_toStartOf="@id/videoPreview"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview">
+
+        <TextView
+            android:id="@+id/readoutMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:text="P" />
+
+        <TextView
+            android:id="@+id/readoutShutter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:text="1/500" />
+
+        <TextView
+            android:id="@+id/readoutAperture"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:text="f/2.8" />
+
+        <TextView
+            android:id="@+id/readoutIso"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:text="ISO 100" />
+
+        <TextView
+            android:id="@+id/readoutEv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:text="0.0" />
+
+        <TextView
+            android:id="@+id/readoutWb"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:textColor="@color/white"
+            android:textSize="13sp"
+            android:text="AUTO" />
+
+        <!-- Doubles as the "what does tapping the video do" toggle - tap
+             the screen always focuses or spot-meters (whichever is
+             highlighted here), even without opening the Focus/Metering
+             tray first, since on-demand focus is core enough that it
+             shouldn't require a menu detour. Not a passive readout like
+             the rest of this strip - see MainActivity.setDefaultTapAction. -->
+        <LinearLayout
+            android:id="@+id/tapActionToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/bg_pill_container"
+            android:padding="2dp">
+
+            <ImageButton
+                android:id="@+id/readoutFocusIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:padding="4dp"
+                android:scaleType="fitCenter"
+                android:background="@drawable/bg_segment_selected"
+                android:src="@drawable/ic_focus_mode"
+                android:contentDescription="Tap video to focus" />
+
+            <ImageButton
+                android:id="@+id/readoutMeteringIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:padding="4dp"
+                android:scaleType="fitCenter"
+                android:background="@android:color/transparent"
+                android:src="@drawable/ic_metering"
+                android:contentDescription="Tap video to set spot meter" />
+
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnHistogramToggle"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="10dp"
+            android:padding="4dp"
+            android:scaleType="fitCenter"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_histogram"
+            android:contentDescription="@string/cd_histogram_toggle" />
+
+    </LinearLayout>
+
+    <!-- Live histogram graph - only streams/renders while visible (see
+         HistogramController.activate()/deactivate() and MainActivity's
+         histogram toggle handler); bucket-to-pixel mapping is a
+         best-effort normalization, see HistogramView's doc comment. -->
+    <io.github.mugenoesis.sidereal.camera.HistogramView
+        android:id="@+id/histogramView"
+        android:layout_width="150dp"
+        android:layout_height="70dp"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_pill_container"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/exposureReadoutStrip"
+        app:layout_constraintStart_toStartOf="@id/videoPreview" />
+
+    <!-- Left-edge settings rail - the deliberate mirror of
+         cameraModeControls on the right: one icon per settings category,
+         each opening its own tray to the right of the rail. Only one tray
+         open at a time (see MainActivity.setActiveSettingsPanel). Hidden
+         whenever connectionStatus is showing, same as exposureReadoutStrip. -->
+    <LinearLayout
+        android:id="@+id/settingsRail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginStart="16dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview">
+
+        <LinearLayout
+            android:id="@+id/settingsRailPill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_pill_container"
+            android:padding="4dp">
+
+            <ImageButton
+                android:id="@+id/btnExposureRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_exposure_mode"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_exposure_settings" />
+
+            <ImageButton
+                android:id="@+id/btnWhiteBalanceRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_white_balance"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_white_balance_settings" />
+
+            <ImageButton
+                android:id="@+id/btnMeteringRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_metering"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_metering_settings" />
+
+            <ImageButton
+                android:id="@+id/btnFocusRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_focus_mode"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_focus_settings" />
+
+            <ImageButton
+                android:id="@+id/btnMoreRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_settings_more"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_more_settings" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Exposure tray: P/A/S/M segment + ISO/shutter/aperture steppers +
+         EV scale. Aperture row hidden entirely when the mounted lens
+         doesn't support it (ExposureController.apertureSupported), not
+         just disabled - same "hide, don't gray out" treatment
+         zoomControlsGroup already gets. Steppers, not sliders, since
+         ISO/shutter/aperture are fixed enum ladders, not continuous
+         ranges - a slider would misrepresent that. -->
+    <LinearLayout
+        android:id="@+id/exposureTray"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_pill_container"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        android:layout_marginStart="8dp">
+
+        <LinearLayout
+            android:id="@+id/exposureModeSegment"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnModeP"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@drawable/bg_segment_selected"
+                android:text="@string/exposure_mode_program" />
+
+            <Button
+                android:id="@+id/btnModeA"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@android:color/transparent"
+                android:text="@string/exposure_mode_aperture_priority" />
+
+            <Button
+                android:id="@+id/btnModeS"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@android:color/transparent"
+                android:text="@string/exposure_mode_shutter_priority" />
+
+            <Button
+                android:id="@+id/btnModeM"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@android:color/transparent"
+                android:text="@string/exposure_mode_manual" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/isoStepperRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="ISO" />
+
+            <Button
+                android:id="@+id/btnIsoDown"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/isoValueText"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="AUTO" />
+
+            <Button
+                android:id="@+id/btnIsoUp"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="+" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/shutterStepperRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp">
+
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="Shutter" />
+
+            <Button
+                android:id="@+id/btnShutterSpeedDown"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/shutterValueText"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="AUTO" />
+
+            <Button
+                android:id="@+id/btnShutterSpeedUp"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="+" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/apertureStepperRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="Aperture" />
+
+            <Button
+                android:id="@+id/btnApertureDown"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/apertureValueText"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="f/2.8" />
+
+            <Button
+                android:id="@+id/btnApertureUp"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="+" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/evStepperRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="6dp">
+
+            <TextView
+                android:layout_width="52dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="EV" />
+
+            <Button
+                android:id="@+id/btnEvDown"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/evValueText"
+                android:layout_width="72dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="0.0" />
+
+            <Button
+                android:id="@+id/btnEvUp"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:background="@drawable/bg_stepper_button"
+                android:text="+" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- White balance tray: icon-cycle through presets + a text readout
+         (icon + value readout, not one icon per preset - keeps the
+         resource footprint small). Custom Kelvin row only appears once
+         the preset is CUSTOM. -->
+    <LinearLayout
+        android:id="@+id/whiteBalanceTray"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_pill_container"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        android:layout_marginStart="8dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/btnWbCycle"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:background="@drawable/bg_stepper_button"
+                android:src="@drawable/ic_white_balance"
+                android:contentDescription="@string/cd_white_balance_settings" />
+
+            <TextView
+                android:id="@+id/wbValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:text="@string/wb_auto" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/wbCustomRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="K" />
+
+            <SeekBar
+                android:id="@+id/wbKelvinSeekBar"
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp" />
+
+            <TextView
+                android:id="@+id/wbKelvinValueText"
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="5600K" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Metering tray: icon-cycle + readout. Spot target itself is set by
+         tapping the video preview while in SPOT mode (FaceOverlayView's
+         tapMode - see MainActivity), not a widget here. -->
+    <LinearLayout
+        android:id="@+id/meteringTray"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_pill_container"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        android:layout_marginStart="8dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/btnMeteringCycle"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:background="@drawable/bg_stepper_button"
+                android:src="@drawable/ic_metering"
+                android:contentDescription="@string/cd_metering_settings" />
+
+            <TextView
+                android:id="@+id/meteringValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:text="@string/metering_center" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/meteringHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/overlay_pill_fill"
+            android:textSize="11sp"
+            android:visibility="gone"
+            android:text="Tap video to set spot" />
+
+    </LinearLayout>
+
+    <!-- Focus tray: icon-cycle MF/AF/AF-C + readout. Manual focus ring
+         slider only appears in MF (mimics a focus pull); AF/AF-C instead
+         show the tap-to-focus hint (FaceOverlayView.tapMode - see
+         MainActivity). -->
+    <LinearLayout
+        android:id="@+id/focusTray"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_pill_container"
+        android:padding="12dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        android:layout_marginStart="8dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/btnFocusCycle"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:padding="6dp"
+                android:scaleType="fitCenter"
+                android:background="@drawable/bg_stepper_button"
+                android:src="@drawable/ic_focus_mode"
+                android:contentDescription="@string/cd_focus_settings" />
+
+            <TextView
+                android:id="@+id/focusValueText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/white"
+                android:textSize="13sp"
+                android:text="@string/focus_auto" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/focusRingRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="Focus" />
+
+            <SeekBar
+                android:id="@+id/focusRingSeekBar"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/focusHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/overlay_pill_fill"
+            android:textSize="11sp"
+            android:visibility="gone"
+            android:text="Tap video to focus" />
+
+    </LinearLayout>
+
+    <!-- "More" overflow tray: sharpness/contrast/saturation steppers +
+         anti-flicker/photo/video format tap-to-cycle rows - lowest
+         interaction novelty and usage frequency, so it's the catch-all
+         rather than cluttering the primary rail with a control per row.
+         Scrollable and bottom-bounded against controlBar since this tray
+         has the most rows and could otherwise run off-screen. -->
+    <ScrollView
+        android:id="@+id/moreSettingsScroll"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        app:layout_constraintBottom_toTopOf="@id/controlBar"
+        android:layout_marginStart="8dp"
+        android:layout_marginBottom="8dp">
+
+        <LinearLayout
+            android:id="@+id/moreSettingsTray"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_pill_container"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textStyle="bold"
+                android:textSize="13sp"
+                android:text="@string/more_settings_title" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="10dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_sharpness" />
+
+                <Button
+                    android:id="@+id/btnSharpnessDown"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:textColor="@color/white"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="-" />
+
+                <TextView
+                    android:id="@+id/sharpnessValueText"
+                    android:layout_width="36dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="0" />
+
+                <Button
+                    android:id="@+id/btnSharpnessUp"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:textColor="@color/white"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="+" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_contrast" />
+
+                <Button
+                    android:id="@+id/btnContrastDown"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:textColor="@color/white"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="-" />
+
+                <TextView
+                    android:id="@+id/contrastValueText"
+                    android:layout_width="36dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="0" />
+
+                <Button
+                    android:id="@+id/btnContrastUp"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:textColor="@color/white"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="+" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_saturation" />
+
+                <Button
+                    android:id="@+id/btnSaturationDown"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:textColor="@color/white"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="-" />
+
+                <TextView
+                    android:id="@+id/saturationValueText"
+                    android:layout_width="36dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="0" />
+
+                <Button
+                    android:id="@+id/btnSaturationUp"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:textColor="@color/white"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="+" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/antiFlickerRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="10dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_anti_flicker" />
+
+                <Button
+                    android:id="@+id/btnAntiFlickerCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="AUTO" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_photo_format" />
+
+                <Button
+                    android:id="@+id/btnPhotoFormatCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="JPEG" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_photo_aspect_ratio" />
+
+                <Button
+                    android:id="@+id/btnPhotoAspectCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="16:9" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_video_format" />
+
+                <Button
+                    android:id="@+id/btnVideoFormatCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="MOV" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_video_resolution" />
+
+                <Button
+                    android:id="@+id/btnVideoResCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="1080p30" />
+
+            </LinearLayout>
+
+            <!-- The DJI camera's own recording only carries audio if a mic
+                 is physically plugged into the gimbal - this cycles which
+                 mic (if any) the phone should separately record from
+                 alongside video capture instead. See AudioSourceController
+                 and AudioRecorderController. -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="@string/label_audio_source" />
+
+                <Button
+                    android:id="@+id/btnAudioSourceCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="Gimbal" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+    <!-- Camera mode (Photo/Video) switch and shutter/record trigger -
+         pinned to the right edge of the screen, vertically centered in the
+         video area. Independent of controlBar at the bottom so it stays
+         reachable in either landscape orientation (see MainActivity's
+         onConfigurationChanged). -->
+    <LinearLayout
+        android:id="@+id/cameraModeControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview">
+
+        <LinearLayout
+            android:id="@+id/cameraModePill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_pill_container"
+            android:padding="4dp">
+
+            <ImageButton
+                android:id="@+id/btnPhotoMode"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_camera_mode"
+                android:background="@drawable/bg_segment_selected"
+                android:contentDescription="Photo mode" />
+
+            <ImageButton
+                android:id="@+id/btnVideoMode"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_video_mode"
+                android:background="@android:color/transparent"
+                android:contentDescription="Video mode" />
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnShutter"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="16dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:background="@drawable/bg_shutter_photo"
+            android:text="" />
+
+        <ImageButton
+            android:id="@+id/btnMediaLibrary"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginTop="12dp"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:background="@drawable/bg_pill_container"
+            android:src="@drawable/ic_gallery"
+            android:contentDescription="Camera media" />
+
+    </LinearLayout>
+
+    <!-- Shown whenever we're not fully connected to the Osmo yet (SDK still
+         registering, or waiting for the physical product/camera to come up)
+         so a blank preview doesn't read as broken. Hidden once connected. -->
+    <TextView
+        android:id="@+id/connectionStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="#AA000000"
+        android:padding="12dp"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:text="Waiting for Osmo..."
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintStart_toStartOf="@id/videoPreview"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview" />
+
+    <!-- Restyled to match the settings rail/pill visual language elsewhere
+         on screen (translucent bg_pill_container groups, white icon+text,
+         bg_segment_selected/bg_toggle_pill_selector for selected/checked
+         state) instead of default gray Android buttons in one flat row.
+         Deliberately styling-only: every view here keeps its original id,
+         type (Button/ToggleButton/SeekBar), and click/change wiring in
+         MainActivity untouched - ToggleButton's on/off visual now comes
+         from bg_toggle_pill_selector reacting to its own built-in checked
+         state, not new code. Grouped by function (gimbal mode / A-B capture
+         / tracking / zoom) rather than one undifferentiated row. -->
+    <LinearLayout
+        android:id="@+id/controlBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_pill_container"
+            android:padding="4dp">
+
+            <Button
+                android:id="@+id/btnManualMode"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:drawableStart="@drawable/ic_gimbal_manual"
+                android:drawablePadding="6dp"
+                android:background="@android:color/transparent"
+                android:text="Manual" />
+
+            <Button
+                android:id="@+id/btnTimedMoveMode"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:drawableStart="@drawable/ic_gimbal_timed_move"
+                android:drawablePadding="6dp"
+                android:background="@android:color/transparent"
+                android:text="A -&gt; B" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_pill_container"
+            android:padding="4dp">
+
+            <Button
+                android:id="@+id/btnSetA"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:background="@drawable/bg_stepper_button"
+                android:text="A" />
+
+            <Button
+                android:id="@+id/btnSetB"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:padding="0dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:background="@drawable/bg_stepper_button"
+                android:text="B" />
+
+            <!-- Cycles through moveDurationOptionsMs presets (3/5/10/15/30s) -
+                 replaced the old free-scrubbing 1s..300s slider, which gave
+                 no useful control over a pan shot's actual duration. -->
+            <Button
+                android:id="@+id/btnDurationCycle"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@drawable/bg_stepper_button"
+                android:text="5s" />
+
+            <Button
+                android:id="@+id/btnStartMove"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:textAllCaps="false"
+                android:drawableStart="@drawable/ic_play"
+                android:drawablePadding="4dp"
+                android:background="@drawable/bg_stepper_button"
+                android:text="Start" />
+
+        </LinearLayout>
+
+        <!-- Nothing in the A/B/duration/Start pill above carries
+             layout_weight on this outer row, so this spacer keeps the
+             tracking/zoom pills pinned to the end of the bar the same way
+             an old single-row layout_weight did. -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_pill_container"
+            android:padding="4dp">
+
+            <ToggleButton
+                android:id="@+id/toggleFaceTrack"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:drawableStart="@drawable/ic_face_track"
+                android:drawablePadding="6dp"
+                android:background="@drawable/bg_toggle_pill_selector"
+                android:textOn="Face Track: ON"
+                android:textOff="Face Track: OFF" />
+
+            <ToggleButton
+                android:id="@+id/toggleFollowStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:drawableStart="@drawable/ic_follow_style"
+                android:drawablePadding="6dp"
+                android:background="@drawable/bg_toggle_pill_selector"
+                android:textOn="Trail"
+                android:textOff="Locked" />
+
+        </LinearLayout>
+
+        <!-- Zoom controls: only shown once ZoomController reports the
+             connected lens supports digital zoom. Not every Osmo/Zenmuse
+             lens does (X5/X5R primes don't), so this starts hidden. -->
+        <LinearLayout
+            android:id="@+id/zoomControlsGroup"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_pill_container"
+            android:padding="4dp"
+            android:visibility="gone">
+
+            <SeekBar
+                android:id="@+id/zoomSeekBar"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:max="100" />
+
+            <ToggleButton
+                android:id="@+id/toggleAutoZoom"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginStart="4dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:drawableStart="@drawable/ic_zoom_auto"
+                android:drawablePadding="6dp"
+                android:background="@drawable/bg_toggle_pill_selector"
+                android:textOn="Auto Zoom: ON"
+                android:textOff="Auto Zoom: OFF" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

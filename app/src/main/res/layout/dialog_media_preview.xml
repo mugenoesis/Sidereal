@@ -1,0 +1,134 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black">
+
+    <ImageView
+        android:id="@+id/previewImage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:contentDescription="@null" />
+
+    <ProgressBar
+        android:id="@+id/previewLoadingSpinner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center" />
+
+    <!-- Videos only get a still preview frame, not playback - this makes
+         that limitation visible rather than looking like a broken/frozen
+         video player. -->
+    <LinearLayout
+        android:id="@+id/previewVideoNotice"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/bg_pill_container"
+        android:padding="16dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@drawable/ic_play"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/previewVideoDurationText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/white"
+            android:text="0:00" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/white"
+            android:alpha="0.7"
+            android:textSize="12sp"
+            android:text="Preview only - download to play" />
+
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btnPreviewClose"
+        style="@style/Widget.AppCompat.Button.Borderless"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="8dp"
+        android:src="@drawable/ic_close"
+        android:contentDescription="Close" />
+
+    <TextView
+        android:id="@+id/previewFileNameText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:textColor="@color/white"
+        android:alpha="0.7"
+        android:textSize="13sp"
+        android:text="" />
+
+    <LinearLayout
+        android:id="@+id/previewBottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@color/overlay_scrim_strong"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:id="@+id/previewDownloadProgressGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:id="@+id/previewDownloadProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100" />
+
+            <TextView
+                android:id="@+id/previewDownloadProgressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:textColor="@color/white"
+                android:text="0%" />
+
+            <Button
+                android:id="@+id/btnPreviewCancelDownload"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:textColor="@color/white"
+                android:text="Cancel" />
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnPreviewAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:backgroundTint="@color/accent_cyan"
+            android:textColor="@color/black"
+            android:textStyle="bold"
+            android:text="Download" />
+
+    </LinearLayout>
+
+</FrameLayout>

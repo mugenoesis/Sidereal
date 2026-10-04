@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- Face-detection glyph: corner brackets around a simple face outline -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M2,2h6v2H4v4H2zM16,2h6v6h-2V4h-4zM2,16h2v4h4v2H2zM20,16h2v6h-6v-2h4z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,7a4,4 0,1 1,0 8a4,4 0,1 1,0 -8z" />
+</vector>

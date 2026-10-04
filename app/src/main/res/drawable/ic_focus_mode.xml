@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- Four corner focus brackets -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M3,3h6v2H5v4H3zM15,3h6v6h-2V5h-4zM3,15h2v4h4v2H3zM19,15h2v6h-6v-2h4z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,9a3,3 0,1 1,0 6a3,3 0,1 1,0 -6z" />
+</vector>

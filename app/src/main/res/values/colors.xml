@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Scaffolded for the new camera-settings UI (exposure readout strip,
+      settings rail/trays, histogram, tap-to-focus/spot-meter reticle).
+      Existing pre-feature views keep their inline hex colors in
+      layout/drawable XML rather than being migrated to these - only new
+      UI added from this point on should reference these.
+    -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="overlay_scrim">#66000000</color>
+    <color name="overlay_scrim_strong">#AA000000</color>
+    <color name="overlay_pill_fill">#4DFFFFFF</color>
+    <color name="accent_cyan">#4CC2FF</color>
+    <color name="status_recording">#FFE53935</color>
+    <color name="status_pending">#FFFB8C00</color>
+    <color name="status_focus_reticle">#FF4CC2FF</color>
+    <color name="status_spot_meter_reticle">#FFFFD54F</color>
+    <color name="control_disabled">#664D4D4D</color>
+</resources>

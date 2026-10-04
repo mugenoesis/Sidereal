@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sidereal</string>
+
+    <!-- Exposure readout strip / P-A-S-M -->
+    <string name="exposure_mode_program">P</string>
+    <string name="exposure_mode_shutter_priority">S</string>
+    <string name="exposure_mode_aperture_priority">A</string>
+    <string name="exposure_mode_manual">M</string>
+    <string name="exposure_mode_cine">CINE</string>
+
+    <!-- Settings rail content descriptions -->
+    <string name="cd_exposure_settings">Exposure settings</string>
+    <string name="cd_white_balance_settings">White balance settings</string>
+    <string name="cd_metering_settings">Metering settings</string>
+    <string name="cd_focus_settings">Focus settings</string>
+    <string name="cd_more_settings">More camera settings</string>
+    <string name="cd_histogram_toggle">Toggle histogram</string>
+
+    <!-- White balance presets -->
+    <string name="wb_auto">AUTO</string>
+    <string name="wb_sunny">SUNNY</string>
+    <string name="wb_cloudy">CLOUDY</string>
+    <string name="wb_water_surface">WATER</string>
+    <string name="wb_indoor_incandescent">INCAND.</string>
+    <string name="wb_indoor_fluorescent">FLUOR.</string>
+    <string name="wb_custom">CUSTOM</string>
+    <string name="wb_neutral">NEUTRAL</string>
+
+    <!-- Metering modes -->
+    <string name="metering_center">CTR</string>
+    <string name="metering_average">AVG</string>
+    <string name="metering_spot">SPOT</string>
+
+    <!-- Focus modes -->
+    <string name="focus_manual">MF</string>
+    <string name="focus_auto">AF</string>
+    <string name="focus_continuous">AF-C</string>
+
+    <!-- More/overflow tray -->
+    <string name="more_settings_title">More Settings</string>
+    <string name="label_sharpness">Sharpness</string>
+    <string name="label_contrast">Contrast</string>
+    <string name="label_saturation">Saturation</string>
+    <string name="label_anti_flicker">Anti-Flicker</string>
+    <string name="label_photo_format">Photo Format</string>
+    <string name="label_photo_aspect_ratio">Photo Aspect Ratio</string>
+    <string name="label_video_format">Video Format</string>
+    <string name="label_video_resolution">Video Resolution / FPS</string>
+    <string name="label_audio_source">Audio Source (Phone-Recorded)</string>
+</resources>
