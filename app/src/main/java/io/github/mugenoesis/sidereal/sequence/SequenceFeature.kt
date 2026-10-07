@@ -56,6 +56,7 @@ class SequenceFeature(
         combine(controller.isRunning, controller.progress, controller.settings) { running, progress, settings ->
             Triple(running, progress, settings)
         }.onEach { (running, progress, settings) ->
+            keepAlive(running, progress, settings.mode.label)
             shutterButton.isEnabled = !running
             shutterButton.alpha = if (running) 0.4f else 1f
             banner.visibility = if (running) View.VISIBLE else View.GONE
@@ -69,6 +70,45 @@ class SequenceFeature(
     }
 
     fun refreshPreview() = tray.refreshPreview()
+
+    private var keepAliveRunning = false
+    private var lastNotification: SequenceNotificationContent? = null
+    private var askedForNotifications = false
+    private val notificationPermission =
+        activity.registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
+    /**
+     * While a sequence runs the foreground service keeps the process, CPU and WiFi awake and shows progress; when it
+     * ends the notification stays behind saying how it went.
+     */
+    private fun keepAlive(running: Boolean, progress: SequenceProgress, modeLabel: String) {
+        // The combined flow can deliver "stopped running" a beat before the final Done/Failed state; at the end read
+        // the controller's own final progress, which is already set by then.
+        val content = SequenceNotificationText.of(modeLabel, if (running) progress else controller.progress.value)
+        if (running) {
+            if (!keepAliveRunning) {
+                keepAliveRunning = true
+                SequenceKeepAliveService.onStopRequested = { activity.runOnUiThread { controller.stop() } }
+                askForNotificationPermissionOnce()
+            }
+            if (content != lastNotification) {
+                lastNotification = content
+                SequenceKeepAliveService.show(activity, content)
+            }
+        } else if (keepAliveRunning) {
+            keepAliveRunning = false
+            lastNotification = null
+            SequenceKeepAliveService.end(activity, content)
+        }
+    }
+
+    private fun askForNotificationPermissionOnce() {
+        if (askedForNotifications || android.os.Build.VERSION.SDK_INT < 33) return
+        askedForNotifications = true
+        if (activity.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     private fun showPrompt(text: String?) {
         promptDialog?.dismiss()

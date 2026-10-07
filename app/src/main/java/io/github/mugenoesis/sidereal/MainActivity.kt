@@ -554,6 +554,18 @@ class MainActivity : AppCompatActivity() {
         )
         findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setOnClickListener { setActiveSettingsPanel(SettingsPanel.SEQUENCE) }
 
+        // Back would finish the activity and cancel the sequence with it; while one runs, back only backgrounds the app
+        // (the keep-alive service carries on, and the notification brings the user back).
+        val keepRunningOnBack = object : androidx.activity.OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                moveTaskToBack(true)
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, keepRunningOnBack)
+        sequenceFeature.controller.isRunning
+            .onEach { running -> keepRunningOnBack.isEnabled = running }
+            .launchIn(lifecycleScope)
+
         // A running sequence owns the camera and gimbal: the pad is locked out until it ends.
         sequenceFeature.controller.isRunning
             .onEach { running -> gamepadMapper.locked = running }

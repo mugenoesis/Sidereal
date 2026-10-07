@@ -22,6 +22,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Long sequences keep running with the screen off: a foreground service with a notification, plus wake/wifi locks. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.USB_PERMISSION" />
 
@@ -79,6 +84,11 @@
             android:screenOrientation="sensorLandscape" />
 
         <!-- Required by DJI MSDK's internal USB accessory handling -->
+        <service
+            android:name=".sequence.SequenceKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
         <activity android:name="dji.sdk.sdkmanager.DJIAoaControllerActivity"
             android:exported="false" />
 
