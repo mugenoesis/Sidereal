@@ -191,7 +191,14 @@ class WatchActivity : ComponentActivity() {
         shutter.isEnabled = canShoot
         mode.isEnabled = canShoot && s?.recording != true
         liveToggle.text = if (liveOn) "Live ●" else "Live"
-        openPhone.visibility = if (WatchDisplay.showOpenPhone(s, age)) View.VISIBLE else View.GONE
+        val phoneSilent = WatchDisplay.showOpenPhone(s, age)
+        if (phoneSilent) {
+            // The phone stopped answering (app closed, out of range): its live stream is gone and it has forgotten that
+            // live view was on, so drop the frozen last frame rather than leave it behind the message.
+            liveOn = false
+            live.setImageDrawable(null)
+        }
+        openPhone.visibility = if (phoneSilent) View.VISIBLE else View.GONE
         join.visibility = if (s != null && age <= WatchDisplay.STALE_MS && !s.phoneOnOsmo) View.VISIBLE else View.GONE
         val canWatch = WatchDisplay.canWatchLive(s, age)
         liveToggle.isEnabled = canWatch || liveOn
