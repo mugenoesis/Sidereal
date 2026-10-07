@@ -195,7 +195,10 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   tried on the camera, because the app can't stop a recording itself.
 - **Wear OS watch app:** checked on a real OnePlus Watch 4 (Wear OS 6) paired
   to a Samsung Galaxy Fold: live status, the shutter, live view, drag to aim
-  and the *Open on phone* button all work, over the real Bluetooth link. Other
+  and the *Open on phone* button all work, over the real Bluetooth link. The
+  live view runs at about 4-6 frames a second with the picture a fraction of a
+  second behind: it sends only as many frames at once as keep that lag under a
+  limit, and sharpens or softens the picture to suit the link. Other
   watches haven't been tried. Because the picture is dragged to aim, the
   watch's swipe-to-dismiss gesture is switched off on that screen; leave the
   app with the watch's own button.

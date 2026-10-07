@@ -42,7 +42,9 @@ class LivePacer(
     var smoothedRttMs: Double? = null
         private set
 
-    private var bestRttMs: Double? = null
+    /** The usual round trip with ONE frame out at a time - what pipelining more frames is judged against. */
+    private var singleFrameRttMs: Double? = null
+    private var growBlockAcks = 0
     private val unconfirmed = ArrayDeque<Long>()
     private var totalSent = 0
     private var totalConfirmed = 0
@@ -58,7 +60,7 @@ class LivePacer(
             totalConfirmed = totalSent
             window = 1
             goodStreak = 0
-            bestRttMs = null
+            singleFrameRttMs = null
             stepQualityDown()
         }
         if (unconfirmed.size >= window) return false
@@ -84,40 +86,54 @@ class LivePacer(
         val rtt = (nowMs - sentAt).toDouble()
         lastRttMs = rtt
         smoothedRttMs = smoothedRttMs?.let { it * 0.7 + rtt * 0.3 } ?: rtt
-        // The best round trip seen, drifting up slowly so it can follow a link that really has become slower.
-        bestRttMs = bestRttMs?.let { min(rtt, it + BEST_CREEP_MS) } ?: rtt
+        if (window == 1) singleFrameRttMs = singleFrameRttMs?.let { it * 0.85 + rtt * 0.15 } ?: rtt
+        if (growBlockAcks > 0) growBlockAcks--
         adapt()
     }
 
     private fun adapt() {
         if (settleAcks > 0) { settleAcks--; return }
         val smooth = smoothedRttMs ?: return
-        val best = bestRttMs ?: return
-        val ratio = smooth / best
+        val single = singleFrameRttMs ?: return
+        // What the round trip may be with this many frames out: a little more than one frame alone, since each extra
+        // frame in flight can add a little. Latency-bound links stay inside this however many frames are out;
+        // bandwidth-bound ones go over it, because the frames then queue behind each other.
+        val allowed = single * (1.3 + 0.2 * (window - 1))
         when {
-            smooth > LAG_BUDGET_MS || ratio > QUEUEING_RATIO -> {
-                // Frames are waiting behind each other: send fewer at once, and if it is already one, send smaller ones.
+            smooth > LAG_BUDGET_MS -> {
+                // Over the budget: send fewer at once, and if that is already one, send smaller pictures.
                 goodStreak = 0
                 if (window > 1) {
                     window--
                     settleAcks = SETTLE_ACKS
+                    growBlockAcks = GROW_BLOCK_ACKS
                 } else {
                     stepQualityDown()
                 }
             }
-            ratio <= STEADY_RATIO && smooth < LAG_BUDGET_MS * HEADROOM -> {
+            window > 1 && smooth > allowed * QUEUEING_MARGIN -> {
+                // Frames are waiting behind each other: one fewer at once. Only a hint on a jumpy link, so it never
+                // costs picture quality - just frame rate.
+                goodStreak = 0
+                window--
+                settleAcks = SETTLE_ACKS
+                growBlockAcks = GROW_BLOCK_ACKS
+            }
+            smooth <= allowed && smooth < LAG_BUDGET_MS * HEADROOM -> {
                 goodStreak++
                 if (window < MAX_WINDOW) {
-                    if (goodStreak >= GROW_ACKS) {
+                    if (goodStreak >= GROW_ACKS && growBlockAcks == 0) {
                         window++
                         goodStreak = 0
                         settleAcks = SETTLE_ACKS
                     }
                 } else if (goodStreak >= UP_ACKS && level < LEVELS.lastIndex) {
+                    // Kept up at the full window with room to spare: a sharper picture - and learn the new size afresh.
                     level++
+                    window = 1
                     goodStreak = 0
                     settleAcks = SETTLE_ACKS
-                    bestRttMs = null // bigger frames have a different best round trip: learn it afresh
+                    singleFrameRttMs = null
                 }
             }
             else -> goodStreak = 0
@@ -129,7 +145,8 @@ class LivePacer(
         if (level > 0) {
             level = max(0, level - 1)
             settleAcks = SETTLE_ACKS
-            bestRttMs = null
+            window = 1
+            singleFrameRttMs = null
         }
     }
 
@@ -145,11 +162,10 @@ class LivePacer(
         const val DEFAULT_LEVEL = 2
         const val MAX_WINDOW = 4
 
-        private const val STEADY_RATIO = 1.5      // round trip still near its best: room for another frame in flight
-        private const val QUEUEING_RATIO = 2.0    // twice its best: frames are queueing behind each other
+        private const val QUEUEING_MARGIN = 1.15  // this far over what is allowed: frames are queueing behind each other
         const val LAG_BUDGET_MS = 600.0           // the round trip is never allowed to stay above this
         private const val HEADROOM = 0.8          // grow or sharpen only while under this share of the budget
-        private const val BEST_CREEP_MS = 3.0
+        private const val GROW_BLOCK_ACKS = 30    // after backing off, do not probe a bigger window again straight away
         private const val GROW_ACKS = 5
         private const val UP_ACKS = 10
         private const val SETTLE_ACKS = 3         // let a change show up in the round trips before judging again

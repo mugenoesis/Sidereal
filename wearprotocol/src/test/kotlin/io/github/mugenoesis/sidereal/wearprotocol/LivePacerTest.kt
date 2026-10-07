@@ -50,7 +50,7 @@ class LivePacerTest {
     @Test
     fun `no more frames are out at once than the window allows`() {
         val p = LivePacer(minIntervalMs = 0)
-        clean(p, 1, 40) // grow the window on a steady link
+        clean(p, 1, 30) // grow the window on a steady link
         val w = p.window
         assertTrue("window $w", w >= 2)
         var now = 100_000L
@@ -94,7 +94,7 @@ class LivePacerTest {
     @Test
     fun `on a steady link the number of frames in flight grows`() {
         val p = LivePacer(minIntervalMs = 0)
-        clean(p, 1, 40)
+        clean(p, 1, 30)
         assertTrue("window ${p.window}", p.window >= 3)
     }
 
@@ -164,6 +164,18 @@ class LivePacerTest {
         var t = clean(p, 1, 20, rtt = 300)
         repeat(80) { t = roundTrip(p, 21 + it, t + 5, rtt = 1_600) }
         assertEquals(0, p.level)
+    }
+
+    @Test
+    fun `a jumpy link whose round trips stay well inside the budget never costs picture quality`() {
+        val p = LivePacer(minIntervalMs = 0)
+        val start = p.level
+        var t = 0L
+        // An occasional lucky 100 ms sets a low "best", and the usual ~300 ms then looks like congestion by comparison -
+        // bad for pipelining, but every frame is still well inside the lag budget so the picture must not be shrunk
+        val rtts = listOf(100L, 300L, 320L, 280L, 310L, 290L, 100L, 330L, 300L, 310L)
+        repeat(400) { t = roundTrip(p, it + 1, t + 5, rtt = rtts[it % rtts.size]) }
+        assertTrue("fell to level ${p.level}", p.level >= start)
     }
 
     @Test
