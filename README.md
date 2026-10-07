@@ -25,16 +25,13 @@
 
 **Camera**
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
-- Day-to-night ("holy grail") timelapse ramp: meters the live histogram before each frame
-  and follows the light with shutter then ISO in smooth third-stop steps; Keep-darkness
-  and Max-ISO options.
-- Camera sounds played on the phone (shutter click, self-timer beeps, record
-  start/stop, focus-lock beep), each switchable in the More tray - the DJI SDK has
-  no setting for the camera's own sounds.
 - Focus modes, tap-to-focus, and a software continuous-autofocus mode
   (contrast-detect scan-and-refine search) for lenses that don't support AFC
 - White balance, metering modes, and tap-to-spot-meter
-- Live histogram
+- Live histogram, with a red marker when the highlights are clipping
+- Camera sounds played on the phone (shutter click, self-timer beeps, record
+  start/stop, focus-lock beep), each switchable in the More tray. The DJI SDK
+  has no setting for the camera's own sounds, so the app plays them itself.
 - Sharpness, contrast, saturation and anti-flicker
 - Photo and video format, resolution and aspect ratio
 - Settings the camera can't change mid-recording are greyed out while
@@ -44,6 +41,13 @@
 - Intervalometer with a settling delay, optional dithering between frames,
   motion timelapse (an A→B gimbal move spread across the run), matrix
   panorama, and dark / bias / flat calibration frames
+- Day-to-night ("holy grail") timelapse ramp: meters the live histogram
+  before each frame and follows the light with shutter first, then ISO, in
+  smooth third-stop steps. *Keep darkness* sets how much of the fading light
+  stays in the frames, and *Max ISO* caps the noise
+- Long sequences keep running with the screen off or the app in the
+  background (a foreground service with a progress notification and a Stop
+  button), and they wait out a dropped camera link instead of giving up
 - Drive modes (single, burst, AEB bracketing), self-timer, exposure lock
   and a composition grid
 - Star focus assistant: magnified star with a live FWHM readout
@@ -54,9 +58,10 @@
 
 **Wear OS**
 - A watch remote (separate `wear` module): live view, shutter or record,
-  photo/video switch, drag to aim the gimbal, battery and card status, and
-  a button to make the phone join the Osmo's WiFi. The phone app stays the
-  only thing that talks to the camera.
+  photo/video switch, drag to aim the gimbal, battery and card status, a
+  button to make the phone join the Osmo's WiFi, and an *Open on phone*
+  button for when the phone app isn't running. The phone app stays the only
+  thing that talks to the camera.
 
 **Game controller**
 - Bluetooth or USB gamepad: left stick aims the gimbal, right stick zooms,
@@ -64,8 +69,9 @@
   show the focus crosshair in the middle (aim the gimbal with it up) and
   let go to focus there, d-pad left/right step P/A/S/M, d-pad up/down
   change exposure compensation, X locks exposure, Y shows the grid.
-  Every button can be remapped (More > Game controller), and the stick
-  speeds, dead zone and response are adjustable.
+  Every button can be remapped from a pop-out list (More > Game controller),
+  the same action can sit on several buttons, and the stick speeds, dead
+  zone and response are adjustable.
 
 **Media and audio**
 - Browse, preview and download photos and videos from the camera's SD card
@@ -152,29 +158,49 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - Video resolution and frame rate, video standard and colour profile, all
   read from the camera and verified by setting and reading back
 - Sharpness, contrast and saturation range of −3 to +3
+- Live histogram: the camera's 64 luma buckets (video range) are checked
+  against screenshots of the preview, and the display follows the exposure
+- Software autofocus: found and locked within about 6–8 s from most starting
+  focus, and again after you pan to a new scene
+- ISO and shutter readouts follow what the camera is set to
+- Camera sounds: shutter click, self-timer beeps, focus-lock beep and the
+  on/off options (checked on the phone)
 
 ### 🧪 Beta
 
 - **Face tracking:** follows a locked face, but it still needs tuning to be
   smooth and accurate.
+- **Day-to-night ramp:** checked on the camera by panning from a bright view
+  to a darker one and back, which it followed in smooth steps. It hasn't seen
+  a real sunset yet.
+- **Long-running sequences:** a one-minute run kept shooting with the screen
+  off, and the notification, wake lock and WiFi lock were released at the end.
+  Runs of several hours, a real WiFi drop and recovery mid-run, and swiping
+  the app away from recents haven't been tested. On Android 13 and newer the
+  app asks for notification permission the first time you start a sequence.
 - **Software continuous autofocus:** seeds from the camera's own
   autofocus, scans the lens ring for the sharpness peak, locks, and then
-  leaves the ring alone until the scene changes (about 6-8 s to first
-  lock). It hasn't been tested while recording video or in bright light.
+  leaves the ring alone until the scene changes. It hasn't been tested while
+  recording video or in bright light, and a very blurred start can fall back
+  to a full scan that takes about 14 s.
 - **Phone audio recording and sync:** records from the phone's mic or a
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
   and exports a merged MP4. The automatic starting offset is only as good
   as the camera's reported record-start time, so check it by ear.
-- **Game controller (remappable in More > Game controller):** built and checked with injected events, but not yet
-  with a physical controller.
-- **Wear OS watch app:** the screens are checked on a Wear OS emulator and
-  the phone side against the real camera, but the Bluetooth link between a
-  real watch and phone is untested.
+- **Game controller:** checked with an 8BitDo Ultimate and with injected
+  events. Other controller families report their buttons with different
+  codes, so tell me if one of yours maps wrongly. Trigger pulls reported both
+  as a button and as an axis are treated as one press.
+- **Camera sounds on record start and stop:** built and unit-tested, but not
+  tried on the camera, because the app can't stop a recording itself.
+- **Wear OS watch app:** the screens (including the icon and the *Open on
+  phone* button's "can't reach phone" case) are checked on a Wear OS emulator
+  and the phone side against the real camera, but the Bluetooth link between a
+  real watch and phone, and the button's success case, are untested.
 - **Joining the Osmo's WiFi from the app** (tap the "not on your Osmo's
   WiFi" message, Android 10+): works, but Android asks you to confirm the
   network the first time. Uses the factory password `12341234` unless you
   long-press the message and enter yours.
-- **Histogram:** shows live data, but the graph's scaling is a best guess.
 - **Switching video standard (PAL/NTSC):** works, but the camera takes
   about five seconds to settle afterwards and refuses queries meanwhile.
   Flipping it repeatedly in a short time once left the camera's media
