@@ -390,4 +390,52 @@ class GamepadMapperTest {
         mapper.onButton(GamepadButton.DPAD_UP, true)
         assertTrue(actions.events.isEmpty())
     }
+
+    // --- controllers that report a trigger both as an axis and as a button (the 8BitDo Ultimate does) ---
+
+    @Test
+    fun `one pull of a trigger reported as axis and button fires the shutter once`() {
+        mapper.onAxis(GamepadAxis.R2, 1f, nowMs = 0)
+        mapper.onButton(GamepadButton.R2, true, nowMs = 1)
+        assertEquals(listOf("shutter"), actions.events)
+    }
+
+    @Test
+    fun `the same when the button event arrives first`() {
+        mapper.onButton(GamepadButton.R2, true, nowMs = 0)
+        mapper.onAxis(GamepadAxis.R2, 1f, nowMs = 1)
+        assertEquals(listOf("shutter"), actions.events)
+    }
+
+    @Test
+    fun `letting go of both lets the next pull fire again, once`() {
+        mapper.onAxis(GamepadAxis.R2, 1f)
+        mapper.onButton(GamepadButton.R2, true)
+        mapper.onButton(GamepadButton.R2, false)
+        mapper.onAxis(GamepadAxis.R2, 0f)
+        mapper.onAxis(GamepadAxis.R2, 1f)
+        mapper.onButton(GamepadButton.R2, true)
+        assertEquals(listOf("shutter", "shutter"), actions.events)
+    }
+
+    @Test
+    fun `the button letting go first does not release the trigger while the axis is still pulled`() {
+        mapper.onAxis(GamepadAxis.R2, 1f)
+        mapper.onButton(GamepadButton.R2, true)
+        mapper.onButton(GamepadButton.R2, false)
+        mapper.onAxis(GamepadAxis.R2, 0.9f) // still pulled: not a new press
+        assertEquals(listOf("shutter"), actions.events)
+    }
+
+    @Test
+    fun `a held focus trigger reported both ways starts once and stops when both are released`() {
+        mapper.onAxis(GamepadAxis.L2, 1f, nowMs = 0)
+        mapper.onButton(GamepadButton.L2, true, nowMs = 1)
+        assertEquals(listOf("focus(1)"), actions.events)
+        mapper.onButton(GamepadButton.L2, false, nowMs = 500)
+        mapper.onAxis(GamepadAxis.L2, 0f, nowMs = 510)
+        actions.events.clear()
+        mapper.tick(5_000)
+        assertTrue(actions.events.isEmpty())
+    }
 }

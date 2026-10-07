@@ -245,8 +245,15 @@ class GamepadMapper(
     private var sentZoom = 0f
 
     private val down = HashSet<GamepadButton>()
-    private var r2AxisDown = false
-    private var l2AxisDown = false
+
+    /**
+     * Many controllers (the 8BitDo Ultimate among them) report each trigger twice - as an analog axis and as a button.
+     * Treating those as two presses fires the shutter twice per pull, so the two are tracked separately and the
+     * trigger counts as pressed while EITHER is down; only a change of that combined state is acted on.
+     */
+    private val triggerAxisDown = HashSet<GamepadButton>()
+    private val triggerButtonDown = HashSet<GamepadButton>()
+    private val triggerActive = HashSet<GamepadButton>()
     private var hatX = 0
     private var hatY = 0
 
@@ -264,8 +271,8 @@ class GamepadMapper(
             GamepadAxis.LEFT_Y -> { leftY = value; updateGimbal() }
             GamepadAxis.RIGHT_Y -> { rightY = value; updateZoom() }
             GamepadAxis.RIGHT_X -> Unit
-            GamepadAxis.R2 -> r2AxisDown = trigger(value, r2AxisDown) { press -> dispatch(GamepadButton.R2, press, nowMs) }
-            GamepadAxis.L2 -> l2AxisDown = trigger(value, l2AxisDown) { press -> dispatch(GamepadButton.L2, press, nowMs) }
+            GamepadAxis.R2 -> triggerAxis(GamepadButton.R2, value, nowMs)
+            GamepadAxis.L2 -> triggerAxis(GamepadButton.L2, value, nowMs)
             // The d-pad as a hat is just four buttons: pressing a direction presses that button until the hat re-centres.
             GamepadAxis.HAT_X -> {
                 val direction = direction(value)
@@ -293,7 +300,12 @@ class GamepadMapper(
         } else {
             down.remove(button)
         }
-        dispatch(button, pressed, nowMs)
+        if (button == GamepadButton.L2 || button == GamepadButton.R2) {
+            if (pressed) triggerButtonDown += button else triggerButtonDown -= button
+            updateTrigger(button, nowMs)
+        } else {
+            dispatch(button, pressed, nowMs)
+        }
     }
 
     /** Drive from a steady clock (e.g. every 50 ms) so a held focus button keeps stepping. */
@@ -312,8 +324,9 @@ class GamepadMapper(
     fun onDisconnected() {
         stopMotion()
         down.clear()
-        r2AxisDown = false
-        l2AxisDown = false
+        triggerAxisDown.clear()
+        triggerButtonDown.clear()
+        triggerActive.clear()
         hatX = 0
         hatY = 0
         leftX = 0f
@@ -353,10 +366,22 @@ class GamepadMapper(
         else -> null
     }
 
-    private fun trigger(value: Float, wasDown: Boolean, onEdge: (pressed: Boolean) -> Unit): Boolean = when {
-        !wasDown && value >= config.triggerPress -> true.also { onEdge(true) }
-        wasDown && value <= config.triggerRelease -> false.also { onEdge(false) }
-        else -> wasDown
+    private fun triggerAxis(button: GamepadButton, value: Float, nowMs: Long) {
+        val was = button in triggerAxisDown
+        val now = when {
+            !was && value >= config.triggerPress -> true
+            was && value <= config.triggerRelease -> false
+            else -> was
+        }
+        if (now) triggerAxisDown += button else triggerAxisDown -= button
+        updateTrigger(button, nowMs)
+    }
+
+    private fun updateTrigger(button: GamepadButton, nowMs: Long) {
+        val active = button in triggerAxisDown || button in triggerButtonDown
+        if (active == (button in triggerActive)) return
+        if (active) triggerActive += button else triggerActive -= button
+        dispatch(button, active, nowMs)
     }
 
     private fun startRepeat(kind: Repeat, direction: Int, source: GamepadButton, nowMs: Long) {
