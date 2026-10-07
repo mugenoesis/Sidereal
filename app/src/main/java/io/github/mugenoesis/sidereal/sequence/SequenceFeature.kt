@@ -6,6 +6,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import io.github.mugenoesis.sidereal.camera.ShutterLogic
+import io.github.mugenoesis.sidereal.display.NightMode
 import io.github.mugenoesis.sidereal.dji.DJIConnectionManager
 import io.github.mugenoesis.sidereal.dji.RealCameraGateway
 import kotlinx.coroutines.delay
@@ -71,6 +72,7 @@ class SequenceFeature(
             .setPositiveButton("Continue") { _, _ -> controller.continueFromPrompt() }
             .setNegativeButton("Cancel") { _, _ -> controller.stop() }
             .show()
+            .also { NightMode.apply(it) }
     }
 
     private fun blockedReason(): String? =

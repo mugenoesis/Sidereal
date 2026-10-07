@@ -15,6 +15,7 @@ import io.github.mugenoesis.sidereal.R
 import io.github.mugenoesis.sidereal.camera.DownloadStatus
 import io.github.mugenoesis.sidereal.camera.MediaLibraryController
 import io.github.mugenoesis.sidereal.camera.MediaTypeFilter
+import io.github.mugenoesis.sidereal.display.NightMode
 import dji.sdk.media.MediaFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +69,7 @@ class MediaPreviewDialog(
         // real native SDK crash was traced to the screen sleeping
         // mid-download).
         dialog.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        NightMode.apply(dialog)
         dialog.setContentView(R.layout.dialog_media_preview)
 
         dialog.findViewById<TextView>(R.id.previewFileNameText).text = mediaFile.fileName

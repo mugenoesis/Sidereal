@@ -31,6 +31,24 @@ object DebugScenarios {
         }
     }
 
+    /** Real number of files on the SD card via the media browser - exact, unlike StorageState's estimated capture count. */
+    suspend fun sdFileCount(): Int? {
+        val media = io.github.mugenoesis.sidereal.camera.MediaLibraryController()
+        media.enterAndLoad()
+        val end = System.currentTimeMillis() + 25_000
+        while (System.currentTimeMillis() < end) {
+            val state = media.loadState.value
+            if (state == io.github.mugenoesis.sidereal.camera.MediaLoadState.LOADED ||
+                state == io.github.mugenoesis.sidereal.camera.MediaLoadState.ERROR
+            ) break
+            delay(200)
+        }
+        val count = if (media.loadState.value == io.github.mugenoesis.sidereal.camera.MediaLoadState.LOADED) media.files.value.size else null
+        media.exit()
+        delay(2500)
+        return count
+    }
+
     fun attitudeText(): String {
         val a = DJIConnectionManager.gimbalState.value?.attitudeInDegrees
         return "pitch=${a?.pitch} yaw=${a?.yaw}"
@@ -77,6 +95,8 @@ object DebugScenarios {
     private suspend fun seqInterval(args: Map<String, String>) {
         val frames = args["frames"]?.toInt() ?: 3
         val dither = DitherConfig(minDeg = 0.3f, maxDeg = 0.8f, seed = 11L)
+        val filesBefore = sdFileCount()
+        Log.i(TAG, "SD files before: $filesBefore")
         callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
         delay(1500)
         callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
@@ -84,7 +104,6 @@ object DebugScenarios {
         delay(1000)
         val host = RealSequenceHost()
         val base = host.currentAttitude() ?: error("no gimbal attitude")
-        val cardBefore = DJIConnectionManager.storageState.value?.availableCaptureCount
         val plan = IntervalPlanner.plan(IntervalConfig(frames, intervalMs = 9_000, settleMs = 1_000, exposureMs = 500, hold = base, dither = dither))
         val moves = plan.filterIsInstance<SequenceStep.MoveTo>()
         val seenAttitudes = mutableListOf<Attitude>()
@@ -101,12 +120,16 @@ object DebugScenarios {
         }
         val t0 = System.currentTimeMillis()
         runner.run(plan)
-        delay(8000)
-        val cardAfter = DJIConnectionManager.storageState.value?.availableCaptureCount
+        delay(3000)
+        host.moveTo(base.pitch, base.yaw)
+        callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
+        val filesAfter = sdFileCount()
+        Log.i(TAG, "SD files after: $filesAfter")
         val problems = mutableListOf<String>()
         if (runner.progress.value.state != SequenceState.Done) problems += "state=${runner.progress.value.state}"
         if (runner.progress.value.capturesDone != frames) problems += "captures=${runner.progress.value.capturesDone}"
-        if (cardBefore != null && cardAfter != null && cardBefore - cardAfter != frames.toLong()) problems += "card delta=${cardBefore - cardAfter} expected $frames"
+        if (filesBefore == null || filesAfter == null) problems += "could not count SD files ($filesBefore -> $filesAfter)"
+        else if (filesAfter - filesBefore != frames) problems += "SD file delta=${filesAfter - filesBefore} expected $frames"
         moves.forEachIndexed { i, m ->
             val seen = seenAttitudes.getOrNull(i) ?: return@forEachIndexed
             val err = GimbalArrival.errorDeg(seen, Attitude(GimbalArrival.quantize(m.pitch), GimbalArrival.quantize(m.yaw)))
@@ -116,8 +139,6 @@ object DebugScenarios {
         val gaps = captureStarts.zipWithNext { a, b -> b - a }
         Log.i(TAG, "frame gaps ms=$gaps total=${System.currentTimeMillis() - t0}ms")
         gaps.forEach { if (kotlin.math.abs(it - 9_000) > 1_500) problems += "gap $it not ~9000" }
-        host.moveTo(base.pitch, base.yaw)
-        callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
         Log.i(TAG, "RESULT seq_interval: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
     }
 }

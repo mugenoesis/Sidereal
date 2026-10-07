@@ -164,6 +164,18 @@
             android:src="@drawable/ic_histogram"
             android:contentDescription="@string/cd_histogram_toggle" />
 
+        <!-- Red-only night display: see display/NightMode. -->
+        <ImageButton
+            android:id="@+id/btnNightMode"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="4dp"
+            android:padding="4dp"
+            android:scaleType="fitCenter"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_night"
+            android:contentDescription="@string/cd_night_mode" />
+
     </LinearLayout>
 
     <!-- Live histogram graph - only streams/renders while visible (see

@@ -35,6 +35,7 @@ object AppPreferences {
     private const val KEY_AUTO_ZOOM_ENABLED = "auto_zoom_enabled"
     private const val KEY_MOVE_DURATION_MS = "move_duration_ms"
     private const val KEY_AUDIO_SOURCE_KIND = "audio_source_kind"
+    private const val KEY_NIGHT_MODE = "night_mode"
 
     private lateinit var prefs: SharedPreferences
 
@@ -68,6 +69,11 @@ object AppPreferences {
     var moveDurationMs: Long
         get() = prefs.getLong(KEY_MOVE_DURATION_MS, 3000L)
         set(value) = prefs.edit().putLong(KEY_MOVE_DURATION_MS, value).apply()
+
+    /** Red-only night display - see display/NightMode. Persisted so a restart in the field doesn't blast white light. */
+    var nightMode: Boolean
+        get() = prefs.getBoolean(KEY_NIGHT_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_NIGHT_MODE, value).apply()
 
     // GIMBAL (no phone-side recording) is the safe default - only a real
     // choice once a mic is actually plugged into the gimbal, which this

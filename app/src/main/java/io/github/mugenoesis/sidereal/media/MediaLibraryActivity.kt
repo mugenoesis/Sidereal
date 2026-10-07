@@ -16,6 +16,7 @@ import io.github.mugenoesis.sidereal.SystemBars
 import io.github.mugenoesis.sidereal.camera.DownloadStatus
 import io.github.mugenoesis.sidereal.camera.MediaLibraryController
 import io.github.mugenoesis.sidereal.camera.MediaLoadState
+import io.github.mugenoesis.sidereal.display.NightMode
 import dji.sdk.media.MediaFile
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -65,6 +66,7 @@ class MediaLibraryActivity : AppCompatActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_media_library)
         SystemBars.applyInsets(this, immersive = false)
+        NightMode.apply(window)
 
         adapter = MediaFileAdapter(onItemClick = ::onItemTapped)
         findViewById<RecyclerView>(R.id.mediaRecyclerView).apply {

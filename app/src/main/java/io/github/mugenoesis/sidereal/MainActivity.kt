@@ -35,6 +35,7 @@ import io.github.mugenoesis.sidereal.gimbal.GimbalModeController
 import io.github.mugenoesis.sidereal.gimbal.JoystickView
 import io.github.mugenoesis.sidereal.gimbal.ManualGimbalController
 import io.github.mugenoesis.sidereal.gimbal.TimedMoveController
+import io.github.mugenoesis.sidereal.display.NightMode
 import io.github.mugenoesis.sidereal.sequence.Attitude
 import io.github.mugenoesis.sidereal.sequence.SequenceFeature
 import io.github.mugenoesis.sidereal.tracking.FaceTrackingController
@@ -288,6 +289,7 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
         SystemBars.applyInsets(this, immersive = true)
+        NightMode.apply(window)
 
         gimbalModeController = GimbalModeController(
             manualController, timedMoveController, faceTrackingController
@@ -610,6 +612,11 @@ class MainActivity : AppCompatActivity() {
                 histogramView.visibility = android.view.View.VISIBLE
                 histogramController.activate()
             }
+        }
+
+        findViewById<android.widget.ImageButton>(R.id.btnNightMode).setOnClickListener {
+            NightMode.enabled = !NightMode.enabled
+            NightMode.apply(window)
         }
 
         findViewById<android.widget.ImageButton>(R.id.readoutFocusIcon).setOnClickListener {
