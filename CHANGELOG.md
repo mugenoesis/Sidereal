@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - first-start fixes
 
 ### Fixed
 - First start no longer pops "Single/Exposure mode ... rejected (No camera connected)" messages while the camera is
