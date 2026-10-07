@@ -61,6 +61,19 @@ class DriveController(private val gateway: CameraGateway = RealCameraGateway) {
         select(DrivePresets.all[index])
     }
 
+    /**
+     * The camera has (re)connected: put it back on the drive mode the UI shows. This fires on every bind - including
+     * the first, when the SDK has not handed over the camera yet - so it waits quietly for the camera instead of
+     * showing "rejected (No camera connected)"; the next bind (with the camera) sends it.
+     */
+    fun reassert() {
+        if (!gateway.hasCamera) {
+            Log.d(TAG, "reassert: no camera bound yet, waiting for the next bind")
+            return
+        }
+        select(_current.value)
+    }
+
     fun select(preset: DrivePreset) {
         index = DrivePresets.all.indexOf(preset).coerceAtLeast(0)
         _current.value = preset

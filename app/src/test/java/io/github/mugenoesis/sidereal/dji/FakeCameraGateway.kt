@@ -11,6 +11,9 @@ class FakeCameraGateway : CameraGateway {
 
     var errorToReturn: String? = null
 
+    /** False simulates the moment the product has connected but the SDK has not bound its camera yet. */
+    override var hasCamera: Boolean = true
+
     /** Every call made, as a short human-readable string, in order - e.g. "setIso(ISO_100)". */
     val calls = mutableListOf<String>()
 

@@ -26,6 +26,7 @@ class OsmoWifiConnector(context: Context) {
 
     /** @param onResult null on success, or a message saying why not */
     fun connect(passphrase: String, onResult: (String?) -> Unit) {
+        Log.i(TAG, "join requested")
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             onResult("Join the Osmo's WiFi in Android settings (this Android version can't do it from the app)")
             return

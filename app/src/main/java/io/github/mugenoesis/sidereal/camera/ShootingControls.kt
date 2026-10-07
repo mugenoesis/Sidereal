@@ -106,7 +106,7 @@ class ShootingControls(
     /** The camera has (re)connected: put it back on the drive mode the UI shows, and forget any stale lock. */
     fun onCameraRebound() {
         aeLock.reset()
-        drive.select(drive.current.value)
+        drive.reassert()
         // The grid needs the photo aspect ratio to know where the picture is; it is otherwise only read when the
         // More tray opens. A second read a moment later covers the camera not answering right at bind time.
         mediaFormatController.refresh()

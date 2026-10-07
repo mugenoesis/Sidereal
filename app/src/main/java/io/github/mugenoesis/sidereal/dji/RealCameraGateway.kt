@@ -26,6 +26,8 @@ object RealCameraGateway : CameraGateway {
 
     private const val TAG = "RealCameraGateway"
 
+    override val hasCamera: Boolean get() = DJIConnectionManager.camera != null
+
     private inline fun withCamera(onResult: (String?) -> Unit, block: (dji.sdk.camera.Camera) -> Unit) {
         val camera = DJIConnectionManager.camera
         if (camera == null) {
