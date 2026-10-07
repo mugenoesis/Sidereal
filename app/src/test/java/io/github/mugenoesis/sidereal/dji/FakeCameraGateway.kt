@@ -114,6 +114,26 @@ class FakeCameraGateway : CameraGateway {
         onResult(errorToReturn)
     }
 
+    override fun setShootPhotoMode(modeName: String, onResult: (String?) -> Unit) {
+        calls += "setShootPhotoMode($modeName)"
+        onResult(errorToReturn)
+    }
+
+    override fun setPhotoBurstCount(countName: String, onResult: (String?) -> Unit) {
+        calls += "setPhotoBurstCount($countName)"
+        onResult(errorToReturn)
+    }
+
+    override fun setPhotoAebCount(countName: String, onResult: (String?) -> Unit) {
+        calls += "setPhotoAebCount($countName)"
+        onResult(errorToReturn)
+    }
+
+    override fun setAeLock(locked: Boolean, onResult: (String?) -> Unit) {
+        calls += "setAeLock($locked)"
+        onResult(errorToReturn)
+    }
+
     override fun setCameraMode(modeName: String, onResult: (String?) -> Unit) {
         calls += "setCameraMode($modeName)"
         onResult(errorToReturn)

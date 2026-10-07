@@ -44,6 +44,51 @@ object DebugScenarios {
             }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
+            "drive_shoot" -> {
+                val problems = mutableListOf<String>()
+                callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+                delay(1500)
+                for ((label, expected) in listOf("Single" to 1, "Burst 3" to 3, "AEB 3" to 3)) {
+                    val preset = io.github.mugenoesis.sidereal.camera.DrivePresets.all.first { it.label == label }
+                    val drive = io.github.mugenoesis.sidereal.camera.DriveController()
+                    drive.select(preset)
+                    delay(1500)
+                    val before = sdFileCount()
+                    callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+                    delay(2000)
+                    callback<String?> { RealCameraGateway.setShootPhotoMode(preset.modeName) { e -> it(e) } }
+                    preset.burstCountName?.let { n -> callback<String?> { RealCameraGateway.setPhotoBurstCount(n) { e -> it(e) } } }
+                    preset.aebCountName?.let { n -> callback<String?> { RealCameraGateway.setPhotoAebCount(n) { e -> it(e) } } }
+                    delay(1000)
+                    val err = callback<String?> { RealCameraGateway.startShootPhoto { e -> it(e) } }
+                    delay(12_000)
+                    val after = sdFileCount()
+                    Log.i(TAG, "DRIVE_SHOOT $label: start=$err files $before -> $after (expected +$expected)")
+                    if (before == null || after == null || after - before != expected) problems += "$label delta=${if (before != null && after != null) after - before else null} expected $expected"
+                }
+                callback<String?> { RealCameraGateway.setShootPhotoMode("SINGLE") { e -> it(e) } }
+                Log.i(TAG, "RESULT drive_shoot: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
+            }
+            "count_files" -> Log.i(TAG, "FILE_COUNT ${sdFileCount()}")
+            "drive_probe" -> {
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                suspend fun key(name: String): String = suspendCancellableCoroutine { cont ->
+                    km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                        override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                        override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                    })
+                }
+                Log.i(TAG, "DRIVE photo format=${key(dji.keysdk.CameraKey.PHOTO_FILE_FORMAT)} aspect=${key(dji.keysdk.CameraKey.PHOTO_ASPECT_RATIO)} exposureMode=${key(dji.keysdk.CameraKey.EXPOSURE_MODE)}")
+                for (preset in io.github.mugenoesis.sidereal.camera.DrivePresets.all) {
+                    val mode = callback<String?> { RealCameraGateway.setShootPhotoMode(preset.modeName) { e -> it(e) } }
+                    val count = preset.burstCountName?.let { n -> callback<String?> { RealCameraGateway.setPhotoBurstCount(n) { e -> it(e) } } }
+                        ?: preset.aebCountName?.let { n -> callback<String?> { RealCameraGateway.setPhotoAebCount(n) { e -> it(e) } } }
+                    Log.i(TAG, "DRIVE ${preset.label}: mode=$mode count=$count now=${key(dji.keysdk.CameraKey.SHOOT_PHOTO_MODE)}")
+                    delay(500)
+                }
+                callback<String?> { RealCameraGateway.setShootPhotoMode("SINGLE") { e -> it(e) } }
+                Log.i(TAG, "RESULT drive_probe: DONE")
+            }
             "reset_camera" -> {
                 callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
                 callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }

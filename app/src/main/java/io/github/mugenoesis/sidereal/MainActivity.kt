@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
     private val audioRecorderController = AudioRecorderController()
     private val focusAssistController = FocusAssistController()
     private lateinit var cameraStatusController: CameraStatusController
+    private lateinit var shootingControls: io.github.mugenoesis.sidereal.camera.ShootingControls
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
     private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, SEQUENCE, MORE }
@@ -307,6 +308,7 @@ class MainActivity : AppCompatActivity() {
         bindCameraSettingsViews()
         bindSequenceFeature()
         bindCameraStatus()
+        shootingControls = io.github.mugenoesis.sidereal.camera.ShootingControls(this, mediaFormatController)
         observeConnectionState()
         observeWifiState()
         observeComponentChanges()
@@ -561,7 +563,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<android.widget.Button>(R.id.btnShutter).setOnClickListener {
-            cameraModeController.triggerShutter()
+            if (!shootingControls.handleShutter { cameraModeController.triggerShutter() }) {
+                cameraModeController.triggerShutter()
+            }
         }
 
         // Browsing media switches the camera to CameraMode.MEDIA_DOWNLOAD,
@@ -1791,6 +1795,7 @@ class MainActivity : AppCompatActivity() {
                 // same reasoning as DJIConnectionManager's own
                 // bindComponents() re-registering system/gimbal/storage
                 // state callbacks every time.
+                shootingControls.onCameraRebound()
                 exposureController.startObserving()
                 exposureController.refreshCapability()
                 // Litchi showed aperture as genuinely adjustable (f/1.7

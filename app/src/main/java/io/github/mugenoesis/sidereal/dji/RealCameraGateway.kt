@@ -143,6 +143,27 @@ object RealCameraGateway : CameraGateway {
             it.setVideoResolutionAndFrameRate(ResolutionAndFrameRate(resolution, frameRate)) { error -> onResult(error?.description) }
         }
 
+    override fun setShootPhotoMode(modeName: String, onResult: (String?) -> Unit) =
+        withCamera(onResult) {
+            val mode = SettingsDefinitions.ShootPhotoMode.valueOf(modeName)
+            it.setShootPhotoMode(mode) { error -> onResult(error?.description) }
+        }
+
+    override fun setPhotoBurstCount(countName: String, onResult: (String?) -> Unit) =
+        withCamera(onResult) {
+            val count = SettingsDefinitions.PhotoBurstCount.valueOf(countName)
+            it.setPhotoBurstCount(count) { error -> onResult(error?.description) }
+        }
+
+    override fun setPhotoAebCount(countName: String, onResult: (String?) -> Unit) =
+        withCamera(onResult) {
+            val count = SettingsDefinitions.PhotoAEBCount.valueOf(countName)
+            it.setPhotoAEBCount(count) { error -> onResult(error?.description) }
+        }
+
+    override fun setAeLock(locked: Boolean, onResult: (String?) -> Unit) =
+        withCamera(onResult) { it.setAELock(locked) { error -> onResult(error?.description) } }
+
     override fun setCameraMode(modeName: String, onResult: (String?) -> Unit) =
         withCamera(onResult) {
             val mode = SettingsDefinitions.CameraMode.valueOf(modeName)

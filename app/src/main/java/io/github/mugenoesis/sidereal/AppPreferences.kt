@@ -36,6 +36,8 @@ object AppPreferences {
     private const val KEY_MOVE_DURATION_MS = "move_duration_ms"
     private const val KEY_AUDIO_SOURCE_KIND = "audio_source_kind"
     private const val KEY_NIGHT_MODE = "night_mode"
+    private const val KEY_GRID_MODE = "grid_mode"
+    private const val KEY_SELF_TIMER_SEC = "self_timer_sec"
 
     private lateinit var prefs: SharedPreferences
 
@@ -74,6 +76,17 @@ object AppPreferences {
     var nightMode: Boolean
         get() = prefs.getBoolean(KEY_NIGHT_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_NIGHT_MODE, value).apply()
+
+    var gridMode: io.github.mugenoesis.sidereal.camera.GridMode
+        get() = prefs.getString(KEY_GRID_MODE, null)
+            ?.let { runCatching { io.github.mugenoesis.sidereal.camera.GridMode.valueOf(it) }.getOrNull() }
+            ?: io.github.mugenoesis.sidereal.camera.GridMode.OFF
+        set(value) = prefs.edit().putString(KEY_GRID_MODE, value.name).apply()
+
+    /** Photo self-timer delay in seconds; 0 = off. */
+    var selfTimerSeconds: Int
+        get() = prefs.getInt(KEY_SELF_TIMER_SEC, 0)
+        set(value) = prefs.edit().putInt(KEY_SELF_TIMER_SEC, value).apply()
 
     // GIMBAL (no phone-side recording) is the safe default - only a real
     // choice once a mic is actually plugged into the gimbal, which this
