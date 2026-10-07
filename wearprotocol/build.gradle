@@ -1,0 +1,21 @@
+// The Kotlin Gradle plugin is already on the root buildscript classpath (see ../build.gradle), so it is applied by
+// id without a version - which also keeps this module buildable offline.
+apply plugin: 'org.jetbrains.kotlin.jvm'
+
+// Shared by the phone app and the Wear OS app: message paths, command/status encoding, the live-view frame
+// codec and frame pacing. Plain JVM Kotlin on purpose - no Android or Google Play Services types - so all of
+// it is unit-tested on the desktop and the two apps cannot drift apart.
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}

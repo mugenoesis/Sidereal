@@ -103,6 +103,9 @@ dependencies {
     implementation 'com.dji:dji-sdk:4.16.4'
     implementation 'com.squareup.okhttp3:okhttp:3.12.13' // version pinned; DJI SDK is picky about this
 
+    // Shared with the Wear OS app: message paths, command/status encoding, live-view frame codec and pacing.
+    implementation project(':wearprotocol')
+
     // --- Face detection ---
     implementation 'com.google.mlkit:face-detection:16.1.7'
 
