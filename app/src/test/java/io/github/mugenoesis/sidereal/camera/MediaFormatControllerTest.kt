@@ -54,4 +54,47 @@ class MediaFormatControllerTest {
         controller.setVideoResolutionAndFrameRateByName("RESOLUTION_4096x2160", "FRAME_RATE_24_FPS") { completedWith = it }
         assertEquals(false, completedWith)
     }
+
+    @Test
+    fun `setVideoStandardByName forwards to the gateway and reports success`() {
+        val gateway = FakeCameraGateway()
+        val controller = MediaFormatController(gateway)
+        var completedWith: Boolean? = null
+        controller.setVideoStandardByName("NTSC") { completedWith = it }
+        assertEquals(listOf("setVideoStandard(NTSC)"), gateway.calls)
+        assertEquals(true, completedWith)
+    }
+
+    @Test
+    fun `a rejected video standard names itself in the error`() = runBlocking {
+        val gateway = FakeCameraGateway().apply { errorToReturn = "Not supported" }
+        val controller = MediaFormatController(gateway)
+        val message = awaitEvents(controller.errorEvents) { controller.setVideoStandardByName("PAL") }.single()
+        assertTrue(message, message.contains("PAL") && message.contains("Not supported"))
+    }
+
+    @Test
+    fun `setColorByName forwards to the gateway and updates the state on success`() {
+        val gateway = FakeCameraGateway()
+        val controller = MediaFormatController(gateway)
+        controller.setColorByName("D_CINELIKE")
+        assertEquals(listOf("setColor(D_CINELIKE)"), gateway.calls)
+        assertEquals("D_CINELIKE", controller.cameraColor.value)
+    }
+
+    @Test
+    fun `a rejected colour profile leaves the state alone and says why`() = runBlocking {
+        val gateway = FakeCameraGateway().apply { errorToReturn = "Param Illegal" }
+        val controller = MediaFormatController(gateway)
+        val message = awaitEvents(controller.errorEvents) { controller.setColorByName("D_LOG") }.single()
+        assertEquals(null, controller.cameraColor.value)
+        assertTrue(message, message.contains("D_LOG") && message.contains("Param Illegal"))
+    }
+
+    @Test
+    fun `a successful video standard change updates the state`() {
+        val controller = MediaFormatController(FakeCameraGateway())
+        controller.setVideoStandardByName("NTSC")
+        assertEquals("NTSC", controller.videoStandard.value)
+    }
 }

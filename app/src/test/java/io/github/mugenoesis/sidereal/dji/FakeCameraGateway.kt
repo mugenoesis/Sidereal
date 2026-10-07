@@ -114,6 +114,16 @@ class FakeCameraGateway : CameraGateway {
         onResult(errorToReturn)
     }
 
+    override fun setVideoStandard(standardName: String, onResult: (String?) -> Unit) {
+        calls += "setVideoStandard($standardName)"
+        onResult(errorToReturn)
+    }
+
+    override fun setColor(colorName: String, onResult: (String?) -> Unit) {
+        calls += "setColor($colorName)"
+        onResult(errorToReturn)
+    }
+
     override fun setShootPhotoMode(modeName: String, onResult: (String?) -> Unit) {
         calls += "setShootPhotoMode($modeName)"
         onResult(errorToReturn)

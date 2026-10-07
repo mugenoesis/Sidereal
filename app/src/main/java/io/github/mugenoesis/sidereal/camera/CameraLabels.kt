@@ -86,11 +86,36 @@ object CameraLabels {
 
     fun videoResolutionLabel(resolutionName: String, frameRateName: String): String {
         val resText = when (resolutionName) {
+            "RESOLUTION_4096x2160" -> "DCI 4K"
+            "RESOLUTION_3840x2160" -> "UHD 4K"
+            "RESOLUTION_2704x1520" -> "2.7K"
             "RESOLUTION_1920x1080" -> "1080p"
-            "RESOLUTION_4096x2160" -> "4K"
             else -> resolutionName
         }
-        val fpsText = frameRateName.removePrefix("FRAME_RATE_").substringBefore("_DOT_").substringBefore("_FPS")
-        return "$resText$fpsText"
+        return "$resText · ${frameRateText(frameRateName)}"
+    }
+
+    /** `FRAME_RATE_23_DOT_976_FPS` -> "23.976", `FRAME_RATE_47_DOT_950_FPS` -> "47.95", `FRAME_RATE_25_FPS` -> "25". */
+    fun frameRateText(frameRateName: String): String {
+        val raw = frameRateName.removePrefix("FRAME_RATE_").removeSuffix("_FPS").replace("_DOT_", ".")
+        return if (raw.contains('.')) raw.trimEnd('0').trimEnd('.') else raw
+    }
+
+    fun videoStandardLabel(standardName: String?): String = when (standardName) {
+        "PAL" -> "PAL (25/50)"
+        "NTSC" -> "NTSC (24/30/60)"
+        else -> "--"
+    }
+
+    /** The camera's picture profile ("color") as a person would say it. */
+    fun colorLabel(colorName: String?): String = when (colorName) {
+        null -> "--"
+        "NONE" -> "Standard"
+        "D_LOG" -> "D-Log"
+        "D_CINELIKE" -> "D-Cinelike"
+        "BLACK_AND_WHITE" -> "B&W"
+        "M_31" -> "M31"
+        "K_DX" -> "K-DX"
+        else -> colorName.lowercase().split('_').joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
     }
 }

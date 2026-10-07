@@ -102,11 +102,45 @@ class CameraLabelsTest {
 
     @Test
     fun `videoResolutionLabel combines resolution and frame rate text`() {
-        assertEquals("4K24", CameraLabels.videoResolutionLabel("RESOLUTION_4096x2160", "FRAME_RATE_24_FPS"))
+        assertEquals("DCI 4K · 24", CameraLabels.videoResolutionLabel("RESOLUTION_4096x2160", "FRAME_RATE_24_FPS"))
+        assertEquals("UHD 4K · 25", CameraLabels.videoResolutionLabel("RESOLUTION_3840x2160", "FRAME_RATE_25_FPS"))
+        assertEquals("2.7K · 25", CameraLabels.videoResolutionLabel("RESOLUTION_2704x1520", "FRAME_RATE_25_FPS"))
+        assertEquals("1080p · 50", CameraLabels.videoResolutionLabel("RESOLUTION_1920x1080", "FRAME_RATE_50_FPS"))
+    }
+
+    @Test
+    fun `videoResolutionLabel keeps fractional frame rates, which are what NTSC and cinema modes are`() {
+        assertEquals("DCI 4K · 23.976", CameraLabels.videoResolutionLabel("RESOLUTION_4096x2160", "FRAME_RATE_23_DOT_976_FPS"))
+        assertEquals("1080p · 47.95", CameraLabels.videoResolutionLabel("RESOLUTION_1920x1080", "FRAME_RATE_47_DOT_950_FPS"))
+        assertEquals("1080p · 29.97", CameraLabels.videoResolutionLabel("RESOLUTION_1920x1080", "FRAME_RATE_29_DOT_970_FPS"))
+    }
+
+    @Test
+    fun `video standard labels say which frame rates each one brings`() {
+        assertEquals("PAL (25/50)", CameraLabels.videoStandardLabel("PAL"))
+        assertEquals("NTSC (24/30/60)", CameraLabels.videoStandardLabel("NTSC"))
+        assertEquals("--", CameraLabels.videoStandardLabel(null))
+    }
+
+    @Test
+    fun `colour profile labels are human readable`() {
+        assertEquals("Standard", CameraLabels.colorLabel("NONE"))
+        assertEquals("D-Log", CameraLabels.colorLabel("D_LOG"))
+        assertEquals("D-Cinelike", CameraLabels.colorLabel("D_CINELIKE"))
+        assertEquals("B&W", CameraLabels.colorLabel("BLACK_AND_WHITE"))
+        assertEquals("Art", CameraLabels.colorLabel("ART"))
+        assertEquals("M31", CameraLabels.colorLabel("M_31"))
+        assertEquals("K-DX", CameraLabels.colorLabel("K_DX"))
+        assertEquals("--", CameraLabels.colorLabel(null))
+    }
+
+    @Test
+    fun `an unknown colour profile is title-cased rather than shown raw`() {
+        assertEquals("Vivid Tone", CameraLabels.colorLabel("VIVID_TONE"))
     }
 
     @Test
     fun `videoResolutionLabel falls back to the raw name for an unmapped resolution`() {
-        assertEquals("RESOLUTION_1280x72030", CameraLabels.videoResolutionLabel("RESOLUTION_1280x720", "FRAME_RATE_30_FPS"))
+        assertEquals("RESOLUTION_1280x720 · 30", CameraLabels.videoResolutionLabel("RESOLUTION_1280x720", "FRAME_RATE_30_FPS"))
     }
 }

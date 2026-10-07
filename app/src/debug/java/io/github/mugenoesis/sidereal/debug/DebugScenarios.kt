@@ -69,6 +69,36 @@ object DebugScenarios {
                 callback<String?> { RealCameraGateway.setShootPhotoMode("SINGLE") { e -> it(e) } }
                 Log.i(TAG, "RESULT drive_shoot: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
             }
+            "video_probe" -> {
+                // Read-only: never starts a recording.
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                suspend fun key(name: String): String = suspendCancellableCoroutine { cont ->
+                    km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                        override fun onSuccess(value: Any) {
+                            if (cont.isActive) cont.resume(when (value) { is Array<*> -> value.joinToString(" | "); else -> value.toString() })
+                        }
+                        override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                    }) ?: cont.resume("no key manager")
+                }
+                callback<String?> { RealCameraGateway.setCameraMode("RECORD_VIDEO") { e -> it(e) } }
+                delay(2500)
+                for (k in listOf(
+                    dji.keysdk.CameraKey.RESOLUTION_FRAME_RATE, dji.keysdk.CameraKey.VIDEO_RESOLUTION_FRAME_RATE_RANGE,
+                    dji.keysdk.CameraKey.VIDEO_FILE_FORMAT, dji.keysdk.CameraKey.VIDEO_FILE_FORMAT_RANGE,
+                    dji.keysdk.CameraKey.VIDEO_STANDARD, dji.keysdk.CameraKey.VIDEO_STANDARD_RANGE,
+                    dji.keysdk.CameraKey.VIDEO_FILE_COMPRESSION_STANDARD, dji.keysdk.CameraKey.VIDEO_COMPRESSION_STANDARD_RANGE,
+                    dji.keysdk.CameraKey.CAMERA_COLOR, dji.keysdk.CameraKey.CAMERA_COLOR_RANGE,
+                    dji.keysdk.CameraKey.PICTURE_STYLE_PRESET, dji.keysdk.CameraKey.VIDEO_CAPTION_ENABLED,
+                    dji.keysdk.CameraKey.SHARPNESS, dji.keysdk.CameraKey.IS_DEWARPING_SUPPORTED
+                )) Log.i(TAG, "VIDEO $k = ${key(k)}")
+                callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+                Log.i(TAG, "RESULT video_probe: DONE")
+            }
+            "video_settings" -> videoSettings()
+            "set_standard" -> {
+                val target = args["standard"] ?: "PAL"
+                Log.i(TAG, "set_standard $target -> ${setStandardAndWait(target)}")
+            }
             "count_files" -> Log.i(TAG, "FILE_COUNT ${sdFileCount()}")
             "drive_probe" -> {
                 val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
@@ -261,5 +291,86 @@ object DebugScenarios {
         }
         Log.i(TAG, "PROBE battery state: $pct")
         Log.i(TAG, "RESULT probe_camera: DONE")
+    }
+
+    /** Sets and reads back every video setting the camera lists. Never records - only changes settings. */
+    private suspend fun videoSettings() {
+        val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager!!
+        suspend fun read(name: String): Any? = suspendCancellableCoroutine { cont ->
+            km.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value) }
+                override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume(null) }
+            })
+        }
+        fun modes(v: Any?) = (v as? Array<*>).orEmpty().filterIsInstance<dji.common.camera.ResolutionAndFrameRate>().map { it.resolution.name to it.frameRate.name }
+        fun names(v: Any?) = (v as? Array<*>).orEmpty().map { (it as Enum<*>).name }
+        suspend fun current() = read(dji.keysdk.CameraKey.RESOLUTION_FRAME_RATE).let { it as? dji.common.camera.ResolutionAndFrameRate }?.let { it.resolution.name to it.frameRate.name }
+
+        val problems = mutableListOf<String>()
+        callback<String?> { RealCameraGateway.setCameraMode("RECORD_VIDEO") { e -> it(e) } }
+        delay(3000)
+        val originalMode = current()
+        val originalStandard = read(dji.keysdk.CameraKey.VIDEO_STANDARD)?.let { (it as Enum<*>).name }
+        val originalColor = read(dji.keysdk.CameraKey.CAMERA_COLOR)?.let { (it as Enum<*>).name }
+        Log.i(TAG, "VSET start mode=$originalMode standard=$originalStandard color=$originalColor")
+
+        // 1. every listed resolution / frame rate
+        val palModes = modes(read(dji.keysdk.CameraKey.VIDEO_RESOLUTION_FRAME_RATE_RANGE))
+        for ((res, fps) in palModes) {
+            val err = callback<String?> { RealCameraGateway.setVideoResolutionAndFrameRate(res, fps) { e -> it(e) } }
+            delay(1200)
+            val now = current()
+            Log.i(TAG, "VSET mode $res $fps -> err=$err readback=$now")
+            if (err != null || now != (res to fps)) problems += "mode $res/$fps err=$err readback=$now"
+        }
+        originalMode?.let { (r, f) -> callback<String?> { RealCameraGateway.setVideoResolutionAndFrameRate(r, f) { e -> it(e) } } }
+
+        // 2. PAL -> NTSC changes the frame-rate list (the camera needs a while to settle after the switch)
+        val other = names(read(dji.keysdk.CameraKey.VIDEO_STANDARD_RANGE)).firstOrNull { it != originalStandard }
+        if (other != null) {
+            val result = setStandardAndWait(other)
+            val otherModes = modes(read(dji.keysdk.CameraKey.VIDEO_RESOLUTION_FRAME_RATE_RANGE))
+            Log.i(TAG, "VSET standard -> $other: $result; modes=${otherModes.size} fps=${otherModes.map { it.second }.distinct()}")
+            if (!result.startsWith("ok") || otherModes == palModes || otherModes.isEmpty()) problems += "standard $other: $result list changed=${otherModes != palModes}"
+            originalStandard?.let { st ->
+                val back = setStandardAndWait(st)
+                val restored = modes(read(dji.keysdk.CameraKey.VIDEO_RESOLUTION_FRAME_RATE_RANGE))
+                Log.i(TAG, "VSET standard restored $st: $back; list restored=${restored == palModes}")
+                if (!back.startsWith("ok") || restored != palModes) problems += "restoring $st: $back"
+            }
+        }
+        originalMode?.let { (r, f) -> callback<String?> { RealCameraGateway.setVideoResolutionAndFrameRate(r, f) { e -> it(e) } } }
+
+        // 3. every colour profile
+        for (color in names(read(dji.keysdk.CameraKey.CAMERA_COLOR_RANGE))) {
+            val err = callback<String?> { RealCameraGateway.setColor(color) { e -> it(e) } }
+            delay(800)
+            val now = (read(dji.keysdk.CameraKey.CAMERA_COLOR) as? Enum<*>)?.name
+            Log.i(TAG, "VSET color $color -> err=$err readback=$now")
+            if (err != null || now != color) problems += "color $color err=$err readback=$now"
+        }
+        originalColor?.let { c -> callback<String?> { done -> RealCameraGateway.setColor(c) { e -> done(e) } } }
+
+        callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+        Log.i(TAG, "RESULT video_settings: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
+    }
+
+    /** Switches PAL/NTSC and waits (the camera takes several seconds and refuses queries meanwhile) until it reads back. */
+    suspend fun setStandardAndWait(target: String, timeoutMs: Long = 40_000): String {
+        val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager!!
+        val err = callback<String?> { done -> RealCameraGateway.setVideoStandard(target) { e -> done(e) } }
+        if (err != null) return "rejected: $err"
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) {
+            delay(1500)
+            val now = suspendCancellableCoroutine<String?> { cont ->
+                km.getValue(dji.keysdk.CameraKey.create(dji.keysdk.CameraKey.VIDEO_STANDARD), object : dji.keysdk.callback.GetCallback {
+                    override fun onSuccess(value: Any) { if (cont.isActive) cont.resume((value as Enum<*>).name) }
+                    override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume(null) }
+                })
+            }
+            if (now == target) return "ok after ${timeoutMs - (end - System.currentTimeMillis())}ms"
+        }
+        return "timed out waiting for $target"
     }
 }

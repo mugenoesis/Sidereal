@@ -174,13 +174,13 @@ class MainActivity : AppCompatActivity() {
     // position.
     private var selectedExposureMode = AppPreferences.exposureMode
 
-    private val videoResolutionOptions = listOf(
-        SettingsDefinitions.VideoResolution.RESOLUTION_1920x1080 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_30_FPS,
-        SettingsDefinitions.VideoResolution.RESOLUTION_1920x1080 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_60_FPS,
-        SettingsDefinitions.VideoResolution.RESOLUTION_4096x2160 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_24_FPS,
-        SettingsDefinitions.VideoResolution.RESOLUTION_4096x2160 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_30_FPS
-    )
-    private var selectedVideoResolutionIndex = 0
+    // Cycle positions for the video-side cyclers - tracked here, not derived from the camera's state, same lesson as
+    // every other cycle button (a rejected value must not trap the button). The lists themselves come from the camera
+    // (MediaFormatController.videoModeRange etc.); the old hard-coded resolution list offered 30/60 fps modes that a
+    // PAL camera rejects.
+    private var selectedVideoResolutionIndex = -1
+    private var videoStandardCycleIndex: Int? = null
+    private var colorCycleIndex: Int? = null
 
     // Each of these enums ends with SDK sentinel members (FIXED/UNKNOWN) that
     // aren't real settable values - they're state-reporting placeholders, not
@@ -727,6 +727,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.Button>(R.id.btnPhotoAspectCycle).setOnClickListener { cyclePhotoAspectRatio() }
         findViewById<android.widget.Button>(R.id.btnVideoFormatCycle).setOnClickListener { cycleVideoFormat() }
         findViewById<android.widget.Button>(R.id.btnVideoResCycle).setOnClickListener { cycleVideoResolution() }
+        findViewById<android.widget.Button>(R.id.btnVideoStandardCycle).setOnClickListener { cycleVideoStandard() }
+        findViewById<android.widget.Button>(R.id.btnColorCycle).setOnClickListener { cycleColor() }
         findViewById<android.widget.Button>(R.id.btnAudioSourceCycle).setOnClickListener { cycleAudioSource() }
 
         // Tap-to-focus/spot-meter: fires instead of face-tap-select whenever
@@ -1014,9 +1016,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun cycleVideoResolution() {
-        selectedVideoResolutionIndex = (selectedVideoResolutionIndex + 1) % videoResolutionOptions.size
-        val (resolution, frameRate) = videoResolutionOptions[selectedVideoResolutionIndex]
-        mediaFormatController.setVideoResolutionAndFrameRate(resolution, frameRate)
+        val options = mediaFormatController.videoModeRange.value
+        if (options.isEmpty()) {
+            showErrorToast("The camera hasn't reported its video modes yet")
+            return
+        }
+        val current = mediaFormatController.videoResolutionAndFrameRate.value
+            ?.let { it.getResolution().name to it.getFrameRate().name }
+        val start = if (selectedVideoResolutionIndex >= 0) selectedVideoResolutionIndex else options.indexOf(current)
+        selectedVideoResolutionIndex = (start + 1).mod(options.size)
+        val (resolution, frameRate) = options[selectedVideoResolutionIndex]
+        mediaFormatController.setVideoResolutionAndFrameRate(
+            SettingsDefinitions.VideoResolution.valueOf(resolution),
+            SettingsDefinitions.VideoFrameRate.valueOf(frameRate)
+        )
+    }
+
+    private fun cycleVideoStandard() {
+        val options = mediaFormatController.videoStandardRange.value.ifEmpty { listOf("PAL", "NTSC") }
+        val (index, next) = nextCycleValue(videoStandardCycleIndex, mediaFormatController.videoStandard.value, options)
+        videoStandardCycleIndex = index
+        mediaFormatController.setVideoStandard(next)
+        // The frame-rate list changes with the standard, so the resolution cycler starts over from the camera's state.
+        selectedVideoResolutionIndex = -1
+    }
+
+    private fun cycleColor() {
+        val options = mediaFormatController.colorRange.value
+        if (options.isEmpty()) {
+            showErrorToast("The camera hasn't reported its colour profiles yet")
+            return
+        }
+        val (index, next) = nextCycleValue(colorCycleIndex, mediaFormatController.cameraColor.value, options)
+        colorCycleIndex = index
+        mediaFormatController.setColor(next)
     }
 
     /**
@@ -1254,6 +1287,8 @@ class MainActivity : AppCompatActivity() {
         mediaFormatController.photoAspectRatio.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
         mediaFormatController.videoFileFormat.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
         mediaFormatController.videoResolutionAndFrameRate.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
+        mediaFormatController.videoStandard.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
+        mediaFormatController.cameraColor.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
         // Media format/resolution changes are especially likely to be
         // rejected mid-recording (MediaFormatController's own doc comment
         // flags this) - surfaced here rather than silently failing.
@@ -1454,6 +1489,16 @@ class MainActivity : AppCompatActivity() {
             isEnabled = !recording
             alpha = lockedDuringRecordingAlpha
         }
+        findViewById<android.widget.Button>(R.id.btnVideoStandardCycle).apply {
+            text = CameraLabels.videoStandardLabel(mediaFormatController.videoStandard.value)
+            isEnabled = !recording
+            alpha = lockedDuringRecordingAlpha
+        }
+        findViewById<android.widget.Button>(R.id.btnColorCycle).apply {
+            text = CameraLabels.colorLabel(mediaFormatController.cameraColor.value)
+            isEnabled = !recording
+            alpha = lockedDuringRecordingAlpha
+        }
         findViewById<android.widget.Button>(R.id.btnAudioSourceCycle).apply {
             val label = AudioSourceController.label(this@MainActivity, AudioSourceController.selectedKind)
             text = if (audioRecorderController.isRecording.value) "$label (rec)" else label
@@ -1522,7 +1567,7 @@ class MainActivity : AppCompatActivity() {
     private fun photoAspectLabel(ratio: SettingsDefinitions.PhotoAspectRatio?): String = CameraLabels.photoAspectLabel(ratio?.name)
 
     private fun videoResolutionLabel(rf: dji.common.camera.ResolutionAndFrameRate?): String =
-        if (rf == null) "1080p30" else CameraLabels.videoResolutionLabel(rf.getResolution().name, rf.getFrameRate().name)
+        if (rf == null) "--" else CameraLabels.videoResolutionLabel(rf.getResolution().name, rf.getFrameRate().name)
 
     /** Routes a mode switch through both the controller and joystickView.armed, which must stay in sync. */
     private fun switchGimbalMode(mode: GimbalMode) {

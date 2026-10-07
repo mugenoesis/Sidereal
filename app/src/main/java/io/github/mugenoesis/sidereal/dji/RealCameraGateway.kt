@@ -143,6 +143,18 @@ object RealCameraGateway : CameraGateway {
             it.setVideoResolutionAndFrameRate(ResolutionAndFrameRate(resolution, frameRate)) { error -> onResult(error?.description) }
         }
 
+    override fun setVideoStandard(standardName: String, onResult: (String?) -> Unit) =
+        withCamera(onResult) {
+            val standard = SettingsDefinitions.VideoStandard.valueOf(standardName)
+            it.setVideoStandard(standard) { error -> onResult(error?.description) }
+        }
+
+    override fun setColor(colorName: String, onResult: (String?) -> Unit) =
+        withCamera(onResult) {
+            val color = SettingsDefinitions.CameraColor.valueOf(colorName)
+            it.setColor(color) { error -> onResult(error?.description) }
+        }
+
     override fun setShootPhotoMode(modeName: String, onResult: (String?) -> Unit) =
         withCamera(onResult) {
             val mode = SettingsDefinitions.ShootPhotoMode.valueOf(modeName)
