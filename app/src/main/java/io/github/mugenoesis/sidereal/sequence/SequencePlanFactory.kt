@@ -33,6 +33,7 @@ sealed class PlanResult {
 object SequenceEstimate {
     private const val MOVE_MS = 1_500L
     private const val SET_SHUTTER_MS = 500L
+    private const val ADAPT_MS = 1_000L
 
     fun durationMs(steps: List<SequenceStep>): Long {
         var t = 0L
@@ -44,6 +45,8 @@ object SequenceEstimate {
                 is SequenceStep.WaitUntil -> maxOf(t, step.offsetMs)
                 is SequenceStep.SetShutter -> t + SET_SHUTTER_MS
                 is SequenceStep.Prompt -> t
+                is SequenceStep.BeginRamp -> t
+                is SequenceStep.AdaptExposure -> t + ADAPT_MS
             }
         }
         return t
@@ -54,6 +57,8 @@ object SequenceEstimate {
 object SequencePlanFactory {
 
     private const val FALLBACK_EXPOSURE_MS = 1_000L
+    private const val RAMP_SLACK_MS = 500L
+    private const val MIN_RAMP_SHUTTER_SEC = 0.25
     private const val DITHER_MIN_DEG = 0.3f
     private const val DITHER_MAX_DEG = 0.8f
 
@@ -86,12 +91,21 @@ object SequencePlanFactory {
                         if (a == null || b == null) return PlanResult.Error("Set points A and B in Timed Move first, or turn the A→B move off")
                         a to b
                     } else null
+                    val ramp = if (settings.ramp) {
+                        // The longest shutter that still fits the interval after the settle, the camera's write time and some slack.
+                        val maxShutterSec = (settings.intervalSec * 1_000L - settings.settleMs - IntervalPlanner.WRITE_ALLOWANCE_MS - RAMP_SLACK_MS) / 1_000.0
+                        if (maxShutterSec < MIN_RAMP_SHUTTER_SEC) {
+                            return PlanResult.Error("The interval is too short to ramp the exposure - lengthen it (needs room for the shutter, settle and write time)")
+                        }
+                        RampConfig(keepDarkFraction = settings.keepDarkPct / 100.0, maxShutterSec = maxShutterSec, maxIso = settings.maxIso)
+                    } else null
                     val config = IntervalConfig(
                         frames = frames,
                         intervalMs = settings.intervalSec * 1_000L,
                         settleMs = settings.settleMs.toLong(),
                         exposureMs = exposureMs,
-                        path = path
+                        path = path,
+                        ramp = ramp
                     )
                     warnings += IntervalPlanner.validate(config)
                     steps = IntervalPlanner.plan(config)

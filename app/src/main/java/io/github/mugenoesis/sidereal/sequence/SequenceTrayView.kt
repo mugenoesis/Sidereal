@@ -44,6 +44,15 @@ class SequenceTrayView @JvmOverloads constructor(
 
     private var controller: SequenceController? = null
     private var renderedMode: SequenceMode? = null
+    private var renderedFieldIds: List<String> = emptyList()
+
+    /** The field rows scroll once there are more than the screen can show (the ramp options add two). */
+    private val fieldsScroll = object : android.widget.ScrollView(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val limit = (resources.displayMetrics.heightPixels * MAX_FIELDS_HEIGHT_FRACTION).toInt()
+            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST))
+        }
+    }.apply { isVerticalScrollBarEnabled = true }
 
     init {
         orientation = VERTICAL
@@ -56,7 +65,8 @@ class SequenceTrayView @JvmOverloads constructor(
         modeRow.addView(modeLabel, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         modeRow.addView(stepButton(">") { controller?.stepMode(+1) }, LayoutParams(dp(32), dp(32)))
         addView(modeRow, LayoutParams(dp(260), LayoutParams.WRAP_CONTENT))
-        addView(fieldsBox, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
+        fieldsScroll.addView(fieldsBox, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        addView(fieldsScroll, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
 
         // Summary and Start share one row to keep the tray short enough for the video area.
         val bottom = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -91,8 +101,10 @@ class SequenceTrayView @JvmOverloads constructor(
 
         modeLabel.text = settings.mode.label
         for (tag in listOf("step:<", "step:>")) findViewWithTag<View>(tag)?.isEnabled = !running
-        if (renderedMode != settings.mode) {
+        val fieldIds = settings.fields().map { it.id }
+        if (renderedMode != settings.mode || renderedFieldIds != fieldIds) {
             renderedMode = settings.mode
+            renderedFieldIds = fieldIds
             fieldsBox.removeAllViews()
             settings.fields().forEach { fieldsBox.addView(fieldRow(it.id)) }
         }
@@ -186,4 +198,9 @@ class SequenceTrayView @JvmOverloads constructor(
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        /** Share of the screen height the field rows may take before they scroll. */
+        const val MAX_FIELDS_HEIGHT_FRACTION = 0.5f
+    }
 }

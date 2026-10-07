@@ -46,7 +46,7 @@ class SequenceSettingsTest {
     fun `each mode exposes only the fields that mean something for it`() {
         fun ids(mode: SequenceMode) = base.copy(mode = mode).fields().map { it.id }
         assertEquals(listOf("frames", "intervalSec", "settleMs", "dither"), ids(SequenceMode.INTERVALOMETER))
-        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion"), ids(SequenceMode.TIMELAPSE))
+        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp"), ids(SequenceMode.TIMELAPSE))
         assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "shotsPerNode", "settleMs"), ids(SequenceMode.PANORAMA))
         assertEquals(listOf("calFrames"), ids(SequenceMode.DARKS))
         assertEquals(listOf("calFrames"), ids(SequenceMode.BIAS))
@@ -92,5 +92,24 @@ class SequenceSettingsTest {
     fun `mode steps backward and wraps around the start`() {
         assertEquals(SequenceMode.INTERVALOMETER, SequenceMode.TIMELAPSE.step(-1))
         assertEquals(SequenceMode.FLATS, SequenceMode.INTERVALOMETER.step(-1))
+    }
+
+    @Test
+    fun `the ramp options only appear once the ramp is switched on`() {
+        val on = base.copy(mode = SequenceMode.TIMELAPSE, ramp = true)
+        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp", "keepDarkPct", "maxIso"), on.fields().map { it.id })
+        assertTrue(on.fields().first { it.id == "ramp" }.toggle)
+    }
+
+    @Test
+    fun `ramp fields step along their ladders and show readable values`() {
+        val on = base.copy(mode = SequenceMode.TIMELAPSE, ramp = true)
+        assertEquals("50%", on.fields().first { it.id == "keepDarkPct" }.display)
+        assertEquals(75, on.adjust("keepDarkPct", +1).keepDarkPct)
+        assertEquals(25, on.adjust("keepDarkPct", -1).keepDarkPct)
+        assertEquals(0, on.copy(keepDarkPct = 0).adjust("keepDarkPct", -1).keepDarkPct)
+        assertEquals("ISO 3200", on.fields().first { it.id == "maxIso" }.display)
+        assertEquals(6400, on.adjust("maxIso", +1).maxIso)
+        assertTrue(on.adjust("ramp", +1).ramp.not())
     }
 }

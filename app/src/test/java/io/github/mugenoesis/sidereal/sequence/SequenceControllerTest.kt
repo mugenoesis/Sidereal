@@ -26,7 +26,40 @@ private class ControllerFakeHost(private val onPromptHook: suspend (String) -> U
     override suspend fun awaitUserContinue(message: String) = onPromptHook(message)
 }
 
+private class ClosableHost : SequenceHost, AutoCloseable {
+    var closed = 0
+    var gate: CompletableDeferred<Unit>? = null
+    override fun nowMs() = 0L
+    override suspend fun sleep(ms: Long) { gate?.await() }
+    override suspend fun moveTo(pitch: Float, yaw: Float) {}
+    override suspend fun capture(exposureMs: Long, label: String) = true
+    override suspend fun setShutter(shutterName: String) = true
+    override suspend fun awaitUserContinue(message: String) {}
+    override fun close() { closed++ }
+}
+
 class SequenceControllerTest {
+
+    @Test
+    fun `a host that needs cleaning up is closed once the run ends`() {
+        val closable = ClosableHost()
+        val c = SequenceController(CoroutineScope(Job() + Dispatchers.Unconfined), { closable }, { context }, {}, { null })
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.start()
+        assertEquals(1, closable.closed)
+    }
+
+    @Test
+    fun `and also when the run is stopped part way`() {
+        val closable = ClosableHost().also { it.gate = CompletableDeferred() }
+        val c = SequenceController(CoroutineScope(Job() + Dispatchers.Unconfined), { closable }, { context }, {}, { null })
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.start()
+        assertTrue(c.isRunning.value)
+        c.stop()
+        assertEquals(1, closable.closed)
+        assertFalse(c.isRunning.value)
+    }
 
     private val context = ShootContext(exposureMs = 100, shutterName = "SHUTTER_SPEED_1_10", attitude = Attitude(0f, 0f))
     private var host: ControllerFakeHost? = null

@@ -130,4 +130,48 @@ class SequencePlanFactoryTest {
         val withMove = SequenceEstimate.durationMs(listOf(SequenceStep.MoveTo(0f, 0f), SequenceStep.Capture(1_000)))
         assertTrue(withMove > noMove)
     }
+
+    private val rampSettings = SequenceSettings(
+        mode = SequenceMode.TIMELAPSE, durationMin = 2, intervalSec = 10, settleMs = 1000,
+        ramp = true, keepDarkPct = 25, maxIso = 1600
+    )
+
+    @Test
+    fun `a timelapse without the ramp has no ramp steps`() {
+        val plan = ok(rampSettings.copy(ramp = false))
+        assertTrue(plan.steps.none { it is SequenceStep.BeginRamp || it is SequenceStep.AdaptExposure })
+    }
+
+    @Test
+    fun `a ramped timelapse begins the ramp once, with limits taken from the settings and the interval`() {
+        val steps = ok(rampSettings).steps
+        val begin = steps.filterIsInstance<SequenceStep.BeginRamp>()
+        assertEquals(1, begin.size)
+        assertTrue(steps.first() is SequenceStep.BeginRamp)
+        val c = begin.single().config
+        assertEquals(0.25, c.keepDarkFraction, 1e-9)
+        assertEquals(1600, c.maxIso)
+        // 10 s interval minus 1 s settle, the 2 s write allowance and a half second of slack
+        assertEquals(6.5, c.maxShutterSec, 1e-9)
+    }
+
+    @Test
+    fun `every frame of a ramped timelapse adapts the exposure right after its slot starts and before the shutter`() {
+        val steps = ok(rampSettings).steps
+        val captures = steps.count { it is SequenceStep.Capture }
+        assertEquals(captures, steps.count { it is SequenceStep.AdaptExposure })
+        for ((i, step) in steps.withIndex()) {
+            if (step is SequenceStep.Capture) {
+                val adaptAt = steps.subList(0, i).indexOfLast { it is SequenceStep.AdaptExposure }
+                val waitAt = steps.subList(0, i).indexOfLast { it is SequenceStep.WaitUntil }
+                assertTrue("adapt $adaptAt after wait $waitAt", adaptAt > waitAt)
+            }
+        }
+    }
+
+    @Test
+    fun `an interval too short to leave any shutter time refuses to ramp and says why`() {
+        val msg = error(rampSettings.copy(intervalSec = 3))
+        assertTrue(msg, msg.contains("interval", ignoreCase = true))
+    }
 }

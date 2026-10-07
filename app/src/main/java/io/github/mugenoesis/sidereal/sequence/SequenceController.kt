@@ -73,7 +73,8 @@ class SequenceController(
             is PlanResult.Ok -> result.plan
         }
 
-        val runner = SequenceRunner(hostFactory { text -> awaitPrompt(text) })
+        val host = hostFactory { text -> awaitPrompt(text) }
+        val runner = SequenceRunner(host)
         runner.onProgress = { _progress.value = it }
         _isRunning.value = true
         _progress.value = SequenceProgress(capturesTotal = plan.captures)
@@ -83,6 +84,7 @@ class SequenceController(
                 runner.run(plan.steps)
                 (runner.progress.value.state as? SequenceState.Failed)?.let { _message.value = it.reason }
             } finally {
+                (host as? AutoCloseable)?.close()
                 _prompt.value = null
                 promptGate = null
                 _isRunning.value = false

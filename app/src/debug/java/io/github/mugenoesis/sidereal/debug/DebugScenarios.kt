@@ -48,6 +48,32 @@ object DebugScenarios {
                 Log.i(TAG, "shutter ${callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"] ?: "SHUTTER_SPEED_1_250") { e -> it(e) } }}")
             }
             "histogram_probe" -> histogramProbe()
+            "luma_vs_shutter" -> lumaVsShutter(args)
+            "luma_now" -> {
+                val camera = DJIConnectionManager.camera
+                var latest: ShortArray? = null
+                camera?.setHistogramEnabled(true) { }
+                camera?.setHistogramCallback { latest = it }
+                delay(1500)
+                val st = io.github.mugenoesis.sidereal.camera.HistogramModel.stats(latest)
+                Log.i(TAG, "LUMA_NOW ${args["tag"] ?: ""} mean=${st?.meanLuma?.let { "%.1f".format(it) }} hi=${st?.highlightsClipped?.let { "%.3f".format(it) }} att=${attitudeText()}")
+            }
+            "ramp_run" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                val c = io.github.mugenoesis.sidereal.sequence.SequenceFeature.latest?.controller ?: return@withContext Unit.also { Log.w(TAG, "no sequence feature") }
+                c.setMode(io.github.mugenoesis.sidereal.sequence.SequenceMode.TIMELAPSE)
+                fun setTo(field: String, target: Int, read: (io.github.mugenoesis.sidereal.sequence.SequenceSettings) -> Int) {
+                    repeat(20) { if (read(c.settings.value) < target) c.adjust(field, +1) else if (read(c.settings.value) > target) c.adjust(field, -1) }
+                }
+                setTo("durationMin", (args["duration"] ?: "1").toInt()) { it.durationMin }
+                setTo("intervalSec", (args["interval"] ?: "5").toInt()) { it.intervalSec }
+                setTo("settleMs", 500) { it.settleMs }
+                if (!c.settings.value.ramp) c.adjust("ramp", +1)
+                setTo("keepDarkPct", (args["keep"] ?: "0").toInt()) { it.keepDarkPct }
+                setTo("maxIso", (args["maxiso"] ?: "800").toInt()) { it.maxIso }
+                Log.i(TAG, "RAMP settings ${c.settings.value}")
+                c.start()
+                Log.i(TAG, "RAMP started msg=${c.message.value} running=${c.isRunning.value}")
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {
@@ -270,6 +296,25 @@ object DebugScenarios {
             Log.i(TAG, "HIST $label: len=${d.size} min=${d.minOrNull()} max=${d.maxOrNull()} sum=${d.sumOf { it.toLong() }}")
             Log.i(TAG, "HIST $label: ${d.joinToString(",")}")
             delay(3500) // hold this exposure so the host can screenshot it
+        }
+        callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
+    }
+
+    /** Mean preview luma at one ISO across a ladder of shutters - shows where the live preview stops following the shutter. */
+    private suspend fun lumaVsShutter(args: Map<String, String>) {
+        val camera = DJIConnectionManager.camera ?: return
+        var latest: ShortArray? = null
+        camera.setHistogramEnabled(true) { }
+        camera.setHistogramCallback { latest = it }
+        callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
+        val iso = args["iso"] ?: "ISO_400"
+        callback<String?> { RealCameraGateway.setIso(iso) { e -> it(e) } }
+        for (sh in listOf("1_250", "1_100", "1_60", "1_30", "1_15", "1_8", "1_4", "1_2", "1", "2", "4", "8")) {
+            val name = "SHUTTER_SPEED_" + (if (sh.contains("_")) sh else "${sh}")
+            val err = callback<String?> { RealCameraGateway.setShutterSpeed(name) { e -> it(e) } }
+            delay(2500)
+            val stats = io.github.mugenoesis.sidereal.camera.HistogramModel.stats(latest)
+            Log.i(TAG, "LUMA $iso $name err=$err mean=${stats?.meanLuma?.let { "%.1f".format(it) }} hi=${stats?.highlightsClipped?.let { "%.3f".format(it) }}")
         }
         callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
     }

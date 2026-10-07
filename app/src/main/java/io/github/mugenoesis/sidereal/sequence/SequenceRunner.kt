@@ -17,6 +17,12 @@ interface SequenceHost {
 
     /** False while the link to the camera is down (WiFi dropped, camera asleep), so a failed shot can wait instead of aborting. */
     fun isCameraReachable(): Boolean = true
+
+    /** Day-to-night ramping starts: read the camera's current settings as the baseline. */
+    suspend fun beginRamp(config: RampConfig) {}
+
+    /** Meter and set the camera for the next frame; returns a short description of the new exposure, or null. */
+    suspend fun adaptExposure(): String? = null
 }
 
 sealed class SequenceState {
@@ -35,7 +41,9 @@ data class SequenceProgress(
     val retries: Int = 0,
     /** True while a shot is waiting for the camera link to come back. */
     val waitingForCamera: Boolean = false,
-    val currentLabel: String = ""
+    val currentLabel: String = "",
+    /** The exposure the ramp last chose, e.g. "1/4 · ISO 800 (+2.0 stops)"; empty when not ramping. */
+    val exposureSummary: String = ""
 )
 
 /**
@@ -104,6 +112,8 @@ class SequenceRunner(
             is SequenceStep.SetShutter -> {
                 if (!host.setShutter(step.shutterName)) return "Camera rejected shutter speed ${step.shutterName}"
             }
+            is SequenceStep.BeginRamp -> host.beginRamp(step.config)
+            is SequenceStep.AdaptExposure -> host.adaptExposure()?.let { summary -> update { it.copy(exposureSummary = summary) } }
             is SequenceStep.Capture -> return capture(step)
         }
         return null

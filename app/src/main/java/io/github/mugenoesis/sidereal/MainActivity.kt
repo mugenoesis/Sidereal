@@ -529,6 +529,24 @@ class MainActivity : AppCompatActivity() {
             banner = findViewById(R.id.sequenceBanner),
             shutterButton = findViewById(R.id.btnShutter),
             shutterNameProvider = { exposureController.readout.value?.shutterSpeed?.name },
+            rampIo = io.github.mugenoesis.sidereal.sequence.RampIo(
+                shutterOptions = {
+                    exposureController.shutterRange.value.orEmpty().mapNotNull { s ->
+                        io.github.mugenoesis.sidereal.camera.ShutterLogic.exposureSeconds(s.name)?.let { io.github.mugenoesis.sidereal.sequence.ShutterOption(s.name, it) }
+                    }
+                },
+                isoOptions = {
+                    exposureController.isoRange.value.orEmpty().mapNotNull { i ->
+                        Regex("ISO_(\\d+)").matchEntire(i.name)?.let { io.github.mugenoesis.sidereal.sequence.IsoOption(i.name, it.groupValues[1].toInt()) }
+                    }
+                },
+                currentNames = { exposureController.readout.value?.let { it.shutterSpeed.name to "ISO_${it.iso}" } },
+                meanLuma = { io.github.mugenoesis.sidereal.camera.HistogramModel.stats(histogramController.histogramData.value)?.meanLuma },
+                setMetering = { on ->
+                    if (on) histogramController.activate()
+                    else if (findViewById<HistogramView>(R.id.histogramView).visibility != android.view.View.VISIBLE) histogramController.deactivate()
+                }
+            ),
             pointsProvider = {
                 fun TimedMoveController.Point?.toAttitude() = this?.let { Attitude(it.pitch.toFloat(), it.yaw.toFloat()) }
                 timedMoveController.capturedA.toAttitude() to timedMoveController.capturedB.toAttitude()

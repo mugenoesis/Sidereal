@@ -18,7 +18,9 @@ data class IntervalConfig(
     val exposureMs: Long,
     val hold: Attitude? = null,
     val path: Pair<Attitude, Attitude>? = null,
-    val dither: DitherConfig? = null
+    val dither: DitherConfig? = null,
+    /** Day-to-night ramping: the exposure is metered and reset before every frame. */
+    val ramp: RampConfig? = null
 )
 
 object IntervalPlanner {
@@ -32,8 +34,10 @@ object IntervalPlanner {
 
         val offsets = config.dither?.let { DitherGenerator.offsets(it, config.frames) }
         val steps = ArrayList<SequenceStep>()
+        config.ramp?.let { steps += SequenceStep.BeginRamp(it) }
         for (i in 0 until config.frames) {
             steps += SequenceStep.WaitUntil(i * config.intervalMs)
+            if (config.ramp != null) steps += SequenceStep.AdaptExposure
             val base = baseAttitude(config, i)
             if (base != null) {
                 val offset = offsets?.get(i) ?: Attitude(0f, 0f)

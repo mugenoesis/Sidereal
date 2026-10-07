@@ -28,4 +28,10 @@ sealed class SequenceStep {
 
     /** Change the camera's shutter speed; [shutterName] is a `SettingsDefinitions.ShutterSpeed` enum name. */
     data class SetShutter(val shutterName: String) : SequenceStep()
+
+    /** Start day-to-night exposure ramping for the rest of the sequence (once, before the first frame). */
+    data class BeginRamp(val config: RampConfig) : SequenceStep()
+
+    /** Meter the scene now and set the camera's shutter/ISO for the next frame, per the ramp begun by [BeginRamp]. */
+    object AdaptExposure : SequenceStep()
 }

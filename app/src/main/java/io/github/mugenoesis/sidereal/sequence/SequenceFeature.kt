@@ -31,11 +31,17 @@ class SequenceFeature(
     private val banner: TextView,
     private val shutterButton: View,
     private val shutterNameProvider: () -> String?,
-    private val pointsProvider: () -> Pair<Attitude?, Attitude?>
+    private val pointsProvider: () -> Pair<Attitude?, Attitude?>,
+    private val rampIo: RampIo? = null
 ) {
+    companion object {
+        /** The live feature, for the debug harness. */
+        @Volatile var latest: SequenceFeature? = null
+    }
+
     val controller = SequenceController(
         scope = activity.lifecycleScope,
-        hostFactory = { onPrompt -> RealSequenceHost(onPrompt) },
+        hostFactory = { onPrompt -> RealSequenceHost(onPrompt, rampIo = rampIo) },
         contextProvider = ::shootContext,
         prepare = ::ensurePhotoMode,
         precondition = ::blockedReason
@@ -44,6 +50,7 @@ class SequenceFeature(
     private var promptDialog: AlertDialog? = null
 
     init {
+        latest = this
         tray.bind(controller, activity.lifecycleScope)
 
         combine(controller.isRunning, controller.progress, controller.settings) { running, progress, settings ->
@@ -53,7 +60,9 @@ class SequenceFeature(
             shutterButton.alpha = if (running) 0.4f else 1f
             banner.visibility = if (running) View.VISIBLE else View.GONE
             banner.text = "${settings.mode.label} · ${progress.capturesDone}/${progress.capturesTotal}" +
-                if (progress.state is SequenceState.AwaitingUser) " · waiting for you" else ""
+                (if (progress.state is SequenceState.AwaitingUser) " · waiting for you" else "") +
+                (if (progress.waitingForCamera) " · waiting for the camera" else "") +
+                (if (progress.exposureSummary.isNotEmpty()) "\n${progress.exposureSummary}" else "")
         }.launchIn(activity.lifecycleScope)
 
         controller.prompt.onEach { showPrompt(it) }.launchIn(activity.lifecycleScope)

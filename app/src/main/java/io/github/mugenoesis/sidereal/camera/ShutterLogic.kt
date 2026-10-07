@@ -33,15 +33,14 @@ object ShutterLogic {
     }
 
     /**
-     * Shutter-open time in ms for a ShutterSpeed enum name, or null for
-     * AUTO/UNKNOWN (no fixed duration). Names are `SHUTTER_SPEED_<x>` for
-     * whole/decimal seconds (`3`, `3_DOT_2`) and `SHUTTER_SPEED_1_<d>` for a
-     * 1/d fraction (`1_100`, `1_2_DOT_5`). Never below 1ms.
+     * Shutter-open time in seconds for a ShutterSpeed enum name, exact (1/8000 stays 0.000125), or null for
+     * AUTO/UNKNOWN (no fixed duration). Names are `SHUTTER_SPEED_<x>` for whole/decimal seconds (`3`, `3_DOT_2`) and
+     * `SHUTTER_SPEED_1_<d>` for a 1/d fraction (`1_100`, `1_2_DOT_5`).
      */
-    fun exposureMs(speedName: String): Long? {
+    fun exposureSeconds(speedName: String): Double? {
         val raw = speedName.removePrefix("SHUTTER_SPEED_").replace("_DOT_", ".")
         val parts = raw.split("_")
-        val seconds = when (parts.size) {
+        return when (parts.size) {
             1 -> parts[0].toDoubleOrNull()
             2 -> {
                 val num = parts[0].toDoubleOrNull()
@@ -49,7 +48,9 @@ object ShutterLogic {
                 if (num != null && den != null && den > 0) num / den else null
             }
             else -> null
-        } ?: return null
-        return Math.round(seconds * 1000).coerceAtLeast(1L)
+        }
     }
+
+    /** [exposureSeconds] in whole milliseconds, never below 1 ms - for waiting on a shot, not for exposure maths. */
+    fun exposureMs(speedName: String): Long? = exposureSeconds(speedName)?.let { Math.round(it * 1000).coerceAtLeast(1L) }
 }

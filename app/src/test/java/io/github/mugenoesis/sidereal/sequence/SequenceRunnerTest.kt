@@ -52,6 +52,15 @@ private class FakeHost : SequenceHost {
     override suspend fun awaitUserContinue(message: String) {
         events += "prompt($message)"
     }
+
+    override suspend fun beginRamp(config: RampConfig) {
+        events += "beginRamp(${config.keepDarkFraction})"
+    }
+
+    override suspend fun adaptExposure(): String? {
+        events += "adapt"
+        return "adapted"
+    }
 }
 
 class SequenceRunnerTest {
@@ -239,5 +248,18 @@ class SequenceRunnerTest {
         val runner = SequenceRunner(host)
         runner.run(plan(frames = 1))
         assertTrue(runner.progress.value.state is SequenceState.Failed)
+    }
+
+    @Test
+    fun `ramp steps reach the host in order, and the summary shows in progress`() = runBlocking {
+        val host = FakeHost()
+        val runner = SequenceRunner(host)
+        runner.run(listOf(
+            SequenceStep.BeginRamp(RampConfig(keepDarkFraction = 0.25, maxShutterSec = 2.0, maxIso = 800)),
+            SequenceStep.AdaptExposure,
+            SequenceStep.Capture(500, "light")
+        ))
+        assertEquals(listOf("beginRamp(0.25)", "adapt", "capture(light,ok)"), host.events.filter { !it.startsWith("sleep") })
+        assertEquals("adapted", runner.progress.value.exposureSummary)
     }
 }

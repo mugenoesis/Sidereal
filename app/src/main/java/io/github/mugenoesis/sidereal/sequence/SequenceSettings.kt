@@ -37,7 +37,12 @@ data class SequenceSettings(
     val pitchSpanDeg: Int = 60,
     val overlapPct: Int = 30,
     val shotsPerNode: Int = 1,
-    val calFrames: Int = 15
+    val calFrames: Int = 15,
+    /** Day-to-night exposure ramp for timelapses. */
+    val ramp: Boolean = false,
+    /** How much of the scene's darkening is kept in the frames, percent (0 = night as bright as day, 100 = fixed exposure). */
+    val keepDarkPct: Int = 50,
+    val maxIso: Int = 3200
 ) {
     companion object {
         private val FRAMES = listOf(1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 1000)
@@ -50,6 +55,8 @@ data class SequenceSettings(
         private val OVERLAP_PCT = listOf(10, 15, 20, 25, 30, 35, 40, 50)
         private val SHOTS = listOf(1, 2, 3, 4, 5, 8, 10)
         private val CAL_FRAMES = listOf(3, 5, 10, 15, 20, 30, 50)
+        private val KEEP_DARK_PCT = listOf(0, 25, 50, 75, 100)
+        private val MAX_ISO = listOf(400, 800, 1600, 3200, 6400, 12800, 25600)
 
         /** Next rung strictly above [value] (or the top), or strictly below it (or the bottom) - so an off-ladder value steps to its neighbour. */
         private fun step(ladder: List<Int>, value: Int, direction: Int): Int =
@@ -77,8 +84,12 @@ data class SequenceSettings(
             intervalField(),
             FieldSpec("fps", "Clip fps", "$fps fps"),
             settleField(),
-            toggle("motion", "A→B move", motion)
-        )
+            toggle("motion", "A→B move", motion),
+            toggle("ramp", "Day→night ramp", ramp)
+        ) + if (ramp) listOf(
+            FieldSpec("keepDarkPct", "Keep darkness", "$keepDarkPct%"),
+            FieldSpec("maxIso", "Max ISO", "ISO $maxIso")
+        ) else emptyList()
         SequenceMode.PANORAMA -> listOf(
             FieldSpec("yawSpanDeg", "Yaw span", "$yawSpanDeg°"),
             FieldSpec("pitchSpanDeg", "Pitch span", "$pitchSpanDeg°"),
@@ -108,6 +119,9 @@ data class SequenceSettings(
         "overlapPct" -> copy(overlapPct = step(OVERLAP_PCT, overlapPct, direction))
         "shotsPerNode" -> copy(shotsPerNode = step(SHOTS, shotsPerNode, direction))
         "calFrames" -> copy(calFrames = step(CAL_FRAMES, calFrames, direction))
+        "ramp" -> copy(ramp = !ramp)
+        "keepDarkPct" -> copy(keepDarkPct = step(KEEP_DARK_PCT, keepDarkPct, direction))
+        "maxIso" -> copy(maxIso = step(MAX_ISO, maxIso, direction))
         else -> this
     }
 }

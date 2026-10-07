@@ -25,6 +25,9 @@
 
 **Camera**
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
+- Day-to-night ("holy grail") timelapse ramp: meters the live histogram before each frame
+  and follows the light with shutter then ISO in smooth third-stop steps; Keep-darkness
+  and Max-ISO options.
 - Camera sounds played on the phone (shutter click, self-timer beeps, record
   start/stop, focus-lock beep), each switchable in the More tray - the DJI SDK has
   no setting for the camera's own sounds.
