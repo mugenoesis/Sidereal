@@ -38,49 +38,40 @@ class GamepadBindingsTest {
     }
 
     @Test
-    fun `an action lives on one button only, so moving it frees its old button`() {
-        val b = defaults.with(GamepadButton.B, GamepadAction.SHUTTER)
-        assertEquals(GamepadAction.NONE, b.actionFor(GamepadButton.R2))
-        assertEquals(1, GamepadButton.values().count { b.actionFor(it) == GamepadAction.SHUTTER })
+    fun `the same action can be on as many buttons as you like, and nothing else changes`() {
+        val b = defaults.with(GamepadButton.B, GamepadAction.SHUTTER).with(GamepadButton.START, GamepadAction.SHUTTER)
+        assertEquals(GamepadAction.SHUTTER, b.actionFor(GamepadButton.B))
+        assertEquals(GamepadAction.SHUTTER, b.actionFor(GamepadButton.START))
+        assertEquals("R2 keeps it too", GamepadAction.SHUTTER, b.actionFor(GamepadButton.R2))
+        assertEquals(3, GamepadButton.values().count { b.actionFor(it) == GamepadAction.SHUTTER })
     }
 
     @Test
-    fun `giving a button a new action replaces its old one`() {
+    fun `giving a button a new action replaces only that button's old one`() {
         val b = defaults.with(GamepadButton.A, GamepadAction.CYCLE_GRID)
         assertEquals(GamepadAction.CYCLE_GRID, b.actionFor(GamepadButton.A))
-        assertEquals(GamepadAction.NONE, b.actionFor(GamepadButton.Y))
-        assertEquals(GamepadAction.NONE, b.buttonFor(GamepadAction.AUTOFOCUS)?.let { b.actionFor(it) } ?: GamepadAction.NONE)
+        assertEquals("Y keeps the grid too", GamepadAction.CYCLE_GRID, b.actionFor(GamepadButton.Y))
+        assertEquals("autofocus is simply no longer on any button", null, b.buttonFor(GamepadAction.AUTOFOCUS))
     }
 
     @Test
-    fun `NONE clears a button and can be given to many`() {
-        val b = defaults.with(GamepadButton.A, GamepadAction.NONE).with(GamepadButton.X, GamepadAction.NONE)
+    fun `NONE clears just that button`() {
+        val b = defaults.with(GamepadButton.A, GamepadAction.NONE)
         assertEquals(GamepadAction.NONE, b.actionFor(GamepadButton.A))
-        assertEquals(GamepadAction.NONE, b.actionFor(GamepadButton.X))
+        assertEquals(GamepadAction.TOGGLE_AE_LOCK, b.actionFor(GamepadButton.X))
     }
 
     @Test
-    fun `cycling steps through the actions in order and wraps both ways`() {
-        val all = GamepadAction.values().toList()
-        val b = defaults.with(GamepadButton.B, GamepadAction.NONE)
-        val next = b.cycled(GamepadButton.B, +1)
-        assertEquals(all[1], next.actionFor(GamepadButton.B))
-        val back = b.cycled(GamepadButton.B, -1)
-        assertEquals(all.last(), back.actionFor(GamepadButton.B))
-    }
-
-    @Test
-    fun `cycling onto an action another button has moves it, never duplicates`() {
-        var b = defaults.with(GamepadButton.B, GamepadAction.NONE)
-        repeat(GamepadAction.values().size) { b = b.cycled(GamepadButton.B, +1) }
-        for (a in GamepadAction.values().filter { it != GamepadAction.NONE }) {
-            assertTrue("$a", GamepadButton.values().count { b.actionFor(it) == a } <= 1)
-        }
+    fun `buttonsFor lists every button that does an action`() {
+        val b = defaults.with(GamepadButton.B, GamepadAction.SHUTTER)
+        assertEquals(setOf(GamepadButton.R2, GamepadButton.B), b.buttonsFor(GamepadAction.SHUTTER).toSet())
+        assertTrue(b.buttonsFor(GamepadAction.NONE).isNotEmpty())
     }
 
     @Test
     fun `bindings survive being stored and read back`() {
         val b = defaults.with(GamepadButton.B, GamepadAction.SHUTTER).with(GamepadButton.START, GamepadAction.TOGGLE_PHOTO_VIDEO)
+            .with(GamepadButton.SELECT, GamepadAction.SHUTTER).with(GamepadButton.A, GamepadAction.NONE)
         assertEquals(b, GamepadBindings.decode(b.encode()))
     }
 
@@ -97,6 +88,7 @@ class GamepadBindingsTest {
         val b = GamepadBindings.decode(stored)
         assertEquals(GamepadAction.SHUTTER, b.actionFor(GamepadButton.B))
         assertEquals(GamepadAction.AUTOFOCUS, b.actionFor(GamepadButton.A)) // that entry was skipped: default stays
+        assertEquals(GamepadAction.SHUTTER, b.actionFor(GamepadButton.R2))
     }
 
     @Test

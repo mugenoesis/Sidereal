@@ -47,30 +47,22 @@ enum class GamepadAction(val label: String) {
 }
 
 /**
- * Which action each button triggers. An action lives on at most one button (giving it to another button moves it),
- * a button has at most one action, and [GamepadAction.NONE] clears a button. Immutable: every change returns a copy.
+ * Which action each button triggers. A button has one action ([GamepadAction.NONE] clears it), and the same action
+ * may be on as many buttons as you like. Immutable: every change returns a copy.
  */
 class GamepadBindings private constructor(private val map: Map<GamepadButton, GamepadAction>) {
 
     fun actionFor(button: GamepadButton): GamepadAction = map[button] ?: GamepadAction.NONE
 
-    fun buttonFor(action: GamepadAction): GamepadButton? = map.entries.firstOrNull { it.value == action }?.key
+    /** Every button currently set to [action] (for [GamepadAction.NONE]: every button with nothing on it). */
+    fun buttonsFor(action: GamepadAction): List<GamepadButton> = REMAPPABLE.filter { actionFor(it) == action }
+
+    fun buttonFor(action: GamepadAction): GamepadButton? = buttonsFor(action).firstOrNull()
 
     fun with(button: GamepadButton, action: GamepadAction): GamepadBindings {
         val next = LinkedHashMap(map)
-        next.remove(button)
-        if (action != GamepadAction.NONE) {
-            next.entries.removeAll { it.value == action }
-            next[button] = action
-        }
+        if (action == GamepadAction.NONE) next.remove(button) else next[button] = action
         return GamepadBindings(next)
-    }
-
-    /** The next (or previous) action in the list for [button], wrapping at both ends - how the settings screen steps through them. */
-    fun cycled(button: GamepadButton, direction: Int): GamepadBindings {
-        val all = GamepadAction.values()
-        val index = all.indexOf(actionFor(button))
-        return with(button, all[(index + direction).mod(all.size)])
     }
 
     /** "A=AUTOFOCUS;B=NONE;..." for every remappable button, so an explicitly cleared default stays cleared. */

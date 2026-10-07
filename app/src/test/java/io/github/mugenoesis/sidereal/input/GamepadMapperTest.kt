@@ -253,11 +253,26 @@ class GamepadMapperTest {
     private fun remapped(b: GamepadBindings) = GamepadMapper(actions, GamepadConfig(), b)
 
     @Test
-    fun `a remapped button does the new thing and the old one does nothing`() {
+    fun `a remapped button does the new thing and the old one keeps working too`() {
         val m = remapped(GamepadBindings.default().with(GamepadButton.A, GamepadAction.SHUTTER))
         m.onButton(GamepadButton.A, true)
         m.onButton(GamepadButton.R2, true)
-        assertEquals(listOf("shutter"), actions.events)
+        assertEquals(listOf("shutter", "shutter"), actions.events)
+    }
+
+    @Test
+    fun `two buttons doing a held action each start and stop it on their own`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.B, GamepadAction.FOCUS_NEARER))
+        m.onButton(GamepadButton.L1, true, nowMs = 0)
+        m.onButton(GamepadButton.B, true, nowMs = 10)
+        m.onButton(GamepadButton.L1, false, nowMs = 50) // B is the one still holding
+        actions.events.clear()
+        m.tick(1_000)
+        assertEquals(listOf("focus(-1)"), actions.events)
+        m.onButton(GamepadButton.B, false, nowMs = 1_010)
+        actions.events.clear()
+        m.tick(3_000)
+        assertTrue(actions.events.isEmpty())
     }
 
     @Test

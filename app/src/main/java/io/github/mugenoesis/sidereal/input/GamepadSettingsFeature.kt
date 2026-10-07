@@ -50,7 +50,7 @@ class GamepadSettingsFeature(private val activity: AppCompatActivity, private va
         content.addView(label("Sticks", 14f, bold = true))
         for (setting in GamepadSetting.values()) content.addView(settingRow(setting))
         content.addView(label("Buttons", 14f, bold = true).apply { setPadding(0, dp(16), 0, 0) })
-        content.addView(label("Tap to change, long-press to go back. An action can only be on one button.", 11f).apply { alpha = 0.7f })
+        content.addView(label("Tap a button to choose what it does. Several buttons can do the same thing.", 11f).apply { alpha = 0.7f })
         for (button in GamepadBindings.REMAPPABLE) content.addView(buttonRow(button))
 
         dialog = AlertDialog.Builder(activity)
@@ -81,8 +81,7 @@ class GamepadSettingsFeature(private val activity: AppCompatActivity, private va
             textSize = 12f
             setBackgroundResource(R.drawable.bg_pill_container)
             tag = "gamepad_button_${button.name}"
-            setOnClickListener { rebind(button, +1) }
-            setOnLongClickListener { rebind(button, -1); true }
+            setOnClickListener { chooseAction(button) }
         }
         buttonViews[button] = action
         val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -97,10 +96,21 @@ class GamepadSettingsFeature(private val activity: AppCompatActivity, private va
         valueViews[setting]?.text = mapper.config.display(setting)
     }
 
-    private fun rebind(button: GamepadButton, direction: Int) {
-        mapper.bindings = mapper.bindings.cycled(button, direction)
-        AppPreferences.gamepadBindings = mapper.bindings.encode()
-        refreshButtons()
+    /** A pop-out list of everything this button can do, the current choice ticked. */
+    private fun chooseAction(button: GamepadButton) {
+        val actions = GamepadAction.values()
+        val current = actions.indexOf(mapper.bindings.actionFor(button))
+        AlertDialog.Builder(activity)
+            .setTitle(buttonName(button))
+            .setSingleChoiceItems(actions.map { it.label }.toTypedArray(), current) { picker, which ->
+                mapper.bindings = mapper.bindings.with(button, actions[which])
+                AppPreferences.gamepadBindings = mapper.bindings.encode()
+                refreshButtons()
+                picker.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+            .also { NightMode.apply(it) }
     }
 
     private fun reset() {
