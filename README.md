@@ -193,10 +193,12 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   as a button and as an axis are treated as one press.
 - **Camera sounds on record start and stop:** built and unit-tested, but not
   tried on the camera, because the app can't stop a recording itself.
-- **Wear OS watch app:** the screens (including the icon and the *Open on
-  phone* button's "can't reach phone" case) are checked on a Wear OS emulator
-  and the phone side against the real camera, but the Bluetooth link between a
-  real watch and phone, and the button's success case, are untested.
+- **Wear OS watch app:** checked on a real OnePlus Watch 4 (Wear OS 6) paired
+  to a Samsung Galaxy Fold: live status, the shutter, live view, drag to aim
+  and the *Open on phone* button all work, over the real Bluetooth link. Other
+  watches haven't been tried. Because the picture is dragged to aim, the
+  watch's swipe-to-dismiss gesture is switched off on that screen; leave the
+  app with the watch's own button.
 - **Joining the Osmo's WiFi from the app** (tap the "not on your Osmo's
   WiFi" message, Android 10+): works, but Android asks you to confirm the
   network the first time. Uses the factory password `12341234` unless you

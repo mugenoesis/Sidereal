@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The remote's picture is dragged to aim the gimbal; with swipe-to-dismiss on, Wear OS takes the drag over (and
+         cancels it) as soon as it moves. The app is left with the watch's hardware button instead. -->
+    <style name="WatchTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowSwipeToDismiss">false</item>
+    </style>
+</resources>

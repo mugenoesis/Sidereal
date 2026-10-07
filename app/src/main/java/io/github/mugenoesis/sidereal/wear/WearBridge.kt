@@ -49,6 +49,8 @@ class WearBridge(
 
     private val listener = MessageClient.OnMessageReceivedListener { onMessage(it) }
     private var statusJob: Job? = null
+    private var deadManJob: Job? = null
+    private val deadMan = GimbalDeadMan()
 
     private val frameThread = Executors.newSingleThreadExecutor { Thread(it, "wear-frames") }
     private val backoff = PushBackoff()
@@ -59,6 +61,15 @@ class WearBridge(
     fun start() {
         active = this
         messages.addListener(listener)
+        deadManJob = scope.launch {
+            while (isActive) {
+                delay(DEAD_MAN_CHECK_MS)
+                if (deadMan.shouldStop(SystemClock.elapsedRealtime())) {
+                    Log.w(TAG, "no word from the watch while the gimbal was turning - stopping it")
+                    host.gimbal(0f, 0f)
+                }
+            }
+        }
         statusJob = scope.launch {
             while (isActive) {
                 pushStatus()
@@ -71,13 +82,17 @@ class WearBridge(
         if (active === this) active = null
         messages.removeListener(listener)
         statusJob?.cancel()
+        deadManJob?.cancel()
         closeLiveView()
         frameThread.shutdown()
     }
 
     private fun onMessage(event: MessageEvent) {
         if (!event.path.startsWith(WearPaths.COMMAND_PREFIX)) return
-        val command = WearProtocol.decode(event.path, event.data) ?: return
+        val command = WearProtocol.decode(event.path, event.data)
+        Log.d(TAG, "command from the watch: ${event.path} -> $command")
+        if (command == null) return
+        if (command is WearCommand.Gimbal) deadMan.onRate(SystemClock.elapsedRealtime(), command.yaw, command.pitch)
         if (command is WearCommand.LiveView) {
             if (command.on) openLiveView(event.sourceNodeId) else closeLiveView()
         }
@@ -167,6 +182,7 @@ class WearBridge(
         private const val TAG = "WearBridge"
         private const val WEARABLE_API_UNAVAILABLE = 17 // ConnectionResult.API_UNAVAILABLE
         private const val STATUS_INTERVAL_MS = 1_500L
+        private const val DEAD_MAN_CHECK_MS = 150L
         private const val FRAME_INTERVAL_MS = 100L       // ~10 fps at best
         private const val FRAME_INTERVAL_MAX_MS = 1_000L
         private const val THUMBNAIL_SIDE = 280
