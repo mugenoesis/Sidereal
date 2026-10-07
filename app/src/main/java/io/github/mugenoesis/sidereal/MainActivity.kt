@@ -16,7 +16,10 @@ import io.github.mugenoesis.sidereal.audio.AudioRecorderController
 import io.github.mugenoesis.sidereal.audio.AudioSourceController
 import io.github.mugenoesis.sidereal.audio.AudioSourceKind
 import io.github.mugenoesis.sidereal.camera.CameraLabels
+import io.github.mugenoesis.sidereal.camera.BatteryLevel
 import io.github.mugenoesis.sidereal.camera.CameraModeController
+import io.github.mugenoesis.sidereal.camera.CameraStatusController
+import io.github.mugenoesis.sidereal.camera.CameraStatusFormat
 import io.github.mugenoesis.sidereal.camera.CycleHelpers
 import io.github.mugenoesis.sidereal.camera.ExposureController
 import io.github.mugenoesis.sidereal.camera.FocusController
@@ -90,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     private val mediaFormatController = MediaFormatController()
     private val audioRecorderController = AudioRecorderController()
     private val focusAssistController = FocusAssistController()
+    private lateinit var cameraStatusController: CameraStatusController
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
     private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, SEQUENCE, MORE }
@@ -302,6 +306,7 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         bindCameraSettingsViews()
         bindSequenceFeature()
+        bindCameraStatus()
         observeConnectionState()
         observeWifiState()
         observeComponentChanges()
@@ -316,6 +321,23 @@ class MainActivity : AppCompatActivity() {
         observeMoreSettings()
         observeTimedMove()
         updateGimbalModeUi()
+    }
+
+    private fun bindCameraStatus() {
+        cameraStatusController = CameraStatusController(lifecycleScope)
+        val text = findViewById<android.widget.TextView>(R.id.cameraStatusText)
+        cameraStatusController.status
+            .onEach { status ->
+                val connected = DJIConnectionManager.connectionState.value is DJIConnectionManager.ConnectionState.ProductConnected
+                text.visibility = if (connected) android.view.View.VISIBLE else android.view.View.GONE
+                text.text = "${CameraStatusFormat.battery(status.batteryPercent)}  ·  ${CameraStatusFormat.card(status)}"
+                val warn = CameraStatusFormat.cardWarning(status) || CameraStatusFormat.batteryLevel(status.batteryPercent) == BatteryLevel.CRITICAL
+                text.setTextColor(if (warn) 0xFFFFB74D.toInt() else android.graphics.Color.WHITE)
+            }
+            .launchIn(lifecycleScope)
+        DJIConnectionManager.connectionState
+            .onEach { cameraStatusController.status.value.let { _ -> text.visibility = if (it is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE } }
+            .launchIn(lifecycleScope)
     }
 
     private fun bindSequenceFeature() {

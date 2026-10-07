@@ -178,6 +178,24 @@
 
     </LinearLayout>
 
+    <!-- Battery / card status, top-left of the video. Filled by CameraStatusController. -->
+    <TextView
+        android:id="@+id/cameraStatusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="68dp"
+        android:layout_marginTop="22dp"
+        android:background="@drawable/bg_pill_container"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <!-- Live histogram graph - only streams/renders while visible (see
          HistogramController.activate()/deactivate() and MainActivity's
          histogram toggle handler); bucket-to-pixel mapping is a

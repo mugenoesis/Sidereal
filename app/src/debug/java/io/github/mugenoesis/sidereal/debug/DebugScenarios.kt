@@ -13,7 +13,9 @@ import io.github.mugenoesis.sidereal.sequence.SequenceRunner
 import io.github.mugenoesis.sidereal.sequence.SequenceState
 import io.github.mugenoesis.sidereal.sequence.SequenceStep
 import io.github.mugenoesis.sidereal.camera.ShutterLogic
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -41,6 +43,7 @@ object DebugScenarios {
                 Log.i(TAG, "shutter ${callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"] ?: "SHUTTER_SPEED_1_250") { e -> it(e) } }}")
             }
             "focus_sweep" -> focusSweep(args)
+            "probe_camera" -> probeCamera()
             "reset_camera" -> {
                 callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
                 callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }
@@ -180,5 +183,38 @@ object DebugScenarios {
             delay(dwellMs)
         }
         Log.i(TAG, "RESULT focus_sweep: DONE")
+    }
+
+    /** Logs what this camera/product actually supports, so features are built against facts rather than the SDK docs. */
+    private suspend fun probeCamera() {
+        val camera = DJIConnectionManager.camera ?: error("no camera")
+        val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+        suspend fun key(name: String) {
+            val v = suspendCancellableCoroutine<String> { cont ->
+                km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                    override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(if (value is Array<*>) value.joinToString() else value.toString()) }
+                    override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                }) ?: cont.resume("no key manager")
+            }
+            Log.i(TAG, "PROBE $name = $v")
+        }
+        key(dji.keysdk.CameraKey.SHOOT_PHOTO_MODE)
+        key(dji.keysdk.CameraKey.SHOOT_PHOTO_MODE_RANGE)
+        key(dji.keysdk.CameraKey.AE_LOCK)
+        key(dji.keysdk.CameraKey.PHOTO_BURST_COUNT)
+        key(dji.keysdk.CameraKey.PHOTO_AEB_COUNT)
+        key(dji.keysdk.CameraKey.PHOTO_TIME_INTERVAL_SETTINGS)
+        val st = DJIConnectionManager.storageState.value
+        Log.i(TAG, "PROBE storage: inserted=${st?.isInserted} total=${st?.totalSpaceInMB}MB remaining=${st?.remainingSpaceInMB}MB photos=${st?.availableCaptureCount} recSec=${st?.availableRecordingTimeInSeconds}")
+        val product = dji.sdk.sdkmanager.DJISDKManager.getInstance().product
+        val battery = product?.battery
+        Log.i(TAG, "PROBE product=${product?.model} battery=${battery != null} connected=${battery?.isConnected}")
+        val pct = suspendCancellableCoroutine<String> { cont ->
+            battery?.setStateCallback { s -> if (cont.isActive) cont.resume("charge=${s.chargeRemainingInPercent}% voltage=${s.voltage} temp=${s.temperature}") }
+                ?: cont.resume("no battery component")
+            kotlinx.coroutines.GlobalScope.launch { delay(4000); if (cont.isActive) cont.resume("battery callback timed out") }
+        }
+        Log.i(TAG, "PROBE battery state: $pct")
+        Log.i(TAG, "RESULT probe_camera: DONE")
     }
 }
