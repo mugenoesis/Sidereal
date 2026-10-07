@@ -4,6 +4,7 @@ import android.util.Log
 import io.github.mugenoesis.sidereal.dji.DJIConnectionManager
 import io.github.mugenoesis.sidereal.dji.RealCameraGateway
 import io.github.mugenoesis.sidereal.sequence.Attitude
+import io.github.mugenoesis.sidereal.sequence.CalibrationPlanner
 import io.github.mugenoesis.sidereal.sequence.DitherConfig
 import io.github.mugenoesis.sidereal.sequence.GimbalArrival
 import io.github.mugenoesis.sidereal.sequence.IntervalConfig
@@ -95,6 +96,19 @@ object DebugScenarios {
                 Log.i(TAG, "RESULT video_probe: DONE")
             }
             "video_settings" -> videoSettings()
+            "media_debug" -> {
+                val media = io.github.mugenoesis.sidereal.camera.MediaLibraryController()
+                val manager = DJIConnectionManager.camera?.mediaManager
+                Log.i(TAG, "MEDIA mediaManager=${manager != null} supported=${DJIConnectionManager.camera?.isMediaDownloadModeSupported}")
+                Log.i(TAG, "MEDIA mode before=${DJIConnectionManager.cameraSystemState.value?.mode}")
+                media.enterAndLoad()
+                for (i in 1..16) {
+                    delay(1000)
+                    Log.i(TAG, "MEDIA t=$i mode=${DJIConnectionManager.cameraSystemState.value?.mode} load=${media.loadState.value} files=${media.files.value.size} snapshot=${manager?.sdCardFileListSnapshot?.size} state=${manager?.sdCardFileListState}")
+                }
+                media.exit()
+            }
+            "seq_modes" -> seqModes()
             "set_standard" -> {
                 val target = args["standard"] ?: "PAL"
                 Log.i(TAG, "set_standard $target -> ${setStandardAndWait(target)}")
@@ -372,5 +386,62 @@ object DebugScenarios {
             if (now == target) return "ok after ${timeoutMs - (end - System.currentTimeMillis())}ms"
         }
         return "timed out waiting for $target"
+    }
+
+    /** Runs a real motion timelapse, darks, bias (with shutter restore) and flats, checking real files and settings. */
+    private suspend fun seqModes() {
+        val problems = mutableListOf<String>()
+        callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+        delay(1500)
+        callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
+        callback<String?> { RealCameraGateway.setShutterSpeed("SHUTTER_SPEED_1_2") { e -> it(e) } }
+        delay(1000)
+        val host = RealSequenceHost(onPrompt = { Log.i(TAG, "SEQ prompt shown: $it"); delay(500) })
+        val base = host.currentAttitude() ?: error("no gimbal")
+        val shutterBefore = readShutter()
+
+        suspend fun run(label: String, steps: List<SequenceStep>, expectedFiles: Int, check: suspend () -> Unit = {}) {
+            val before = sdFileCount()
+            callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+            delay(2500)
+            val runner = SequenceRunner(host)
+            runner.run(steps)
+            check()
+            delay(2500)
+            val after = sdFileCount()
+            Log.i(TAG, "SEQ $label: state=${runner.progress.value.state} files $before -> $after (expected +$expectedFiles)")
+            if (runner.progress.value.state != SequenceState.Done) problems += "$label state=${runner.progress.value.state}"
+            if (before == null || after == null || after - before != expectedFiles) problems += "$label files $before->$after expected +$expectedFiles"
+        }
+
+        // motion timelapse: A -> B, 3 frames
+        val a = Attitude(base.pitch, base.yaw)
+        val b = Attitude(base.pitch + 4f, base.yaw + 6f)
+        val seen = mutableListOf<Attitude>()
+        val tl = IntervalPlanner.plan(IntervalConfig(3, 7_000, 1_000, 500, path = a to b))
+        run("timelapse", tl, 3) { }
+        // (attitude at the end of the run should be at B)
+        val end = host.currentAttitude()
+        Log.i(TAG, "SEQ timelapse ended at $end, B=$b")
+        if (end == null || GimbalArrival.errorDeg(end, Attitude(GimbalArrival.quantize(b.pitch), GimbalArrival.quantize(b.yaw))) > 0.5f) problems += "timelapse did not finish at B ($end)"
+        host.moveTo(a.pitch, a.yaw)
+
+        run("darks", CalibrationPlanner.darks(2, 500), 2)
+        run("flats", CalibrationPlanner.flats(2, 100), 2)
+        run("bias", CalibrationPlanner.bias(2, shutterBefore), 2) {
+            delay(1500)
+            val now = readShutter()
+            Log.i(TAG, "SEQ bias shutter restored: before=$shutterBefore now=$now")
+            if (now != shutterBefore) problems += "shutter not restored ($shutterBefore -> $now)"
+        }
+        callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
+        Log.i(TAG, "RESULT seq_modes: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
+    }
+
+    private suspend fun readShutter(): String? = suspendCancellableCoroutine { cont ->
+        dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager?.getValue(dji.keysdk.CameraKey.create(dji.keysdk.CameraKey.SHUTTER_SPEED), object : dji.keysdk.callback.GetCallback {
+            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume((value as Enum<*>).name) }
+            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume(null) }
+        }) ?: cont.resume(null)
     }
 }
