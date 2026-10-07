@@ -36,6 +36,7 @@ class RealSequenceHost(
     private companion object {
         const val TAG = "RealSequenceHost"
         const val POLL_MS = 50L
+        const val MOVE_ATTEMPTS = 2
     }
 
     private var freeModeRequested = false
@@ -65,22 +66,29 @@ class RealSequenceHost(
             GimbalArrival.quantize(pitchRange?.let { pitch.coerceIn(it.start, it.endInclusive) } ?: pitch),
             GimbalArrival.quantize(yawRange?.let { yaw.coerceIn(it.start, it.endInclusive) } ?: yaw)
         )
-        val rotation = Rotation.Builder()
-            .mode(RotationMode.ABSOLUTE_ANGLE)
-            .pitch(target.pitch)
-            .yaw(target.yaw)
-            .time(moveDurationSec)
-            .build()
-        gimbal.rotate(rotation) { error ->
-            if (error != null) Log.w(TAG, "rotate failed: ${error.description}")
+        // One retry: the first move after switching to FREE mode has been seen stalling a fraction of a
+        // degree short and sitting out the whole timeout; re-sending the same target finishes it.
+        repeat(MOVE_ATTEMPTS) { attempt ->
+            val rotation = Rotation.Builder()
+                .mode(RotationMode.ABSOLUTE_ANGLE)
+                .pitch(target.pitch)
+                .yaw(target.yaw)
+                .time(moveDurationSec)
+                .build()
+            gimbal.rotate(rotation) { error ->
+                if (error != null) Log.w(TAG, "rotate failed: ${error.description}")
+            }
+            val start = nowMs()
+            while (nowMs() - start < moveTimeoutMs / MOVE_ATTEMPTS) {
+                delay(100)
+                val current = currentAttitude() ?: continue
+                if (GimbalArrival.hasArrived(current, target, arrivalToleranceDeg)) {
+                    Log.i(TAG, "moveTo(${target.pitch}, ${target.yaw}) arrived in ${nowMs() - start}ms at $current (attempt ${attempt + 1})")
+                    return
+                }
+            }
         }
-        val start = nowMs()
-        while (nowMs() - start < moveTimeoutMs) {
-            delay(100)
-            val current = currentAttitude() ?: continue
-            if (GimbalArrival.hasArrived(current, target, arrivalToleranceDeg)) return
-        }
-        Log.w(TAG, "moveTo(${target.pitch}, ${target.yaw}) did not arrive within ${moveTimeoutMs}ms; now at ${currentAttitude()}")
+        Log.w(TAG, "moveTo(${target.pitch}, ${target.yaw}) did not arrive; now at ${currentAttitude()}")
     }
 
     override suspend fun capture(exposureMs: Long, label: String): Boolean {
@@ -96,7 +104,7 @@ class RealSequenceHost(
         while (true) {
             val state = DJIConnectionManager.cameraSystemState.value
             when (val status = tracker.onSample(nowMs() - sent, state?.isShootingSinglePhoto == true, state?.isStoringPhoto == true)) {
-                PhotoStatus.Done -> return true
+                PhotoStatus.Done -> { Log.i(TAG, "capture($label) finished in ${nowMs() - sent}ms"); return true }
                 is PhotoStatus.TimedOut -> { Log.w(TAG, "capture($label): ${status.reason}"); return false }
                 else -> delay(POLL_MS)
             }

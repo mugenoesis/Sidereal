@@ -6,7 +6,13 @@ enum class SequenceMode(val label: String) {
     PANORAMA("Panorama"),
     DARKS("Darks"),
     BIAS("Bias"),
-    FLATS("Flats")
+    FLATS("Flats");
+
+    /** The neighbouring mode in [direction] (+1/-1), wrapping at both ends. */
+    fun step(direction: Int): SequenceMode {
+        val all = values()
+        return all[(ordinal + direction).mod(all.size)]
+    }
 }
 
 /** One row in the sequence tray: a labelled value with -/+ (or a single toggle button when [toggle]). */

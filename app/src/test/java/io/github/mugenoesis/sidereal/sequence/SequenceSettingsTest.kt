@@ -81,4 +81,16 @@ class SequenceSettingsTest {
     fun `every mode has a label`() {
         SequenceMode.values().forEach { assertTrue(it.label.isNotBlank()) }
     }
+
+    @Test
+    fun `mode steps forward and wraps around the end`() {
+        assertEquals(SequenceMode.TIMELAPSE, SequenceMode.INTERVALOMETER.step(+1))
+        assertEquals(SequenceMode.INTERVALOMETER, SequenceMode.FLATS.step(+1))
+    }
+
+    @Test
+    fun `mode steps backward and wraps around the start`() {
+        assertEquals(SequenceMode.INTERVALOMETER, SequenceMode.TIMELAPSE.step(-1))
+        assertEquals(SequenceMode.FLATS, SequenceMode.INTERVALOMETER.step(-1))
+    }
 }

@@ -35,6 +35,8 @@ import io.github.mugenoesis.sidereal.gimbal.GimbalModeController
 import io.github.mugenoesis.sidereal.gimbal.JoystickView
 import io.github.mugenoesis.sidereal.gimbal.ManualGimbalController
 import io.github.mugenoesis.sidereal.gimbal.TimedMoveController
+import io.github.mugenoesis.sidereal.sequence.Attitude
+import io.github.mugenoesis.sidereal.sequence.SequenceFeature
 import io.github.mugenoesis.sidereal.tracking.FaceTrackingController
 import io.github.mugenoesis.sidereal.tracking.FollowStyle
 import io.github.mugenoesis.sidereal.tracking.TrackingState
@@ -73,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     private val faceTrackingController = FaceTrackingController(zoomController)
     private val videoFrameProvider = VideoFrameProvider(faceTrackingController, targetFps = 12)
     private lateinit var gimbalModeController: GimbalModeController
+    private lateinit var sequenceFeature: SequenceFeature
 
     private val exposureController = ExposureController()
     private val focusController = FocusController()
@@ -85,7 +88,7 @@ class MainActivity : AppCompatActivity() {
     private val audioRecorderController = AudioRecorderController()
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
-    private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, MORE }
+    private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, SEQUENCE, MORE }
     private var activeSettingsPanel = SettingsPanel.NONE
 
     // ExposureSettings.getISO() pushes back a plain Int (the camera's real
@@ -293,6 +296,7 @@ class MainActivity : AppCompatActivity() {
         requestPermissionsIfNeeded()
         bindViews()
         bindCameraSettingsViews()
+        bindSequenceFeature()
         observeConnectionState()
         observeWifiState()
         observeComponentChanges()
@@ -307,6 +311,21 @@ class MainActivity : AppCompatActivity() {
         observeMoreSettings()
         observeTimedMove()
         updateGimbalModeUi()
+    }
+
+    private fun bindSequenceFeature() {
+        sequenceFeature = SequenceFeature(
+            activity = this,
+            tray = findViewById(R.id.sequenceTray),
+            banner = findViewById(R.id.sequenceBanner),
+            shutterButton = findViewById(R.id.btnShutter),
+            shutterNameProvider = { exposureController.readout.value?.shutterSpeed?.name },
+            pointsProvider = {
+                fun TimedMoveController.Point?.toAttitude() = this?.let { Attitude(it.pitch.toFloat(), it.yaw.toFloat()) }
+                timedMoveController.capturedA.toAttitude() to timedMoveController.capturedB.toAttitude()
+            }
+        )
+        findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setOnClickListener { setActiveSettingsPanel(SettingsPanel.SEQUENCE) }
     }
 
     private fun observeTimedMove() {
@@ -1035,12 +1054,14 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.view.View>(R.id.whiteBalanceTray).visibility = if (activeSettingsPanel == SettingsPanel.WHITE_BALANCE) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.meteringTray).visibility = if (activeSettingsPanel == SettingsPanel.METERING) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.focusTray).visibility = if (activeSettingsPanel == SettingsPanel.FOCUS) android.view.View.VISIBLE else android.view.View.GONE
+        findViewById<android.view.View>(R.id.sequenceTray).visibility = if (activeSettingsPanel == SettingsPanel.SEQUENCE) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.moreSettingsScroll).visibility = if (activeSettingsPanel == SettingsPanel.MORE) android.view.View.VISIBLE else android.view.View.GONE
 
         findViewById<android.widget.ImageButton>(R.id.btnExposureRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.EXPOSURE) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnWhiteBalanceRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.WHITE_BALANCE) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnMeteringRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.METERING) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnFocusRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.FOCUS) R.drawable.bg_segment_selected else android.R.color.transparent)
+        findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.SEQUENCE) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnMoreRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.MORE) R.drawable.bg_segment_selected else android.R.color.transparent)
 
         if (activeSettingsPanel == SettingsPanel.MORE) {
@@ -1062,7 +1083,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeExposure() {
         exposureController.readout
-            .onEach { updateExposureReadoutUi(); updateExposureTrayUi() }
+            .onEach { updateExposureReadoutUi(); updateExposureTrayUi(); sequenceFeature.refreshPreview() }
             .launchIn(lifecycleScope)
         exposureController.apertureSupported
             .onEach { updateExposureTrayUi(); updateExposureReadoutUi() }

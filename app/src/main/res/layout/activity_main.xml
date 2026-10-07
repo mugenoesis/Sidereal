@@ -249,6 +249,17 @@
                 android:contentDescription="@string/cd_focus_settings" />
 
             <ImageButton
+                android:id="@+id/btnSequenceRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_sequence"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_sequence_settings" />
+
+            <ImageButton
                 android:id="@+id/btnMoreRail"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
@@ -547,6 +558,36 @@
         </LinearLayout>
 
     </LinearLayout>
+
+    <!-- Sequence tray (intervalometer / timelapse / panorama / calibration):
+         built in code by SequenceTrayView, opened from btnSequenceRail. -->
+    <io.github.mugenoesis.sidereal.sequence.SequenceTrayView
+        android:id="@+id/sequenceTray"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        android:layout_marginStart="8dp" />
+
+    <!-- Progress strip shown at the top while a sequence runs, so it is
+         visible even with the tray closed. -->
+    <TextView
+        android:id="@+id/sequenceBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="68dp"
+        android:background="@drawable/bg_pill_container"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- White balance tray: icon-cycle through presets + a text readout
          (icon + value readout, not one icon per preset - keeps the
