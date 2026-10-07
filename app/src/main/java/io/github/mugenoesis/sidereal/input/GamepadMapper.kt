@@ -19,7 +19,12 @@ interface GamepadActions {
     fun zoom(rate: Float)
     fun shutter()
     fun togglePhotoVideo()
-    fun autofocus()
+
+    /**
+     * The autofocus button: [pressed] true shows the tap-to-focus crosshair in the middle of the picture (the gimbal
+     * can be moved with it up), false hides it and focuses there. A quick tap is just a very short hold.
+     */
+    fun autofocusHold(pressed: Boolean)
 
     /** One manual-focus step: -1 nearer, +1 farther. Repeated while the button is held. */
     fun focusRing(direction: Int)
@@ -259,6 +264,9 @@ class GamepadMapper(
 
     /** The held button that keeps repeating (focus or exposure compensation) - the one pressed last wins. */
     private enum class Repeat { FOCUS, EXPOSURE }
+    /** Buttons currently held as "autofocus": the crosshair is up while any is down. */
+    private val aimButtons = HashSet<GamepadButton>()
+
     private var repeatKind: Repeat? = null
     private var repeatDirection = 0
     private var repeatSource: GamepadButton? = null
@@ -336,11 +344,17 @@ class GamepadMapper(
 
     /** Does whatever [button] is currently bound to; held actions (focus) start on press and stop on release. */
     private fun dispatch(button: GamepadButton, pressed: Boolean, nowMs: Long) {
+        // Letting go of a button that is aiming always ends the aim - even if it was rebound while held.
+        if (!pressed && aimButtons.remove(button) && aimButtons.isEmpty()) actions.autofocusHold(false)
         when (bindings.actionFor(button)) {
             GamepadAction.NONE -> Unit
             GamepadAction.SHUTTER -> if (pressed) actions.shutter()
             GamepadAction.TOGGLE_PHOTO_VIDEO -> if (pressed) actions.togglePhotoVideo()
-            GamepadAction.AUTOFOCUS -> if (pressed) actions.autofocus()
+            GamepadAction.AUTOFOCUS -> if (pressed) {
+                val first = aimButtons.isEmpty()
+                aimButtons += button
+                if (first) actions.autofocusHold(true)
+            }
             GamepadAction.FOCUS_NEARER -> if (pressed) startRepeat(Repeat.FOCUS, -1, button, nowMs) else stopRepeat(button)
             GamepadAction.FOCUS_FARTHER -> if (pressed) startRepeat(Repeat.FOCUS, +1, button, nowMs) else stopRepeat(button)
             GamepadAction.EXPOSURE_COMP_UP -> if (pressed) startRepeat(Repeat.EXPOSURE, +1, button, nowMs) else stopRepeat(button)
@@ -431,6 +445,10 @@ class GamepadMapper(
     }
 
     private fun stopMotion() {
+        if (aimButtons.isNotEmpty()) {
+            aimButtons.clear()
+            actions.autofocusHold(false)
+        }
         if (sentYaw != 0f || sentPitch != 0f) {
             sentYaw = 0f
             sentPitch = 0f

@@ -13,7 +13,7 @@ private class Recorder : GamepadActions {
     override fun zoom(rate: Float) { lastZoom = rate; events += "zoom(%.3f)".format(rate) }
     override fun shutter() { events += "shutter" }
     override fun togglePhotoVideo() { events += "mode" }
-    override fun autofocus() { events += "af" }
+    override fun autofocusHold(pressed: Boolean) { events += if (pressed) "af+" else "af-" }
     override fun focusRing(direction: Int) { events += "focus($direction)" }
     override fun exposureMode(direction: Int) { events += "exposure($direction)" }
     override fun recenter() { events += "recenter" }
@@ -157,10 +157,59 @@ class GamepadMapperTest {
     }
 
     @Test
-    fun `A triggers autofocus`() {
+    fun `A is hold-to-aim autofocus - down shows the crosshair, up focuses`() {
         mapper.onButton(GamepadButton.A, true)
+        assertEquals(listOf("af+"), actions.events)
         mapper.onButton(GamepadButton.A, false)
-        assertEquals(listOf("af"), actions.events)
+        assertEquals(listOf("af+", "af-"), actions.events)
+    }
+
+    @Test
+    fun `the gimbal still moves while the autofocus button is held`() {
+        mapper.onButton(GamepadButton.A, true)
+        mapper.onAxis(GamepadAxis.LEFT_X, 1f)
+        mapper.onAxis(GamepadAxis.LEFT_X, 0f)
+        mapper.onButton(GamepadButton.A, false)
+        assertEquals("af+", actions.events.first())
+        assertEquals("af-", actions.events.last())
+        assertTrue("gimbal moved in between: ${actions.events}", actions.events.drop(1).dropLast(1).any { it.startsWith("gimbal(1.000") })
+        assertEquals(0f, actions.lastGimbal.first, 0f)
+    }
+
+    @Test
+    fun `with two buttons doing autofocus, the crosshair stays until both are let go`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.B, GamepadAction.AUTOFOCUS))
+        m.onButton(GamepadButton.A, true)
+        m.onButton(GamepadButton.B, true)
+        m.onButton(GamepadButton.A, false)
+        assertEquals(listOf("af+"), actions.events)
+        m.onButton(GamepadButton.B, false)
+        assertEquals(listOf("af+", "af-"), actions.events)
+    }
+
+    @Test
+    fun `locking while the button is held drops the crosshair, and the later release adds nothing`() {
+        mapper.onButton(GamepadButton.A, true)
+        mapper.locked = true
+        assertEquals(listOf("af+", "af-"), actions.events)
+        mapper.locked = false
+        mapper.onButton(GamepadButton.A, false)
+        assertEquals(listOf("af+", "af-"), actions.events)
+    }
+
+    @Test
+    fun `losing the controller while the button is held drops the crosshair`() {
+        mapper.onButton(GamepadButton.A, true)
+        mapper.onDisconnected()
+        assertEquals(listOf("af+", "af-"), actions.events)
+    }
+
+    @Test
+    fun `rebinding autofocus away while it is held does not leave the crosshair up`() {
+        mapper.onButton(GamepadButton.A, true)
+        mapper.bindings = GamepadBindings.default().with(GamepadButton.A, GamepadAction.CYCLE_GRID)
+        mapper.onButton(GamepadButton.A, false)
+        assertEquals(listOf("af+", "af-"), actions.events)
     }
 
     @Test
@@ -218,7 +267,7 @@ class GamepadMapperTest {
         mapper.locked = true
         mapper.locked = false
         mapper.onButton(GamepadButton.A, true)
-        assertEquals(listOf("af"), actions.events)
+        assertEquals(listOf("af+"), actions.events)
     }
 
     @Test
@@ -303,7 +352,7 @@ class GamepadMapperTest {
         m.onAxis(GamepadAxis.HAT_Y, 1f)
         m.onAxis(GamepadAxis.HAT_Y, 0f)
         m.onButton(GamepadButton.DPAD_UP, true)
-        assertEquals(listOf("af", "mode", "af"), actions.events)
+        assertEquals(listOf("af+", "af-", "mode", "af+"), actions.events)
     }
 
     @Test
@@ -319,7 +368,7 @@ class GamepadMapperTest {
         mapper.onButton(GamepadButton.A, false)
         mapper.bindings = GamepadBindings.default().with(GamepadButton.A, GamepadAction.CYCLE_GRID)
         mapper.onButton(GamepadButton.A, true)
-        assertEquals(listOf("af", "grid"), actions.events)
+        assertEquals(listOf("af+", "af-", "grid"), actions.events)
     }
 
     @Test

@@ -374,8 +374,17 @@ class MainActivity : AppCompatActivity() {
             cameraModeController.setMode(if (video) SettingsDefinitions.CameraMode.SHOOT_PHOTO else SettingsDefinitions.CameraMode.RECORD_VIDEO)
         }
 
-        override fun autofocus() {
-            focusController.setFocusTarget(0.5f, 0.5f)
+        // Hold = show the tap-to-focus crosshair in the middle (the stick keeps moving the gimbal under it);
+        // release = hide it and focus there. A quick tap does both at once.
+        override fun autofocusHold(pressed: Boolean) {
+            val overlay = findViewById<io.github.mugenoesis.sidereal.tracking.FaceOverlayView>(R.id.faceOverlay)
+            if (pressed) {
+                overlay.showAimReticle(0.5f, 0.5f)
+            } else {
+                overlay.hideAimReticle()
+                overlay.flashReticle(0.5f, 0.5f)
+                focusController.setFocusTarget(0.5f, 0.5f)
+            }
         }
 
         override fun focusRing(direction: Int) {

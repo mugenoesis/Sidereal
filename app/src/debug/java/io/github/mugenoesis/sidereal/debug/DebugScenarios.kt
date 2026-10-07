@@ -49,6 +49,16 @@ object DebugScenarios {
             }
             "histogram_probe" -> histogramProbe()
             "luma_vs_shutter" -> lumaVsShutter(args)
+            "pad_key" -> kotlin.run {
+                // Holds or releases one pad button through the real input path (unlike `input gamepad keyevent`, which is a blink).
+                val code = android.view.KeyEvent.keyCodeFromString("KEYCODE_BUTTON_" + (args["key"] ?: "A"))
+                val down = args["state"] != "up"
+                val now = android.os.SystemClock.uptimeMillis()
+                val event = android.view.KeyEvent(now, now, if (down) android.view.KeyEvent.ACTION_DOWN else android.view.KeyEvent.ACTION_UP, code, 0, 0, 0, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    Log.i(TAG, "pad_key ${args["key"]} ${if (down) "down" else "up"} handled=${io.github.mugenoesis.sidereal.input.GamepadInput.active?.handleKey(event)}")
+                }
+            }
             "gamepad_probe" -> {
                 val on = args["on"] != "false"
                 io.github.mugenoesis.sidereal.input.GamepadInput.probeUntilMs =

@@ -86,6 +86,33 @@ class FaceOverlayView @JvmOverloads constructor(
     }
     private val reticleVisibleMs = 1200L
 
+    // The crosshair held up while the controller's autofocus button is down (see showAimReticle): same icon as the
+    // tap-to-focus reticle, but it stays until released rather than clearing on a timer.
+    private var aimX: Float? = null
+    private var aimY: Float? = null
+
+    /** Puts the tap-to-focus crosshair at the normalized point [x],[y] (0..1 of this view) and keeps it there. */
+    fun showAimReticle(x: Float, y: Float) {
+        aimX = x
+        aimY = y
+        invalidate()
+    }
+
+    fun hideAimReticle() {
+        aimX = null
+        aimY = null
+        invalidate()
+    }
+
+    /** The brief confirmation crosshair a tap shows, at a normalized point. */
+    fun flashReticle(x: Float, y: Float) {
+        reticleX = x * width
+        reticleY = y * height
+        removeCallbacks(reticleClearRunnable)
+        postDelayed(reticleClearRunnable, reticleVisibleMs)
+        invalidate()
+    }
+
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
             onDeselectRequested?.invoke()
@@ -123,15 +150,20 @@ class FaceOverlayView @JvmOverloads constructor(
             canvas.drawLine(dragCurrentX - 24f, dragCurrentY, dragCurrentX + 24f, dragCurrentY, dragIndicatorPaint)
             canvas.drawLine(dragCurrentX, dragCurrentY - 24f, dragCurrentX, dragCurrentY + 24f, dragIndicatorPaint)
         }
+        val ax = aimX
+        val ay = aimY
+        if (ax != null && ay != null) drawReticle(canvas, ax * width, ay * height)
         val rx = reticleX
         val ry = reticleY
-        if (rx != null && ry != null) {
-            canvas.drawCircle(rx, ry, 28f, reticlePaint)
-            canvas.drawLine(rx - 36f, ry, rx - 14f, ry, reticlePaint)
-            canvas.drawLine(rx + 14f, ry, rx + 36f, ry, reticlePaint)
-            canvas.drawLine(rx, ry - 36f, rx, ry - 14f, reticlePaint)
-            canvas.drawLine(rx, ry + 14f, rx, ry + 36f, reticlePaint)
-        }
+        if (rx != null && ry != null) drawReticle(canvas, rx, ry)
+    }
+
+    private fun drawReticle(canvas: Canvas, x: Float, y: Float) {
+        canvas.drawCircle(x, y, 28f, reticlePaint)
+        canvas.drawLine(x - 36f, y, x - 14f, y, reticlePaint)
+        canvas.drawLine(x + 14f, y, x + 36f, y, reticlePaint)
+        canvas.drawLine(x, y - 36f, x, y - 14f, reticlePaint)
+        canvas.drawLine(x, y + 14f, x, y + 36f, reticlePaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

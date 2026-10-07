@@ -122,7 +122,7 @@ class GamepadSensitivityTest {
         override fun zoom(rate: Float) { zoom = rate }
         override fun shutter() {}
         override fun togglePhotoVideo() {}
-        override fun autofocus() {}
+        override fun autofocusHold(pressed: Boolean) {}
         override fun focusRing(direction: Int) {}
         override fun exposureMode(direction: Int) {}
         override fun recenter() {}

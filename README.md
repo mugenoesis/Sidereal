@@ -60,9 +60,12 @@
 
 **Game controller**
 - Bluetooth or USB gamepad: left stick aims the gimbal, right stick zooms,
-  R2 is the shutter, R1 switches photo/video, L1/L2 pull focus, A is
-  autofocus, d-pad left/right step P/A/S/M, X locks exposure, Y shows the
-  grid
+  R2 is the shutter, R1 switches photo/video, L1/L2 pull focus, hold A to
+  show the focus crosshair in the middle (aim the gimbal with it up) and
+  let go to focus there, d-pad left/right step P/A/S/M, d-pad up/down
+  change exposure compensation, X locks exposure, Y shows the grid.
+  Every button can be remapped (More > Game controller), and the stick
+  speeds, dead zone and response are adjustable.
 
 **Media and audio**
 - Browse, preview and download photos and videos from the camera's SD card
