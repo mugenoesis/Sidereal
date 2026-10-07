@@ -12,7 +12,7 @@ enum class GamepadAxis { LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, L2, R2, HAT_X, HAT_Y 
 
 /** What a gamepad can ask the camera app to do - the activity implements these with the same code the touch controls use. */
 interface GamepadActions {
-    /** Camera-relative gimbal rates, -1..1: positive yaw pans right, positive pitch tilts up. Sent on change, with a final (0, 0). */
+    /** Camera-relative gimbal rates, -1..1: positive yaw pans right, positive pitch tilts up (whatever the stick direction that produced it). Sent on change, with a final (0, 0). */
     fun gimbal(yaw: Float, pitch: Float)
 
     /** -1..1, positive zooms in; a final 0 when released. */
@@ -39,7 +39,8 @@ data class GamepadConfig(
     val triggerRelease: Float = 0.4f,
     val focusRepeatDelayMs: Long = 300,
     val focusRepeatMs: Long = 120,
-    val invertPitch: Boolean = false
+    /** Stick up tilts the camera DOWN (and vice versa) - the owner's preference; set false for the usual way round. */
+    val invertPitch: Boolean = true
 )
 
 /**
@@ -49,7 +50,7 @@ data class GamepadConfig(
  * [GamepadAxis]/[GamepadButton].
  *
  * Default layout:
- *  - left stick: gimbal; click it to recentre
+ *  - left stick: gimbal (up/down inverted by default: push up to tilt down); click it to recentre
  *  - right stick up/down: zoom
  *  - R2 / right trigger: shutter; R1: photo <-> video
  *  - A: autofocus; L1 / L2: manual focus ring nearer / farther (repeats while held)

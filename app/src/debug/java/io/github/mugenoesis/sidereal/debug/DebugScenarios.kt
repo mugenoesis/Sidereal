@@ -627,13 +627,15 @@ object DebugScenarios {
         if (kotlin.math.abs(att()!!.yaw - settled.yaw) > 0.3f) problems += "gimbal kept moving after the stick was released"
         hold(1500, X to -1f); pad.handleMotion(padMotion(X to 0f)); delay(800)
 
-        // 2. left stick up tilts up
+        // 2. up/down are inverted: stick up tilts DOWN, stick down tilts back up
         val b0 = att()!!
         hold(800, Y to -1f); pad.handleMotion(padMotion(Y to 0f)); delay(800)
         val b1 = att()!!
-        Log.i(TAG, "PAD stick up: pitch ${b0.pitch} -> ${b1.pitch}")
-        if (b1.pitch - b0.pitch < 5f) problems += "up stick changed pitch by ${b1.pitch - b0.pitch} (expected a clear increase)"
+        Log.i(TAG, "PAD stick up (inverted): pitch ${b0.pitch} -> ${b1.pitch}")
+        if (b0.pitch - b1.pitch < 5f) problems += "up stick changed pitch by ${b1.pitch - b0.pitch} (expected a clear decrease - inverted)"
         hold(800, Y to 1f); pad.handleMotion(padMotion(Y to 0f)); delay(800)
+        val b2 = att()!!
+        if (b2.pitch - b1.pitch < 5f) problems += "down stick did not tilt back up (${b1.pitch} -> ${b2.pitch})"
 
         // 3. right trigger takes a photo (photo mode only)
         var shot = false

@@ -48,16 +48,25 @@ class GamepadMapperTest {
     }
 
     @Test
-    fun `pushing the stick up tilts the camera up - android reports up as negative Y`() {
+    fun `pushing the stick up tilts the camera down by default - up and down are inverted`() {
+        // Android reports stick-up as negative Y; the owner prefers it inverted.
         mapper.onAxis(GamepadAxis.LEFT_Y, -1f)
+        assertEquals(-1f, actions.lastGimbal.second, 1e-4f)
+        mapper.onAxis(GamepadAxis.LEFT_Y, 1f)
         assertEquals(1f, actions.lastGimbal.second, 1e-4f)
     }
 
     @Test
-    fun `inverting pitch flips it`() {
-        val inverted = GamepadMapper(actions, GamepadConfig(invertPitch = true))
-        inverted.onAxis(GamepadAxis.LEFT_Y, -1f)
-        assertEquals(-1f, actions.lastGimbal.second, 1e-4f)
+    fun `turning the inversion off gives the usual stick-up-tilts-up`() {
+        val normal = GamepadMapper(actions, GamepadConfig(invertPitch = false))
+        normal.onAxis(GamepadAxis.LEFT_Y, -1f)
+        assertEquals(1f, actions.lastGimbal.second, 1e-4f)
+    }
+
+    @Test
+    fun `only the gimbal is inverted - the zoom stick still zooms in when pushed up`() {
+        mapper.onAxis(GamepadAxis.RIGHT_Y, -1f)
+        assertEquals(1f, actions.lastZoom, 1e-4f)
     }
 
     @Test
@@ -70,7 +79,7 @@ class GamepadMapperTest {
     @Test
     fun `both axes combine`() {
         mapper.onAxis(GamepadAxis.LEFT_X, 1f)
-        mapper.onAxis(GamepadAxis.LEFT_Y, -1f)
+        mapper.onAxis(GamepadAxis.LEFT_Y, 1f)
         assertEquals(1f, actions.lastGimbal.first, 1e-4f)
         assertEquals(1f, actions.lastGimbal.second, 1e-3f)
     }
