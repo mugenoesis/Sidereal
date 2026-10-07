@@ -162,7 +162,7 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
   and exports a merged MP4. The automatic starting offset is only as good
   as the camera's reported record-start time, so check it by ear.
-- **Game controller:** built and checked with injected events, but not yet
+- **Game controller (remappable in More > Game controller):** built and checked with injected events, but not yet
   with a physical controller.
 - **Wear OS watch app:** the screens are checked on a Wear OS emulator and
   the phone side against the real camera, but the Bluetooth link between a

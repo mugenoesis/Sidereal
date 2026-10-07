@@ -40,6 +40,8 @@ object AppPreferences {
     private const val KEY_GRID_MODE = "grid_mode"
     private const val KEY_SELF_TIMER_SEC = "self_timer_sec"
     private const val KEY_CAMERA_SOUNDS = "camera_sounds"
+    private const val KEY_GAMEPAD_BINDINGS = "gamepad_bindings"
+    private const val KEY_GAMEPAD_CONFIG = "gamepad_config"
 
     private lateinit var prefs: SharedPreferences
 
@@ -99,6 +101,16 @@ object AppPreferences {
     var cameraSounds: String?
         get() = prefs.getString(KEY_CAMERA_SOUNDS, null)
         set(value) = prefs.edit().putString(KEY_CAMERA_SOUNDS, value).apply()
+
+    /** Game-controller button assignments (GamepadBindings.encode()); null = the default layout. */
+    var gamepadBindings: String?
+        get() = prefs.getString(KEY_GAMEPAD_BINDINGS, null)
+        set(value) = prefs.edit().putString(KEY_GAMEPAD_BINDINGS, value).apply()
+
+    /** Game-controller stick settings (GamepadConfig.encode()); null = the defaults. */
+    var gamepadConfig: String?
+        get() = prefs.getString(KEY_GAMEPAD_CONFIG, null)
+        set(value) = prefs.edit().putString(KEY_GAMEPAD_CONFIG, value).apply()
 
     // GIMBAL (no phone-side recording) is the safe default - only a real
     // choice once a mic is actually plugged into the gimbal, which this

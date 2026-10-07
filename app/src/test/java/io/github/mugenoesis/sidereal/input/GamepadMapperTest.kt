@@ -247,4 +247,70 @@ class GamepadMapperTest {
             assertTrue(abs(actions.lastGimbal.first) <= 1f + 1e-6f)
         }
     }
+
+    // --- remapping ---
+
+    private fun remapped(b: GamepadBindings) = GamepadMapper(actions, GamepadConfig(), b)
+
+    @Test
+    fun `a remapped button does the new thing and the old one does nothing`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.A, GamepadAction.SHUTTER))
+        m.onButton(GamepadButton.A, true)
+        m.onButton(GamepadButton.R2, true)
+        assertEquals(listOf("shutter"), actions.events)
+    }
+
+    @Test
+    fun `the trigger axis follows its binding too`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.R2, GamepadAction.CYCLE_GRID))
+        m.onAxis(GamepadAxis.R2, 1f)
+        assertEquals(listOf("grid"), actions.events)
+    }
+
+    @Test
+    fun `a button bound to focus repeats while held, and stops on release`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.B, GamepadAction.FOCUS_FARTHER))
+        m.onButton(GamepadButton.B, true, nowMs = 0)
+        m.tick(300)
+        assertEquals(listOf("focus(1)", "focus(1)"), actions.events)
+        m.onButton(GamepadButton.B, false, nowMs = 310)
+        actions.events.clear()
+        m.tick(2_000)
+        assertTrue(actions.events.isEmpty())
+    }
+
+    @Test
+    fun `d-pad up and down can be bound, from the hat or the buttons`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.DPAD_UP, GamepadAction.AUTOFOCUS).with(GamepadButton.DPAD_DOWN, GamepadAction.TOGGLE_PHOTO_VIDEO))
+        m.onAxis(GamepadAxis.HAT_Y, -1f)
+        m.onAxis(GamepadAxis.HAT_Y, 0f)
+        m.onAxis(GamepadAxis.HAT_Y, 1f)
+        m.onAxis(GamepadAxis.HAT_Y, 0f)
+        m.onButton(GamepadButton.DPAD_UP, true)
+        assertEquals(listOf("af", "mode", "af"), actions.events)
+    }
+
+    @Test
+    fun `an unbound button does nothing`() {
+        mapper.onButton(GamepadButton.B, true)
+        mapper.onButton(GamepadButton.START, true)
+        assertTrue(actions.events.isEmpty())
+    }
+
+    @Test
+    fun `bindings can be changed while the pad is in use`() {
+        mapper.onButton(GamepadButton.A, true)
+        mapper.onButton(GamepadButton.A, false)
+        mapper.bindings = GamepadBindings.default().with(GamepadButton.A, GamepadAction.CYCLE_GRID)
+        mapper.onButton(GamepadButton.A, true)
+        assertEquals(listOf("af", "grid"), actions.events)
+    }
+
+    @Test
+    fun `exposure mode previous and next can be put on any buttons`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.START, GamepadAction.EXPOSURE_MODE_NEXT).with(GamepadButton.SELECT, GamepadAction.EXPOSURE_MODE_PREVIOUS))
+        m.onButton(GamepadButton.START, true)
+        m.onButton(GamepadButton.SELECT, true)
+        assertEquals(listOf("exposure(1)", "exposure(-1)"), actions.events)
+    }
 }

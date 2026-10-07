@@ -31,6 +31,104 @@ interface GamepadActions {
     fun cycleGrid()
 }
 
+/** What a button can be set to do. [NONE] first so "unassigned" is where cycling starts. */
+enum class GamepadAction(val label: String) {
+    NONE("Nothing"),
+    SHUTTER("Shutter"),
+    TOGGLE_PHOTO_VIDEO("Photo / video"),
+    AUTOFOCUS("Autofocus"),
+    FOCUS_NEARER("Focus nearer (hold)"),
+    FOCUS_FARTHER("Focus farther (hold)"),
+    EXPOSURE_MODE_PREVIOUS("Exposure mode back"),
+    EXPOSURE_MODE_NEXT("Exposure mode next"),
+    RECENTER("Recentre gimbal"),
+    TOGGLE_AE_LOCK("Exposure lock"),
+    CYCLE_GRID("Grid")
+}
+
+/**
+ * Which action each button triggers. An action lives on at most one button (giving it to another button moves it),
+ * a button has at most one action, and [GamepadAction.NONE] clears a button. Immutable: every change returns a copy.
+ */
+class GamepadBindings private constructor(private val map: Map<GamepadButton, GamepadAction>) {
+
+    fun actionFor(button: GamepadButton): GamepadAction = map[button] ?: GamepadAction.NONE
+
+    fun buttonFor(action: GamepadAction): GamepadButton? = map.entries.firstOrNull { it.value == action }?.key
+
+    fun with(button: GamepadButton, action: GamepadAction): GamepadBindings {
+        val next = LinkedHashMap(map)
+        next.remove(button)
+        if (action != GamepadAction.NONE) {
+            next.entries.removeAll { it.value == action }
+            next[button] = action
+        }
+        return GamepadBindings(next)
+    }
+
+    /** The next (or previous) action in the list for [button], wrapping at both ends - how the settings screen steps through them. */
+    fun cycled(button: GamepadButton, direction: Int): GamepadBindings {
+        val all = GamepadAction.values()
+        val index = all.indexOf(actionFor(button))
+        return with(button, all[(index + direction).mod(all.size)])
+    }
+
+    /** "A=AUTOFOCUS;B=NONE;..." for every remappable button, so an explicitly cleared default stays cleared. */
+    fun encode(): String = REMAPPABLE.joinToString(";") { "${it.name}=${actionFor(it).name}" }
+
+    override fun equals(other: Any?) = other is GamepadBindings && REMAPPABLE.all { actionFor(it) == other.actionFor(it) }
+    override fun hashCode() = REMAPPABLE.fold(1) { h, b -> 31 * h + actionFor(b).hashCode() }
+    override fun toString() = encode()
+
+    companion object {
+        /** Buttons offered on the settings screen (in the order shown). */
+        val REMAPPABLE = listOf(
+            GamepadButton.A, GamepadButton.B, GamepadButton.X, GamepadButton.Y,
+            GamepadButton.L1, GamepadButton.R1, GamepadButton.L2, GamepadButton.R2,
+            GamepadButton.L3, GamepadButton.R3, GamepadButton.START, GamepadButton.SELECT,
+            GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT
+        )
+
+        fun default(): GamepadBindings = GamepadBindings(
+            linkedMapOf(
+                GamepadButton.R2 to GamepadAction.SHUTTER,
+                GamepadButton.R1 to GamepadAction.TOGGLE_PHOTO_VIDEO,
+                GamepadButton.A to GamepadAction.AUTOFOCUS,
+                GamepadButton.L1 to GamepadAction.FOCUS_NEARER,
+                GamepadButton.L2 to GamepadAction.FOCUS_FARTHER,
+                GamepadButton.L3 to GamepadAction.RECENTER,
+                GamepadButton.X to GamepadAction.TOGGLE_AE_LOCK,
+                GamepadButton.Y to GamepadAction.CYCLE_GRID,
+                GamepadButton.DPAD_LEFT to GamepadAction.EXPOSURE_MODE_PREVIOUS,
+                GamepadButton.DPAD_RIGHT to GamepadAction.EXPOSURE_MODE_NEXT
+            )
+        )
+
+        /** Starts from the defaults and applies every valid entry of [stored]; anything unreadable is skipped. */
+        fun decode(stored: String?): GamepadBindings {
+            var result = default()
+            if (stored.isNullOrBlank()) return result
+            for (entry in stored.split(";")) {
+                val parts = entry.split("=")
+                if (parts.size != 2) continue
+                val button = REMAPPABLE.firstOrNull { it.name == parts[0].trim() } ?: continue
+                val action = GamepadAction.values().firstOrNull { it.name == parts[1].trim() } ?: continue
+                result = result.with(button, action)
+            }
+            return result
+        }
+    }
+}
+
+/** The stick/response settings the user can change on the gamepad settings screen. */
+enum class GamepadSetting(val label: String) {
+    GIMBAL_SPEED("Gimbal speed"),
+    ZOOM_SPEED("Zoom speed"),
+    DEADZONE("Dead zone"),
+    RESPONSE("Response"),
+    INVERT_TILT("Stick up")
+}
+
 data class GamepadConfig(
     val deadzone: Float = 0.15f,
     /** Response curve exponent: 1 is linear, 2 gives fine control near the centre and full speed at the edge. */
@@ -40,8 +138,73 @@ data class GamepadConfig(
     val focusRepeatDelayMs: Long = 300,
     val focusRepeatMs: Long = 120,
     /** Stick up tilts the camera DOWN (and vice versa) - the owner's preference; set false for the usual way round. */
-    val invertPitch: Boolean = true
-)
+    val invertPitch: Boolean = true,
+    /** Scales the gimbal stick's output, [MIN_SPEED]..1: lower is slower at full deflection (finer moves). */
+    val gimbalSpeed: Float = 1f,
+    /** Scales the zoom stick the same way. */
+    val zoomSpeed: Float = 1f
+) {
+    /** The user-adjustable settings only (the rest are fixed tuning): "deadzone,expo,gimbalSpeed,zoomSpeed,invertPitch". */
+    fun encode(): String = String.format(java.util.Locale.US, "%.2f,%.2f,%.2f,%.2f,%b", deadzone, expo, gimbalSpeed, zoomSpeed, invertPitch)
+
+    /** One rung up or down for [setting] (the toggle just flips); off-ladder values step to their neighbour. */
+    fun adjusted(setting: GamepadSetting, direction: Int): GamepadConfig = when (setting) {
+        GamepadSetting.GIMBAL_SPEED -> copy(gimbalSpeed = stepPercent(gimbalSpeed, direction, 10, 100, 10))
+        GamepadSetting.ZOOM_SPEED -> copy(zoomSpeed = stepPercent(zoomSpeed, direction, 10, 100, 10))
+        GamepadSetting.DEADZONE -> copy(deadzone = stepPercent(deadzone, direction, 5, 50, 5))
+        GamepadSetting.RESPONSE -> copy(expo = stepPercent(expo, direction, 100, 300, 50))
+        GamepadSetting.INVERT_TILT -> copy(invertPitch = !invertPitch)
+    }
+
+    fun display(setting: GamepadSetting): String = when (setting) {
+        GamepadSetting.GIMBAL_SPEED -> "${Math.round(gimbalSpeed * 100)}%"
+        GamepadSetting.ZOOM_SPEED -> "${Math.round(zoomSpeed * 100)}%"
+        GamepadSetting.DEADZONE -> "${Math.round(deadzone * 100)}%"
+        GamepadSetting.RESPONSE -> when {
+            expo < 1.25f -> "Linear"
+            expo < 1.75f -> "Soft"
+            expo < 2.25f -> "Curved"
+            expo < 2.75f -> "Steep"
+            else -> "Strong"
+        }
+        GamepadSetting.INVERT_TILT -> if (invertPitch) "Up = tilt down" else "Up = tilt up"
+    }
+
+    /** [value] is a fraction (or, with scale 1, a plain number) moved one [step] along min..max in hundredths. */
+    private fun stepPercent(value: Float, direction: Int, min: Int, max: Int, step: Int, scale: Float = 100f): Float {
+        val current = Math.round(value * scale)
+        val next = if (direction > 0) {
+            (min..max step step).firstOrNull { it > current } ?: max
+        } else {
+            (min..max step step).lastOrNull { it < current } ?: min
+        }
+        return next / scale
+    }
+
+    companion object {
+        const val MIN_SPEED = 0.1f
+        const val MAX_DEADZONE = 0.5f
+        private const val MIN_DEADZONE = 0.05f
+
+        /** Out-of-range or unreadable values fall back to sane ones rather than leaving the pad unusable. */
+        fun decode(stored: String?): GamepadConfig {
+            val p = stored?.split(",") ?: return GamepadConfig()
+            if (p.size != 5) return GamepadConfig()
+            val d = p[0].toFloatOrNull() ?: return GamepadConfig()
+            val e = p[1].toFloatOrNull() ?: return GamepadConfig()
+            val g = p[2].toFloatOrNull() ?: return GamepadConfig()
+            val z = p[3].toFloatOrNull() ?: return GamepadConfig()
+            val inv = when (p[4]) { "true" -> true; "false" -> false; else -> return GamepadConfig() }
+            return GamepadConfig(
+                deadzone = d.coerceIn(MIN_DEADZONE, MAX_DEADZONE),
+                expo = e.coerceIn(1f, 3f),
+                gimbalSpeed = g.coerceIn(MIN_SPEED, 1f),
+                zoomSpeed = z.coerceIn(MIN_SPEED, 1f),
+                invertPitch = inv
+            )
+        }
+    }
+}
 
 /**
  * Turns raw gamepad events into [GamepadActions]. Pure - no Android types - so the behaviour that matters
@@ -57,7 +220,13 @@ data class GamepadConfig(
  *  - d-pad left/right: step the exposure mode P/A/S/M
  *  - X: exposure lock; Y: composition grid
  */
-class GamepadMapper(private val actions: GamepadActions, private val config: GamepadConfig = GamepadConfig()) {
+class GamepadMapper(
+    private val actions: GamepadActions,
+    /** Live: change it and the next stick movement uses it. */
+    var config: GamepadConfig = GamepadConfig(),
+    /** Live: change it and the next press uses it. */
+    var bindings: GamepadBindings = GamepadBindings.default()
+) {
 
     /** While locked (e.g. a sequence is running) nothing is acted on; locking also stops any motion in progress. */
     var locked: Boolean = false
@@ -76,7 +245,8 @@ class GamepadMapper(private val actions: GamepadActions, private val config: Gam
     private val down = HashSet<GamepadButton>()
     private var r2AxisDown = false
     private var l2AxisDown = false
-    private var hatDirection = 0
+    private var hatX = 0
+    private var hatY = 0
 
     private var focusDirection = 0
     private var focusSource: GamepadButton? = null
@@ -88,20 +258,24 @@ class GamepadMapper(private val actions: GamepadActions, private val config: Gam
             GamepadAxis.LEFT_X -> { leftX = value; updateGimbal() }
             GamepadAxis.LEFT_Y -> { leftY = value; updateGimbal() }
             GamepadAxis.RIGHT_Y -> { rightY = value; updateZoom() }
-            GamepadAxis.RIGHT_X, GamepadAxis.HAT_Y -> Unit
-            GamepadAxis.R2 -> r2AxisDown = trigger(value, r2AxisDown) { press -> if (press) actions.shutter() }
-            GamepadAxis.L2 -> l2AxisDown = trigger(value, l2AxisDown) { press ->
-                if (press) startFocus(+1, GamepadButton.L2, nowMs) else stopFocus(GamepadButton.L2)
-            }
+            GamepadAxis.RIGHT_X -> Unit
+            GamepadAxis.R2 -> r2AxisDown = trigger(value, r2AxisDown) { press -> dispatch(GamepadButton.R2, press, nowMs) }
+            GamepadAxis.L2 -> l2AxisDown = trigger(value, l2AxisDown) { press -> dispatch(GamepadButton.L2, press, nowMs) }
+            // The d-pad as a hat is just four buttons: pressing a direction presses that button until the hat re-centres.
             GamepadAxis.HAT_X -> {
-                val direction = when {
-                    value >= 0.5f -> 1
-                    value <= -0.5f -> -1
-                    else -> 0
+                val direction = direction(value)
+                if (direction != hatX) {
+                    hold(hatX, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT)?.let { dispatch(it, false, nowMs) }
+                    hatX = direction
+                    hold(direction, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT)?.let { dispatch(it, true, nowMs) }
                 }
-                if (direction != hatDirection) {
-                    hatDirection = direction
-                    if (direction != 0) actions.exposureMode(direction)
+            }
+            GamepadAxis.HAT_Y -> {
+                val direction = direction(value)
+                if (direction != hatY) {
+                    hold(hatY, GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN)?.let { dispatch(it, false, nowMs) }
+                    hatY = direction
+                    hold(direction, GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN)?.let { dispatch(it, true, nowMs) }
                 }
             }
         }
@@ -114,19 +288,7 @@ class GamepadMapper(private val actions: GamepadActions, private val config: Gam
         } else {
             down.remove(button)
         }
-        when (button) {
-            GamepadButton.R2 -> if (pressed) actions.shutter()
-            GamepadButton.R1 -> if (pressed) actions.togglePhotoVideo()
-            GamepadButton.A -> if (pressed) actions.autofocus()
-            GamepadButton.L1 -> if (pressed) startFocus(-1, GamepadButton.L1, nowMs) else stopFocus(GamepadButton.L1)
-            GamepadButton.L2 -> if (pressed) startFocus(+1, GamepadButton.L2, nowMs) else stopFocus(GamepadButton.L2)
-            GamepadButton.L3 -> if (pressed) actions.recenter()
-            GamepadButton.X -> if (pressed) actions.toggleAeLock()
-            GamepadButton.Y -> if (pressed) actions.cycleGrid()
-            GamepadButton.DPAD_LEFT -> if (pressed) actions.exposureMode(-1)
-            GamepadButton.DPAD_RIGHT -> if (pressed) actions.exposureMode(+1)
-            else -> Unit
-        }
+        dispatch(button, pressed, nowMs)
     }
 
     /** Drive from a steady clock (e.g. every 50 ms) so a held focus button keeps stepping. */
@@ -144,10 +306,41 @@ class GamepadMapper(private val actions: GamepadActions, private val config: Gam
         down.clear()
         r2AxisDown = false
         l2AxisDown = false
-        hatDirection = 0
+        hatX = 0
+        hatY = 0
         leftX = 0f
         leftY = 0f
         rightY = 0f
+    }
+
+    /** Does whatever [button] is currently bound to; held actions (focus) start on press and stop on release. */
+    private fun dispatch(button: GamepadButton, pressed: Boolean, nowMs: Long) {
+        when (bindings.actionFor(button)) {
+            GamepadAction.NONE -> Unit
+            GamepadAction.SHUTTER -> if (pressed) actions.shutter()
+            GamepadAction.TOGGLE_PHOTO_VIDEO -> if (pressed) actions.togglePhotoVideo()
+            GamepadAction.AUTOFOCUS -> if (pressed) actions.autofocus()
+            GamepadAction.FOCUS_NEARER -> if (pressed) startFocus(-1, button, nowMs) else stopFocus(button)
+            GamepadAction.FOCUS_FARTHER -> if (pressed) startFocus(+1, button, nowMs) else stopFocus(button)
+            GamepadAction.EXPOSURE_MODE_PREVIOUS -> if (pressed) actions.exposureMode(-1)
+            GamepadAction.EXPOSURE_MODE_NEXT -> if (pressed) actions.exposureMode(+1)
+            GamepadAction.RECENTER -> if (pressed) actions.recenter()
+            GamepadAction.TOGGLE_AE_LOCK -> if (pressed) actions.toggleAeLock()
+            GamepadAction.CYCLE_GRID -> if (pressed) actions.cycleGrid()
+        }
+    }
+
+    private fun direction(value: Float) = when {
+        value >= 0.5f -> 1
+        value <= -0.5f -> -1
+        else -> 0
+    }
+
+    /** The d-pad button a hat [direction] stands for: negative = [negative], positive = [positive], 0 = none. */
+    private fun hold(direction: Int, negative: GamepadButton, positive: GamepadButton): GamepadButton? = when (direction) {
+        -1 -> negative
+        1 -> positive
+        else -> null
     }
 
     private fun trigger(value: Float, wasDown: Boolean, onEdge: (pressed: Boolean) -> Unit): Boolean = when {
@@ -173,8 +366,8 @@ class GamepadMapper(private val actions: GamepadActions, private val config: Gam
     private fun updateGimbal() {
         val pitchSign = if (config.invertPitch) -1f else 1f
         val inside = hypot(leftX, leftY) < config.deadzone
-        val yaw = if (inside) 0f else shape(leftX)
-        val pitch = if (inside) 0f else shape(-leftY) * pitchSign
+        val yaw = if (inside) 0f else shape(leftX) * config.gimbalSpeed
+        val pitch = if (inside) 0f else shape(-leftY) * pitchSign * config.gimbalSpeed
         if (yaw != sentYaw || pitch != sentPitch) {
             sentYaw = yaw
             sentPitch = pitch
@@ -183,7 +376,7 @@ class GamepadMapper(private val actions: GamepadActions, private val config: Gam
     }
 
     private fun updateZoom() {
-        val rate = if (abs(rightY) < config.deadzone) 0f else shape(-rightY)
+        val rate = if (abs(rightY) < config.deadzone) 0f else shape(-rightY) * config.zoomSpeed
         if (rate != sentZoom) {
             sentZoom = rate
             actions.zoom(rate)

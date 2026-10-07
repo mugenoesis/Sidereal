@@ -105,7 +105,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var gamepadInput: io.github.mugenoesis.sidereal.input.GamepadInput
     private var wearBridge: io.github.mugenoesis.sidereal.wear.WearBridge? = null
     private var wearLiveViewWanted = false
-    private val gamepadMapper by lazy { io.github.mugenoesis.sidereal.input.GamepadMapper(gamepadActions) }
+    private val gamepadMapper by lazy {
+        io.github.mugenoesis.sidereal.input.GamepadMapper(
+            gamepadActions,
+            io.github.mugenoesis.sidereal.input.GamepadConfig.decode(AppPreferences.gamepadConfig),
+            io.github.mugenoesis.sidereal.input.GamepadBindings.decode(AppPreferences.gamepadBindings)
+        )
+    }
     private var gamepadZoomRate = 0f
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
@@ -326,6 +332,7 @@ class MainActivity : AppCompatActivity() {
             this, softwareAfcController.isLocked, sequenceRunning = { sequenceFeature.controller.isRunning.value }
         )
         shootingControls.onTimerTick = cameraSounds::onTimerTick
+        io.github.mugenoesis.sidereal.input.GamepadSettingsFeature(this, gamepadMapper)
         observeConnectionState()
         observeWifiState()
         observeComponentChanges()
