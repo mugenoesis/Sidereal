@@ -810,7 +810,49 @@
             android:visibility="gone"
             android:text="Tap video to focus" />
 
+        <!-- Star focus assist: magnified star + live FWHM readout (see
+             focus/FocusAssistController). -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="Star assist" />
+
+            <Button
+                android:id="@+id/btnStarAssist"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@drawable/bg_stepper_button"
+                android:text="Off" />
+
+        </LinearLayout>
+
     </LinearLayout>
+
+    <!-- Magnified star + FWHM, bottom-right of the video, shown only while
+         star assist is on. -->
+    <io.github.mugenoesis.sidereal.focus.FocusAssistView
+        android:id="@+id/focusAssistView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview" />
 
     <!-- "More" overflow tray: sharpness/contrast/saturation steppers +
          anti-flicker/photo/video format tap-to-cycle rows - lowest

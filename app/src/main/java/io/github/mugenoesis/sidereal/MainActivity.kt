@@ -36,6 +36,8 @@ import io.github.mugenoesis.sidereal.gimbal.JoystickView
 import io.github.mugenoesis.sidereal.gimbal.ManualGimbalController
 import io.github.mugenoesis.sidereal.gimbal.TimedMoveController
 import io.github.mugenoesis.sidereal.display.NightMode
+import io.github.mugenoesis.sidereal.focus.FocusAssistController
+import io.github.mugenoesis.sidereal.focus.FocusAssistView
 import io.github.mugenoesis.sidereal.sequence.Attitude
 import io.github.mugenoesis.sidereal.sequence.SequenceFeature
 import io.github.mugenoesis.sidereal.tracking.FaceTrackingController
@@ -87,6 +89,7 @@ class MainActivity : AppCompatActivity() {
     private val imageTuningController = ImageTuningController()
     private val mediaFormatController = MediaFormatController()
     private val audioRecorderController = AudioRecorderController()
+    private val focusAssistController = FocusAssistController()
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
     private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, SEQUENCE, MORE }
@@ -328,6 +331,16 @@ class MainActivity : AppCompatActivity() {
             }
         )
         findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setOnClickListener { setActiveSettingsPanel(SettingsPanel.SEQUENCE) }
+
+        findViewById<FocusAssistView>(R.id.focusAssistView).bind(focusAssistController, lifecycleScope)
+        val starAssistButton = findViewById<android.widget.Button>(R.id.btnStarAssist)
+        starAssistButton.setOnClickListener { focusAssistController.setEnabled(!focusAssistController.enabled.value) }
+        focusAssistController.enabled
+            .onEach { on ->
+                starAssistButton.text = if (on) "On" else "Off"
+                updateFrameCaptureState()
+            }
+            .launchIn(lifecycleScope)
     }
 
     private fun observeTimedMove() {
@@ -928,7 +941,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Frame capture (TextureView.getBitmap() at ~12fps) is only worth running while something actually consumes it. */
     private fun updateFrameCaptureState() {
-        val needed = findViewById<android.widget.ToggleButton>(R.id.toggleFaceTrack).isChecked || softwareAfcController.isRunning.value
+        val needed = findViewById<android.widget.ToggleButton>(R.id.toggleFaceTrack).isChecked || softwareAfcController.isRunning.value || focusAssistController.enabled.value
         if (needed) startFrameCapture() else stopFrameCapture()
     }
 
@@ -1679,6 +1692,7 @@ class MainActivity : AppCompatActivity() {
         val bitmap = videoPreview.bitmap ?: return
         videoFrameProvider.onBitmapFrame(bitmap)
         softwareAfcController.onBitmapFrame(bitmap)
+        focusAssistController.onBitmapFrame(bitmap)
     }
 
     private fun observeConnectionState() {

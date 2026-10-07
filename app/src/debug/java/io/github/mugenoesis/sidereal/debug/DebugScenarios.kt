@@ -26,6 +26,26 @@ object DebugScenarios {
         when (cmd) {
             "photo_probe" -> photoProbe()
             "seq_interval" -> seqInterval(args)
+            "focus_ring" -> {
+                val v = args["value"]?.toInt() ?: 0
+                Log.i(TAG, "focus_ring $v -> ${callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { _ -> }; RealCameraGateway.setFocusRingValue(v) { e -> it(e) } }}")
+            }
+            "gimbal_to" -> {
+                val host = io.github.mugenoesis.sidereal.sequence.RealSequenceHost()
+                host.moveTo(args["pitch"]?.toFloat() ?: 0f, args["yaw"]?.toFloat() ?: 0f)
+                Log.i(TAG, "gimbal_to done, now ${attitudeText()}")
+            }
+            "exposure" -> {
+                callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
+                Log.i(TAG, "iso ${callback<String?> { RealCameraGateway.setIso(args["iso"] ?: "ISO_100") { e -> it(e) } }}")
+                Log.i(TAG, "shutter ${callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"] ?: "SHUTTER_SPEED_1_250") { e -> it(e) } }}")
+            }
+            "focus_sweep" -> focusSweep(args)
+            "reset_camera" -> {
+                callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
+                callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }
+                Log.i(TAG, "reset_camera done (PROGRAM, AF)")
+            }
             "attitude" -> Log.i(TAG, "attitude ${attitudeText()}")
             else -> Log.w(TAG, "unknown command $cmd")
         }
@@ -140,5 +160,25 @@ object DebugScenarios {
         Log.i(TAG, "frame gaps ms=$gaps total=${System.currentTimeMillis() - t0}ms")
         gaps.forEach { if (kotlin.math.abs(it - 9_000) > 1_500) problems += "gap $it not ~9000" }
         Log.i(TAG, "RESULT seq_interval: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
+    }
+
+    /** Steps the manual focus ring across its range, pausing at each so FocusAssist's log lines can be matched to ring values. */
+    private suspend fun focusSweep(args: Map<String, String>) {
+        val camera = DJIConnectionManager.camera ?: error("no camera")
+        callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+        val upper = callback<Int> { cb -> camera.getFocusRingValueUpperBound(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+            override fun onSuccess(v: Int) = cb(v)
+            override fun onFailure(e: dji.common.error.DJIError) = cb(-1)
+        }) }
+        val steps = args["steps"]?.toInt() ?: 16
+        val dwellMs = args["dwell"]?.toLong() ?: 2500L
+        Log.i(TAG, "focus ring upper bound=$upper")
+        for (i in 0..steps) {
+            val v = (upper.toLong() * i / steps).toInt()
+            callback<String?> { RealCameraGateway.setFocusRingValue(v) { e -> it(e) } }
+            Log.i(TAG, "RING $v")
+            delay(dwellMs)
+        }
+        Log.i(TAG, "RESULT focus_sweep: DONE")
     }
 }
