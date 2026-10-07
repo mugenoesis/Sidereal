@@ -13,7 +13,7 @@ android {
     defaultConfig {
         // Same id as the phone app so the two are one product on Google Play; they are installed on different devices.
         applicationId "io.github.mugenoesis.sidereal"
-        minSdk 30
+        minSdk 25
         targetSdk 36
         versionCode 1
         versionName "0.1"
