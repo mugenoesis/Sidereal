@@ -43,6 +43,8 @@ class RealSequenceHost(
 
     override fun nowMs(): Long = SystemClock.elapsedRealtime()
 
+    override fun isCameraReachable(): Boolean = DJIConnectionManager.isReadyToShoot()
+
     override suspend fun sleep(ms: Long) = delay(ms)
 
     private suspend fun ensureFreeMode() {

@@ -20,6 +20,10 @@ private class FakeHost : SequenceHost {
     var setShutterOk = true
     var blockSleepOn: CompletableDeferred<Unit>? = null
 
+    /** The camera link is "up" while clock is outside every [downFrom, downUntil) window. */
+    val outages = mutableListOf<LongRange>()
+    override fun isCameraReachable() = outages.none { clock in it }
+
     override fun nowMs() = clock
 
     override suspend fun sleep(ms: Long) {
@@ -33,7 +37,7 @@ private class FakeHost : SequenceHost {
     }
 
     override suspend fun capture(exposureMs: Long, label: String): Boolean {
-        val ok = captureResults.removeFirstOrNull() ?: true
+        val ok = isCameraReachable() && (captureResults.removeFirstOrNull() ?: true)
         events += "capture($label,${if (ok) "ok" else "fail"})"
         if (ok) captureTimes += clock
         clock += exposureMs
@@ -180,5 +184,60 @@ class SequenceRunnerTest {
         runner.run(plan(frames = 3))
         assertTrue(counts.containsAll(listOf(1, 2, 3)))
         assertEquals(counts.sorted(), counts)
+    }
+
+    @Test
+    fun `a capture failing because the camera link dropped waits for it and then carries on`() = runBlocking {
+        val host = FakeHost()
+        host.outages += 500L..40_000L // drops just before the first shot (1 s in), back after 40 s
+        val runner = SequenceRunner(host)
+        runner.run(plan(frames = 2))
+        assertEquals(SequenceState.Done, runner.progress.value.state)
+        assertEquals(2, runner.progress.value.capturesDone)
+        assertTrue("first shot only after the link returned: ${host.captureTimes}", host.captureTimes.first() >= 40_000L)
+        assertEquals("a dropped link is not a retry", 0, runner.progress.value.retries)
+    }
+
+    @Test
+    fun `progress says it is waiting for the camera during an outage and clears afterwards`() = runBlocking {
+        val host = FakeHost()
+        host.outages += 500L..20_000L
+        val runner = SequenceRunner(host)
+        val seen = mutableListOf<Boolean>()
+        runner.onProgress = { seen += it.waitingForCamera }
+        runner.run(plan(frames = 1))
+        assertTrue("never reported waiting: $seen", seen.any { it })
+        assertEquals(false, runner.progress.value.waitingForCamera)
+    }
+
+    @Test
+    fun `a camera that never comes back fails the sequence after the patience runs out and says so`() = runBlocking {
+        val host = FakeHost()
+        host.outages += 500L..Long.MAX_VALUE / 2
+        val runner = SequenceRunner(host, linkPatienceMs = 5 * 60_000)
+        runner.run(plan(frames = 3))
+        val state = runner.progress.value.state
+        assertTrue("$state", state is SequenceState.Failed && state.reason.contains("camera", ignoreCase = true))
+        assertTrue("gave up at ${host.clock}", host.clock in 5 * 60_000L..8 * 60_000L)
+    }
+
+    @Test
+    fun `several separate outages in one sequence are each waited out`() = runBlocking {
+        val host = FakeHost()
+        host.outages += 500L..30_000L
+        host.outages += 100_000L..130_000L
+        val runner = SequenceRunner(host)
+        runner.run(plan(frames = 15))
+        assertEquals(SequenceState.Done, runner.progress.value.state)
+        assertEquals(15, runner.progress.value.capturesDone)
+    }
+
+    @Test
+    fun `a failure with the link up still uses the retry budget`() = runBlocking {
+        val host = FakeHost()
+        host.captureResults.addAll(listOf(false, false, false))
+        val runner = SequenceRunner(host)
+        runner.run(plan(frames = 1))
+        assertTrue(runner.progress.value.state is SequenceState.Failed)
     }
 }
