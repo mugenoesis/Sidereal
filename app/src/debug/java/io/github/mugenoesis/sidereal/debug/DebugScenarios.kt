@@ -100,6 +100,8 @@ object DebugScenarios {
             }
             "video_settings" -> videoSettings()
             "mux_test" -> muxTest()
+            // Real controller events arrive on the main thread and touch views, so the injected ones must too.
+            "gamepad_test" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { gamepadTest() }
             "sync_seed" -> syncSeed()
             "sync_cleanup" -> {
                 val context = appContext ?: error("no context")
@@ -573,5 +575,118 @@ object DebugScenarios {
         Log.i(TAG, "VERIFY ${found.second}: tone onset=$onset ms expected~=${expected?.plus(46)} playable=$playable size=${copy.length()}")
         Log.i(TAG, "RESULT verify_export: ${if (pass) "PASS" else "FAIL"}")
         copy.delete()
+    }
+
+    private fun padMotion(vararg axes: Pair<Int, Float>): android.view.MotionEvent {
+        val now = android.os.SystemClock.uptimeMillis()
+        val props = arrayOf(android.view.MotionEvent.PointerProperties().apply { id = 0; toolType = android.view.MotionEvent.TOOL_TYPE_UNKNOWN })
+        val coords = arrayOf(android.view.MotionEvent.PointerCoords().apply { axes.forEach { (axis, value) -> setAxisValue(axis, value) } })
+        return android.view.MotionEvent.obtain(now, now, android.view.MotionEvent.ACTION_MOVE, 1, props, coords, 0, 0, 1f, 1f, 0, 0, android.view.InputDevice.SOURCE_JOYSTICK, 0)
+    }
+
+    private fun padKey(code: Int, down: Boolean): android.view.KeyEvent {
+        val now = android.os.SystemClock.uptimeMillis()
+        return android.view.KeyEvent(now, now, if (down) android.view.KeyEvent.ACTION_DOWN else android.view.KeyEvent.ACTION_UP, code, 0, 0, 0, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD)
+    }
+
+    /** Injects synthetic controller events into the running activity and checks what the real gimbal and camera did. */
+    private suspend fun gamepadTest() {
+        val pad = io.github.mugenoesis.sidereal.input.GamepadInput.active ?: run {
+            Log.i(TAG, "RESULT gamepad_test: FAIL no active GamepadInput - open the app first"); return
+        }
+        val problems = mutableListOf<String>()
+        val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager!!
+        suspend fun read(name: String): String? = suspendCancellableCoroutine { cont ->
+            km.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume(null) }
+            })
+        }
+        fun att() = DJIConnectionManager.gimbalState.value?.attitudeInDegrees
+        suspend fun hold(ms: Long, vararg axes: Pair<Int, Float>) {
+            val end = System.currentTimeMillis() + ms
+            while (System.currentTimeMillis() < end) { pad.handleMotion(padMotion(*axes)); delay(40) }
+        }
+        suspend fun press(code: Int, holdMs: Long = 120) { pad.handleKey(padKey(code, true)); delay(holdMs); pad.handleKey(padKey(code, false)) }
+        val X = android.view.MotionEvent.AXIS_X
+        val Y = android.view.MotionEvent.AXIS_Y
+
+        callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+        delay(2000)
+
+        // 1. left stick right pans right, left pans back
+        val a0 = att()!!
+        hold(1500, X to 1f)
+        pad.handleMotion(padMotion(X to 0f)); delay(800)
+        val a1 = att()!!
+        Log.i(TAG, "PAD stick right: yaw ${a0.yaw} -> ${a1.yaw}")
+        if (a1.yaw - a0.yaw < 15f) problems += "right stick moved yaw only ${a1.yaw - a0.yaw}"
+        val settled = att()!!; delay(1000)
+        if (kotlin.math.abs(att()!!.yaw - settled.yaw) > 0.3f) problems += "gimbal kept moving after the stick was released"
+        hold(1500, X to -1f); pad.handleMotion(padMotion(X to 0f)); delay(800)
+
+        // 2. left stick up tilts up
+        val b0 = att()!!
+        hold(800, Y to -1f); pad.handleMotion(padMotion(Y to 0f)); delay(800)
+        val b1 = att()!!
+        Log.i(TAG, "PAD stick up: pitch ${b0.pitch} -> ${b1.pitch}")
+        if (b1.pitch - b0.pitch < 5f) problems += "up stick changed pitch by ${b1.pitch - b0.pitch} (expected a clear increase)"
+        hold(800, Y to 1f); pad.handleMotion(padMotion(Y to 0f)); delay(800)
+
+        // 3. right trigger takes a photo (photo mode only)
+        var shot = false
+        pad.handleMotion(padMotion(android.view.MotionEvent.AXIS_RTRIGGER to 1f))
+        val end = System.currentTimeMillis() + 4000
+        while (System.currentTimeMillis() < end && !shot) { shot = DJIConnectionManager.cameraSystemState.value?.isShootingSinglePhoto == true; delay(50) }
+        pad.handleMotion(padMotion(android.view.MotionEvent.AXIS_RTRIGGER to 0f))
+        Log.i(TAG, "PAD trigger: photo started=$shot")
+        if (!shot) problems += "trigger did not start a photo"
+        delay(5000)
+
+        // 4. d-pad right then left steps the exposure mode
+        val mode0 = read(dji.keysdk.CameraKey.EXPOSURE_MODE)
+        pad.handleMotion(padMotion(android.view.MotionEvent.AXIS_HAT_X to 1f)); delay(100); pad.handleMotion(padMotion(android.view.MotionEvent.AXIS_HAT_X to 0f)); delay(1500)
+        val mode1 = read(dji.keysdk.CameraKey.EXPOSURE_MODE)
+        pad.handleMotion(padMotion(android.view.MotionEvent.AXIS_HAT_X to -1f)); delay(100); pad.handleMotion(padMotion(android.view.MotionEvent.AXIS_HAT_X to 0f)); delay(1500)
+        val mode2 = read(dji.keysdk.CameraKey.EXPOSURE_MODE)
+        Log.i(TAG, "PAD d-pad: exposure $mode0 -> $mode1 -> $mode2")
+        if (mode1 == mode0 || mode2 != mode0) problems += "d-pad exposure mode $mode0 -> $mode1 -> $mode2"
+
+        // 5. X toggles the exposure lock
+        press(android.view.KeyEvent.KEYCODE_BUTTON_X); delay(1500)
+        val lockOn = read(dji.keysdk.CameraKey.AE_LOCK)
+        press(android.view.KeyEvent.KEYCODE_BUTTON_X); delay(1500)
+        val lockOff = read(dji.keysdk.CameraKey.AE_LOCK)
+        Log.i(TAG, "PAD X: AE lock $lockOn then $lockOff")
+        if (lockOn != "true" || lockOff != "false") problems += "AE lock $lockOn/$lockOff"
+
+        // 6. L1 / L2 move the focus ring (the first press switches to manual focus)
+        val camera = DJIConnectionManager.camera!!
+        suspend fun ring(): Int = callback { cb -> camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+            override fun onSuccess(v: Int) = cb(v)
+            override fun onFailure(e: dji.common.error.DJIError) = cb(-1)
+        }) }
+        press(android.view.KeyEvent.KEYCODE_BUTTON_L2, 100); delay(1500)
+        val r0 = ring()
+        press(android.view.KeyEvent.KEYCODE_BUTTON_L2, 1500); delay(1200)
+        val r1 = ring()
+        press(android.view.KeyEvent.KEYCODE_BUTTON_L1, 1500); delay(1200)
+        val r2 = ring()
+        Log.i(TAG, "PAD focus: ring $r0 -> (L2 held) $r1 -> (L1 held) $r2")
+        if (r1 <= r0) problems += "L2 hold did not move the ring farther ($r0 -> $r1)"
+        if (r2 >= r1) problems += "L1 hold did not move the ring nearer ($r1 -> $r2)"
+
+        // 7. R1 switches to video mode and back (never touches the shutter while in video)
+        press(android.view.KeyEvent.KEYCODE_BUTTON_R1); delay(3000)
+        val toVideo = DJIConnectionManager.cameraSystemState.value?.mode?.name
+        press(android.view.KeyEvent.KEYCODE_BUTTON_R1); delay(3000)
+        val toPhoto = DJIConnectionManager.cameraSystemState.value?.mode?.name
+        Log.i(TAG, "PAD R1: $toVideo then $toPhoto")
+        if (toVideo != "RECORD_VIDEO" || toPhoto != "SHOOT_PHOTO") problems += "R1 mode switch $toVideo/$toPhoto"
+
+        // restore
+        callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }
+        callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
+        Log.i(TAG, "RESULT gamepad_test: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
     }
 }

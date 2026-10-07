@@ -72,6 +72,15 @@ class ShootingControls(
         renderAeLock(false)
     }
 
+    /** Same as tapping the buttons - for other input methods (a gamepad). */
+    fun toggleAeLock() = aeLock.toggle()
+
+    fun cycleGrid() {
+        gridMode = gridMode.next()
+        AppPreferences.gridMode = gridMode
+        renderGrid()
+    }
+
     /**
      * Handles a shutter press for the self-timer. Returns true if the press was consumed - it cancelled a
      * running countdown, or started one that will call [fire] at zero - and false if the caller should shoot now.

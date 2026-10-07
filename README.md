@@ -46,10 +46,18 @@
 - Colour profiles (D-Log, D-Cinelike, B&W and more), PAL/NTSC and the
   camera's own list of video resolutions and frame rates
 
+**Game controller**
+- Bluetooth or USB gamepad: left stick aims the gimbal, right stick zooms,
+  R2 is the shutter, R1 switches photo/video, L1/L2 pull focus, A is
+  autofocus, d-pad left/right step P/A/S/M, X locks exposure, Y shows the
+  grid
+
 **Media and audio**
 - Browse, preview and download photos and videos from the camera's SD card
 - Record audio on the phone (built-in or Bluetooth mic) alongside the video,
   since the X5 rig records no audio of its own
+- Audio sync: line the phone audio up with the video by ear against a live
+  preview, then export one merged MP4 (no re-encoding)
 
 ## Requirements
 
@@ -137,9 +145,12 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - **Software continuous autofocus:** works for photos, but it hunts a
   little even once settled. It hasn't been tested while recording video or
   in bright light.
-- **Phone audio recording:** records from the phone's mic or a Bluetooth
-  mic alongside the video. Lining the audio up with the video is a manual
-  job in your editor for now.
+- **Phone audio recording and sync:** records from the phone's mic or a
+  Bluetooth mic alongside the video, and the Audio sync screen lines it up
+  and exports a merged MP4. The automatic starting offset is only as good
+  as the camera's reported record-start time, so check it by ear.
+- **Game controller:** built and checked with injected events, but not yet
+  with a physical controller.
 - **Histogram:** shows live data, but the graph's scaling is a best guess.
 - **Switching video standard (PAL/NTSC):** works, but the camera takes
   about five seconds to settle afterwards and refuses queries meanwhile.
@@ -175,6 +186,8 @@ app/src/main/java/io/github/mugenoesis/sidereal/
 ├── display/    red night mode
 ├── zoom/       digital zoom and size-locked auto-zoom
 ├── audio/      phone-side audio recording and source selection
+├── sync/       audio/video offset, sidecar files, MP4 merge and the sync screen
+├── input/      game controller mapping
 └── media/      on-camera media library
 ```
 

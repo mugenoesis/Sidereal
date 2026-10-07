@@ -23,6 +23,7 @@ import io.github.mugenoesis.sidereal.camera.CameraStatusFormat
 import io.github.mugenoesis.sidereal.camera.CycleHelpers
 import io.github.mugenoesis.sidereal.camera.ExposureController
 import io.github.mugenoesis.sidereal.camera.FocusController
+import io.github.mugenoesis.sidereal.camera.FocusRingStepper
 import io.github.mugenoesis.sidereal.camera.HistogramController
 import io.github.mugenoesis.sidereal.camera.HistogramView
 import io.github.mugenoesis.sidereal.camera.ImageTuningController
@@ -83,6 +84,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var gimbalModeController: GimbalModeController
     private lateinit var sequenceFeature: SequenceFeature
 
+    private companion object {
+        /** Zoom scale change per 50 ms tick at full right-stick deflection (~1.2x per second). */
+        const val GAMEPAD_ZOOM_PER_TICK = 0.06f
+    }
+
     private val exposureController = ExposureController()
     private val focusController = FocusController()
     private val softwareAfcController = SoftwareAfcController(focusController)
@@ -95,6 +101,9 @@ class MainActivity : AppCompatActivity() {
     private val focusAssistController = FocusAssistController()
     private lateinit var cameraStatusController: CameraStatusController
     private lateinit var shootingControls: io.github.mugenoesis.sidereal.camera.ShootingControls
+    private lateinit var gamepadInput: io.github.mugenoesis.sidereal.input.GamepadInput
+    private val gamepadMapper by lazy { io.github.mugenoesis.sidereal.input.GamepadMapper(gamepadActions) }
+    private var gamepadZoomRate = 0f
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
     private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, SEQUENCE, MORE }
@@ -308,6 +317,7 @@ class MainActivity : AppCompatActivity() {
         bindCameraSettingsViews()
         bindSequenceFeature()
         bindCameraStatus()
+        bindGamepad()
         shootingControls = io.github.mugenoesis.sidereal.camera.ShootingControls(this, mediaFormatController)
         observeConnectionState()
         observeWifiState()
@@ -324,6 +334,99 @@ class MainActivity : AppCompatActivity() {
         observeTimedMove()
         updateGimbalModeUi()
     }
+
+    // --- Game controller support: the pure mapper decides WHAT was asked; these do it with the same code paths
+    // the touch controls use, so every guard (recording lock-out, sequence lock-out, capability checks) still applies.
+    private val gamepadActions = object : io.github.mugenoesis.sidereal.input.GamepadActions {
+        override fun gimbal(yaw: Float, pitch: Float) {
+            if (yaw == 0f && pitch == 0f) manualController.onJoystickReleased() else manualController.onJoystickMoved(yaw, pitch)
+        }
+
+        override fun zoom(rate: Float) {
+            gamepadZoomRate = rate
+        }
+
+        override fun shutter() {
+            val button = findViewById<android.widget.Button>(R.id.btnShutter)
+            if (button.isEnabled) button.performClick()
+        }
+
+        override fun togglePhotoVideo() {
+            if (DJIConnectionManager.cameraSystemState.value?.isRecording == true) {
+                showErrorToast("Stop recording before switching mode")
+                return
+            }
+            val video = DJIConnectionManager.cameraSystemState.value?.mode == SettingsDefinitions.CameraMode.RECORD_VIDEO
+            cameraModeController.setMode(if (video) SettingsDefinitions.CameraMode.SHOOT_PHOTO else SettingsDefinitions.CameraMode.RECORD_VIDEO)
+        }
+
+        override fun autofocus() {
+            focusController.setFocusTarget(0.5f, 0.5f)
+        }
+
+        override fun focusRing(direction: Int) {
+            if (findViewById<android.view.View>(R.id.focusRingRow).visibility != android.view.View.VISIBLE) {
+                // The ring only does something in manual focus - switch there first, the next step moves it.
+                gamepadRingValue = null
+                focusController.setFocusMode(SettingsDefinitions.FocusMode.MANUAL)
+                return
+            }
+            val bar = findViewById<SeekBar>(R.id.focusRingSeekBar)
+            val known = gamepadRingValue
+            if (known != null) {
+                applyGamepadRing(FocusRingStepper.next(known, direction, bar.max))
+                return
+            }
+            // First nudge since manual focus engaged: start from where the camera's ring really is, not from the
+            // slider (which only moves when touched).
+            DJIConnectionManager.camera?.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                override fun onSuccess(value: Int) {
+                    runOnUiThread { applyGamepadRing(FocusRingStepper.next(value, direction, bar.max)) }
+                }
+
+                override fun onFailure(error: dji.common.error.DJIError) {
+                    android.util.Log.w("MainActivity", "getFocusRingValue failed: ${error.description}")
+                }
+            })
+        }
+
+        override fun exposureMode(direction: Int) {
+            val order = listOf(
+                SettingsDefinitions.ExposureMode.PROGRAM,
+                SettingsDefinitions.ExposureMode.APERTURE_PRIORITY,
+                SettingsDefinitions.ExposureMode.SHUTTER_PRIORITY,
+                SettingsDefinitions.ExposureMode.MANUAL
+            )
+            val current = order.indexOf(selectedExposureMode).coerceAtLeast(0)
+            selectExposureMode(order[(current + direction).mod(order.size)])
+        }
+
+        override fun recenter() = manualController.onDoubleTap()
+        override fun toggleAeLock() = shootingControls.toggleAeLock()
+        override fun cycleGrid() = shootingControls.cycleGrid()
+    }
+
+    /** The manual-focus ring value the pad last set (null until its first nudge reads the camera's own). */
+    private var gamepadRingValue: Int? = null
+
+    private fun applyGamepadRing(value: Int) {
+        gamepadRingValue = value
+        findViewById<SeekBar>(R.id.focusRingSeekBar).progress = value
+        focusController.setFocusRingValue(value)
+    }
+
+    private fun bindGamepad() {
+        gamepadInput = io.github.mugenoesis.sidereal.input.GamepadInput(this, gamepadMapper) {
+            val capability = zoomController.capability.value
+            if (gamepadZoomRate != 0f && capability.supported) zoomController.adjustZoomBy(gamepadZoomRate * GAMEPAD_ZOOM_PER_TICK)
+        }
+    }
+
+    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean =
+        (::gamepadInput.isInitialized && gamepadInput.handleMotion(event)) || super.dispatchGenericMotionEvent(event)
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        (::gamepadInput.isInitialized && gamepadInput.handleKey(event)) || super.dispatchKeyEvent(event)
 
     private fun bindCameraStatus() {
         cameraStatusController = CameraStatusController(lifecycleScope)
@@ -356,6 +459,11 @@ class MainActivity : AppCompatActivity() {
         )
         findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setOnClickListener { setActiveSettingsPanel(SettingsPanel.SEQUENCE) }
 
+        // A running sequence owns the camera and gimbal: the pad is locked out until it ends.
+        sequenceFeature.controller.isRunning
+            .onEach { running -> gamepadMapper.locked = running }
+            .launchIn(lifecycleScope)
+
         findViewById<FocusAssistView>(R.id.focusAssistView).bind(focusAssistController, lifecycleScope)
         val starAssistButton = findViewById<android.widget.Button>(R.id.btnStarAssist)
         starAssistButton.setOnClickListener { focusAssistController.setEnabled(!focusAssistController.enabled.value) }
@@ -375,11 +483,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        gamepadInput.start()
         OsmoWifiChecker.start(this)
     }
 
     override fun onStop() {
         super.onStop()
+        gamepadInput.stop()
         OsmoWifiChecker.stop(this)
     }
 
