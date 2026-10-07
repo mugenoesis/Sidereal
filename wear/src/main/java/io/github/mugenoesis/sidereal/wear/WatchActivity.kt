@@ -250,7 +250,12 @@ class WatchActivity : ComponentActivity() {
 
     private fun vibrate(pattern: LongArray) {
         val vibrator = getSystemService(Vibrator::class.java) ?: return
-        vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+        } else {
+            @Suppress("DEPRECATION") // older Wear OS (Android 7.x) has only the plain pattern call
+            vibrator.vibrate(pattern, -1)
+        }
     }
 
     private fun label(sp: Float, style: Int) = TextView(this).apply {
