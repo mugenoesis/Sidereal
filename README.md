@@ -25,6 +25,9 @@
 
 **Camera**
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
+- Camera sounds played on the phone (shutter click, self-timer beeps, record
+  start/stop, focus-lock beep), each switchable in the More tray - the DJI SDK has
+  no setting for the camera's own sounds.
 - Focus modes, tap-to-focus, and a software continuous-autofocus mode
   (contrast-detect scan-and-refine search) for lenses that don't support AFC
 - White balance, metering modes, and tap-to-spot-meter

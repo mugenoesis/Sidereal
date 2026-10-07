@@ -39,6 +39,7 @@ object AppPreferences {
     private const val KEY_OSMO_WIFI_PASSPHRASE = "osmo_wifi_passphrase"
     private const val KEY_GRID_MODE = "grid_mode"
     private const val KEY_SELF_TIMER_SEC = "self_timer_sec"
+    private const val KEY_CAMERA_SOUNDS = "camera_sounds"
 
     private lateinit var prefs: SharedPreferences
 
@@ -93,6 +94,11 @@ object AppPreferences {
     var selfTimerSeconds: Int
         get() = prefs.getInt(KEY_SELF_TIMER_SEC, 0)
         set(value) = prefs.edit().putInt(KEY_SELF_TIMER_SEC, value).apply()
+
+    /** Which camera sounds are on, as CameraSoundSettings.encode() writes it; null = the defaults (all on). */
+    var cameraSounds: String?
+        get() = prefs.getString(KEY_CAMERA_SOUNDS, null)
+        set(value) = prefs.edit().putString(KEY_CAMERA_SOUNDS, value).apply()
 
     // GIMBAL (no phone-side recording) is the safe default - only a real
     // choice once a mic is actually plugged into the gimbal, which this

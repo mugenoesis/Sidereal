@@ -101,6 +101,7 @@ class MainActivity : AppCompatActivity() {
     private val focusAssistController = FocusAssistController()
     private lateinit var cameraStatusController: CameraStatusController
     private lateinit var shootingControls: io.github.mugenoesis.sidereal.camera.ShootingControls
+    private lateinit var cameraSounds: io.github.mugenoesis.sidereal.camera.CameraSoundsFeature
     private lateinit var gamepadInput: io.github.mugenoesis.sidereal.input.GamepadInput
     private var wearBridge: io.github.mugenoesis.sidereal.wear.WearBridge? = null
     private var wearLiveViewWanted = false
@@ -321,6 +322,10 @@ class MainActivity : AppCompatActivity() {
         bindCameraStatus()
         bindGamepad()
         shootingControls = io.github.mugenoesis.sidereal.camera.ShootingControls(this, mediaFormatController)
+        cameraSounds = io.github.mugenoesis.sidereal.camera.CameraSoundsFeature(
+            this, softwareAfcController.isLocked, sequenceRunning = { sequenceFeature.controller.isRunning.value }
+        )
+        shootingControls.onTimerTick = cameraSounds::onTimerTick
         observeConnectionState()
         observeWifiState()
         observeComponentChanges()
@@ -2248,6 +2253,7 @@ class MainActivity : AppCompatActivity() {
         stopFrameCapture()
         videoFrameProvider.release()
         softwareAfcController.stop()
+        cameraSounds.release()
         histogramController.deactivate()
         // Safety net, not the normal path - the isRecordingIntent observer
         // above already stops this on a normal shutter-button stop press.

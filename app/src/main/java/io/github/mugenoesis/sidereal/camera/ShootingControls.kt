@@ -36,6 +36,11 @@ class ShootingControls(
     private val gridOverlay: GridOverlayView = activity.findViewById(R.id.gridOverlay)
     private val countdownText: TextView = activity.findViewById(R.id.countdownText)
 
+    /** Called with each remaining second of the self-timer (for the beeps). */
+    var onTimerTick: ((Int) -> Unit)?
+        get() = countdown.onTick
+        set(value) { countdown.onTick = value }
+
     private var timerSeconds = AppPreferences.selfTimerSeconds
     private var gridMode = AppPreferences.gridMode
 
