@@ -120,7 +120,8 @@ class MediaLibraryController {
                 _errorEvents.tryEmit("Couldn't load file list (${error.description})")
                 return@refreshFileListOfStorageLocation
             }
-            _files.value = manager.getSDCardFileListSnapshot().orEmpty().filter { MediaTypeFilter.isDownloadable(it.mediaType.name) }
+            val downloadable = manager.getSDCardFileListSnapshot().orEmpty().filter { MediaTypeFilter.isDownloadable(it.mediaType.name) }
+            _files.value = MediaOrdering.newestFirst(downloadable, { it.timeCreated }, { it.fileName })
             _loadState.value = MediaLoadState.LOADED
         }
     }

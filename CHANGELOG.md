@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The on-camera media browser lists the newest files first instead of oldest first.
+
 ## 0.1.1 - first-start fixes
 
 ### Fixed
