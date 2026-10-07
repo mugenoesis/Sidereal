@@ -26,7 +26,7 @@
 **Camera**
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
 - Focus modes, tap-to-focus, and a software continuous-autofocus mode
-  (contrast-detect hill climbing) for lenses that don't support AFC
+  (contrast-detect scan-and-refine search) for lenses that don't support AFC
 - White balance, metering modes, and tap-to-spot-meter
 - Live histogram
 - Sharpness, contrast, saturation and anti-flicker
@@ -148,9 +148,10 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 
 - **Face tracking:** follows a locked face, but it still needs tuning to be
   smooth and accurate.
-- **Software continuous autofocus:** works for photos, but it hunts a
-  little even once settled. It hasn't been tested while recording video or
-  in bright light.
+- **Software continuous autofocus:** seeds from the camera's own
+  autofocus, scans the lens ring for the sharpness peak, locks, and then
+  leaves the ring alone until the scene changes (about 10-13 s to first
+  lock). It hasn't been tested while recording video or in bright light.
 - **Phone audio recording and sync:** records from the phone's mic or a
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
   and exports a merged MP4. The automatic starting offset is only as good

@@ -103,6 +103,28 @@ object DebugScenarios {
             "mux_test" -> muxTest()
             // Real controller events arrive on the main thread and touch views, so the injected ones must too.
             "wear_host_test" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { wearHostTest() }
+            "afc_start" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { io.github.mugenoesis.sidereal.camera.SoftwareAfcController.latest?.start(); Log.i(TAG, "AFC started by harness") }
+            "afc_stop" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { io.github.mugenoesis.sidereal.camera.SoftwareAfcController.latest?.stop(); Log.i(TAG, "AFC stopped by harness") }
+            "af_probe" -> {
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                suspend fun ring(): Int = callback { cb -> camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                    override fun onSuccess(v: Int) = cb(v)
+                    override fun onFailure(e: dji.common.error.DJIError) = cb(-1)
+                }) }
+                callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                callback<String?> { RealCameraGateway.setFocusRingValue(args["start"]?.toInt() ?: 0) { e -> it(e) } }
+                delay(2500)
+                if (args["assist"] == "off") {
+                    Log.i(TAG, "AFPROBE focus assistant off: ${callback<String?> { RealCameraGateway.setFocusAssistantEnabled(false, false) { e -> it(e) } }}")
+                }
+                Log.i(TAG, "AFPROBE start ring=${ring()}")
+                Log.i(TAG, "AFPROBE ->AUTO ${callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }}")
+                Log.i(TAG, "AFPROBE target ${callback<String?> { RealCameraGateway.setFocusTarget(0.5f, 0.5f) { e -> it(e) } }}")
+                for (t in listOf(500L, 1000L, 1500L, 2500L)) { delay(t - (if (t == 500L) 0 else 500)); Log.i(TAG, "AFPROBE in AUTO +${t}ms ring=${ring()}") }
+                Log.i(TAG, "AFPROBE ->MANUAL ${callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }}")
+                for (t in listOf(200L, 800L)) { delay(t); Log.i(TAG, "AFPROBE in MANUAL +${t}ms ring=${ring()}") }
+                Log.i(TAG, "RESULT af_probe: DONE")
+            }
             "gamepad_test" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { gamepadTest() }
             "sync_seed" -> syncSeed()
             "sync_cleanup" -> {
