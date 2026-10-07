@@ -209,7 +209,12 @@ class WatchActivity : ComponentActivity() {
         return View.OnTouchListener { v, event ->
             val radius = v.width / 3f
             when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = event.x; downY = event.y; true }
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
+                    downY = event.y
+                    v.parent?.requestDisallowInterceptTouchEvent(true) // this drag is ours, not a system gesture
+                    true
+                }
                 MotionEvent.ACTION_MOVE -> {
                     val now = SystemClock.uptimeMillis()
                     if (now - lastGimbalSentAt >= 100) {
