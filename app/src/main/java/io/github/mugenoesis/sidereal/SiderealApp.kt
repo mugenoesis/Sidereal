@@ -44,5 +44,29 @@ class SiderealApp : Application() {
         super.onCreate()
         AppPreferences.init(this)
         DJIConnectionManager.initialize(this)
+        retryRegistrationWhenOnline()
+    }
+
+    /**
+     * First-time registration needs the internet (see RegistrationText). If it failed for that reason, try again by
+     * itself the moment a working internet connection shows up, so the user does not have to restart the app.
+     */
+    private fun retryRegistrationWhenOnline() {
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            .build()
+        runCatching {
+            manager.registerNetworkCallback(request, object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    val state = DJIConnectionManager.connectionState.value
+                    if (state is DJIConnectionManager.ConnectionState.Error && io.github.mugenoesis.sidereal.dji.RegistrationText.needsInternet(state.message)) {
+                        android.util.Log.i("SiderealApp", "internet is back - registering with DJI again")
+                        DJIConnectionManager.initialize(this@SiderealApp)
+                    }
+                }
+            })
+        }
     }
 }

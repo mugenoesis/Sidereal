@@ -80,6 +80,27 @@
 - Audio sync: line the phone audio up with the video by ear against a live
   preview, then export one merged MP4 (no re-encoding)
 
+## Download
+
+Grab the latest APK from the [Releases page](../../releases/latest) and install
+it on your phone (Android will ask you to allow installs from your browser or
+file manager the first time). The APK already includes a DJI App Key registered
+to this app, so you don't need your own to use it.
+
+**A Google Play version is coming, but it isn't available yet.** For now this
+GitHub release is the only way to get Sidereal.
+
+**First start needs the internet, once.** DJI's SDK registers the app with DJI
+the first time it runs, so open Sidereal while you're on your normal WiFi (or
+mobile data) before you connect to the Osmo. If you open it already on the
+Osmo's WiFi, it says so and finishes registering by itself as soon as you get
+online. After that it never needs the internet again.
+
+The Wear OS watch app is a separate APK on the same release. Watches have no
+store entry for it yet, so it is installed from a computer with
+`adb install sidereal-wear-<version>.apk` (turn on ADB debugging on the watch
+first). It works with Wear OS 2 and newer.
+
 ## Requirements
 
 - A DJI Osmo Pro with a Zenmuse X5. Only the DJI MFT 15mm f/1.7 lens has
@@ -254,13 +275,14 @@ app/src/main/java/io/github/mugenoesis/sidereal/
 ## Support the project
 
 Sidereal is free and I build it in my spare time. The APK is free to download
-from this repository's releases. If you'd like to support development, you
-can buy it on Google Play instead, or
-[buy me a coffee on Ko-fi](https://ko-fi.com/mugenoesis). Bug reports and
-ideas are welcome as GitHub issues.
+from this repository's releases. A Google Play version is coming soon (it isn't
+there yet); when it arrives you'll be able to buy it there to support
+development, or you can
+[buy me a coffee on Ko-fi](https://ko-fi.com/mugenoesis) any time. Bug reports
+and ideas are welcome as GitHub issues.
 
-The GitHub and Google Play builds are signed differently, so to switch
-between them you have to uninstall one before installing the other.
+The GitHub and Google Play builds will be signed differently, so to switch
+between them you'll have to uninstall one before installing the other.
 
 ## License
 
