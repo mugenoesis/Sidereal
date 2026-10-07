@@ -46,6 +46,12 @@
 - Colour profiles (D-Log, D-Cinelike, B&W and more), PAL/NTSC and the
   camera's own list of video resolutions and frame rates
 
+**Wear OS**
+- A watch remote (separate `wear` module): live view, shutter or record,
+  photo/video switch, drag to aim the gimbal, battery and card status, and
+  a button to make the phone join the Osmo's WiFi. The phone app stays the
+  only thing that talks to the camera.
+
 **Game controller**
 - Bluetooth or USB gamepad: left stick aims the gimbal, right stick zooms,
   R2 is the shutter, R1 switches photo/video, L1/L2 pull focus, A is
@@ -151,6 +157,13 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   as the camera's reported record-start time, so check it by ear.
 - **Game controller:** built and checked with injected events, but not yet
   with a physical controller.
+- **Wear OS watch app:** the screens are checked on a Wear OS emulator and
+  the phone side against the real camera, but the Bluetooth link between a
+  real watch and phone is untested.
+- **Joining the Osmo's WiFi from the app** (tap the "not on your Osmo's
+  WiFi" message, Android 10+): works, but Android asks you to confirm the
+  network the first time. Uses the factory password `12341234` unless you
+  long-press the message and enter yours.
 - **Histogram:** shows live data, but the graph's scaling is a best guess.
 - **Switching video standard (PAL/NTSC):** works, but the camera takes
   about five seconds to settle afterwards and refuses queries meanwhile.
@@ -175,6 +188,9 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 
 ## Project layout
 
+Other modules: `wear/` is the Wear OS app and `wearprotocol/` is the plain-Kotlin
+protocol and display logic shared by the phone and the watch.
+
 ```
 app/src/main/java/io/github/mugenoesis/sidereal/
 ├── dji/        SDK registration, connection state, camera gateway
@@ -188,6 +204,7 @@ app/src/main/java/io/github/mugenoesis/sidereal/
 ├── audio/      phone-side audio recording and source selection
 ├── sync/       audio/video offset, sidecar files, MP4 merge and the sync screen
 ├── input/      game controller mapping
+├── wear/       watch bridge on the phone (commands, status, live-view stream)
 └── media/      on-camera media library
 ```
 

@@ -4,12 +4,14 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import io.github.mugenoesis.sidereal.wearprotocol.FrameCodec
 import io.github.mugenoesis.sidereal.wearprotocol.FramePacer
+import io.github.mugenoesis.sidereal.wearprotocol.PushBackoff
 import io.github.mugenoesis.sidereal.wearprotocol.Thumbnail
 import io.github.mugenoesis.sidereal.wearprotocol.WearCommand
 import io.github.mugenoesis.sidereal.wearprotocol.WearPaths
@@ -49,6 +51,7 @@ class WearBridge(
     private var statusJob: Job? = null
 
     private val frameThread = Executors.newSingleThreadExecutor { Thread(it, "wear-frames") }
+    private val backoff = PushBackoff()
     private val pacer = FramePacer(minIntervalMs = FRAME_INTERVAL_MS, maxIntervalMs = FRAME_INTERVAL_MAX_MS)
     @Volatile private var liveStream: OutputStream? = null
     @Volatile private var liveChannel: ChannelClient.Channel? = null
@@ -92,12 +95,23 @@ class WearBridge(
     fun statusSnapshot() = host.status()
 
     private suspend fun pushStatus() {
+        val now = SystemClock.elapsedRealtime()
+        if (!backoff.shouldTry(now)) return
         runCatching {
             val connected = nodes.connectedNodes.await()
+            backoff.onSuccess()
             if (connected.isEmpty()) return
             val payload = WearProtocol.encodeStatus(host.status())
             for (node in connected) messages.sendMessage(node.id, WearPaths.STATUS, payload)
-        }.onFailure { Log.w(TAG, "status push failed: ${it.message}") }
+        }.onFailure { error ->
+            if ((error as? ApiException)?.statusCode == WEARABLE_API_UNAVAILABLE) {
+                // No Wear OS service on this phone (e.g. no watch ever paired): say so once, then check only occasionally.
+                if (backoff.onUnavailable(now)) Log.i(TAG, "no Wear OS service on this phone - the watch link is idle")
+            } else {
+                backoff.onFailure(now)
+                Log.w(TAG, "status push failed: ${error.message}")
+            }
+        }
     }
 
     private fun openLiveView(nodeId: String) {
@@ -151,6 +165,7 @@ class WearBridge(
         @Volatile var active: WearBridge? = null
 
         private const val TAG = "WearBridge"
+        private const val WEARABLE_API_UNAVAILABLE = 17 // ConnectionResult.API_UNAVAILABLE
         private const val STATUS_INTERVAL_MS = 1_500L
         private const val FRAME_INTERVAL_MS = 100L       // ~10 fps at best
         private const val FRAME_INTERVAL_MAX_MS = 1_000L

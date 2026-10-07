@@ -78,6 +78,8 @@ class OsmoWifiConnector(context: Context) {
     private companion object {
         const val TAG = "OsmoWifiConnector"
         const val OSMO_SSID_PREFIX = "OSMO_"
-        const val CONNECT_TIMEOUT_MS = 30_000
+        // Includes the time spent choosing the network in Android's own dialog - 30 s was seen to expire at the very
+        // moment the connection completed.
+        const val CONNECT_TIMEOUT_MS = 90_000
     }
 }
