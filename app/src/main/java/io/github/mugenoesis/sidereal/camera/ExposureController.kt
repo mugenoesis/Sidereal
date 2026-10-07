@@ -233,6 +233,17 @@ class ExposureController(private val gateway: CameraGateway = RealCameraGateway)
     fun setExposureMode(mode: SettingsDefinitions.ExposureMode, onComplete: (Boolean) -> Unit = {}) =
         setExposureModeByName(mode.name, onComplete)
 
+    /** Re-sends the remembered mode on a (re)bind; quiet until the SDK has actually handed over the camera - see DriveController.reassert. */
+    fun reassertMode(mode: SettingsDefinitions.ExposureMode) = reassertModeByName(mode.name)
+
+    internal fun reassertModeByName(modeName: String) {
+        if (!gateway.hasCamera) {
+            Log.d(TAG, "reassertMode: no camera bound yet, waiting for the next bind")
+            return
+        }
+        setExposureModeByName(modeName)
+    }
+
     internal fun setExposureModeByName(modeName: String, onComplete: (Boolean) -> Unit = {}) {
         gateway.setExposureMode(modeName) { error ->
             if (error != null) {

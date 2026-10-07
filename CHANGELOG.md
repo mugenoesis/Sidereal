@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- First start no longer pops "Single/Exposure mode ... rejected (No camera connected)" messages while the camera is
+  still connecting; the modes are re-applied quietly once the camera is ready.
+- The WiFi status no longer says "currently: no WiFi network" when the network name merely can't be read.
+- First-time DJI registration without internet shows a plain explanation and retries by itself when the internet is back.
+
 ## 0.1.0 - first release
 
 The first public build of Sidereal: an Android companion app for the DJI Osmo Pro (Zenmuse X5) over WiFi, with a

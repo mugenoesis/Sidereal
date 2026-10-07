@@ -166,4 +166,30 @@ class ExposureControllerTest {
             gateway.calls
         )
     }
+
+    // --- re-sending the saved exposure mode when the camera (re)connects ---
+
+    @Test
+    fun `re-sending the saved mode before the camera is bound sends nothing and shows no error`() = runBlocking {
+        val gateway = FakeCameraGateway().apply { hasCamera = false; errorToReturn = "No camera connected" }
+        val controller = ExposureController(gateway)
+        val messages = awaitEvents(controller.errorEvents) { controller.reassertModeByName("PROGRAM") }
+        assertTrue("no toast at startup: $messages", messages.isEmpty())
+        assertTrue(gateway.calls.isEmpty())
+    }
+
+    @Test
+    fun `re-sending the saved mode once the camera is there sends it`() {
+        val gateway = FakeCameraGateway()
+        ExposureController(gateway).reassertModeByName("APERTURE_PRIORITY")
+        assertEquals(listOf("setExposureMode(APERTURE_PRIORITY)"), gateway.calls)
+    }
+
+    @Test
+    fun `a rejection while re-sending is still reported`() = runBlocking {
+        val gateway = FakeCameraGateway().apply { errorToReturn = "Not supported" }
+        val controller = ExposureController(gateway)
+        val messages = awaitEvents(controller.errorEvents) { controller.reassertModeByName("MANUAL") }
+        assertEquals(1, messages.size)
+    }
 }

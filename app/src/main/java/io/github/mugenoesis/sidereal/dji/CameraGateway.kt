@@ -42,6 +42,12 @@ package io.github.mugenoesis.sidereal.dji
  * that's actually worth locking down with tests.
  */
 interface CameraGateway {
+    /**
+     * False in the moment between the product connecting and the SDK handing over its camera. Settings the app
+     * re-sends on every (re)bind wait for this instead of being rejected with "No camera connected".
+     */
+    val hasCamera: Boolean get() = true
+
     fun setExposureMode(modeName: String, onResult: (error: String?) -> Unit)
     fun setIso(isoName: String, onResult: (error: String?) -> Unit)
     fun setShutterSpeed(speedName: String, onResult: (error: String?) -> Unit)

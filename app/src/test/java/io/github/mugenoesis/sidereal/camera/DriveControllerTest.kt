@@ -81,4 +81,39 @@ class DriveControllerTest {
         val labels = DrivePresets.all.map { it.label }
         assertEquals(labels.size, labels.toSet().size)
     }
+
+    // --- re-sending the saved mode when the camera (re)connects ---
+
+    @Test
+    fun `re-sending the saved mode before the camera is bound sends nothing and shows no error`() = runBlocking {
+        gateway.hasCamera = false
+        gateway.errorToReturn = "No camera connected"
+        val events = awaitEvents(controller.errorEvents) { controller.reassert() }
+        assertTrue("no toast at startup: $events", events.isEmpty())
+        assertTrue(gateway.calls.isEmpty())
+    }
+
+    @Test
+    fun `re-sending the saved mode once the camera is there puts it on the camera`() {
+        controller.select(DrivePresets.all.first { it.label == "Burst 5" })
+        gateway.calls.clear()
+        controller.reassert()
+        assertEquals(listOf("setShootPhotoMode(BURST)", "setPhotoBurstCount(BURST_COUNT_5)"), gateway.calls)
+    }
+
+    @Test
+    fun `a failure while re-sending still says why - only the not-ready-yet case is quiet`() = runBlocking {
+        gateway.errorToReturn = "Not supported"
+        val events = awaitEvents(controller.errorEvents) { controller.reassert() }
+        assertEquals(1, events.size)
+    }
+
+    @Test
+    fun `choosing a mode yourself with no camera is still reported`() = runBlocking {
+        gateway.hasCamera = false
+        gateway.errorToReturn = "No camera connected"
+        val events = awaitEvents(controller.errorEvents) { controller.cycle() }
+        assertEquals(1, events.size)
+        assertTrue(events[0], events[0].contains("No camera connected"))
+    }
 }

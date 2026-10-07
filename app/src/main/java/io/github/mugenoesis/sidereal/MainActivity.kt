@@ -2055,8 +2055,7 @@ class MainActivity : AppCompatActivity() {
         val wrongWifi = !OsmoWifiChecker.isOsmoNetwork(ssid)
 
         connectionStatus.text = if (wrongWifi) {
-            val current = ssid ?: "no WiFi network"
-            "Not on your Osmo's WiFi (currently: $current) - tap to join it (hold to set its password)"
+            io.github.mugenoesis.sidereal.dji.WifiStatusText.notOnOsmo(ssid)
         } else {
             when (djiState) {
                 is DJIConnectionManager.ConnectionState.Disconnected -> "Waiting for Osmo..."
@@ -2149,7 +2148,7 @@ class MainActivity : AppCompatActivity() {
                 // silently leave the camera in whatever mode it happened
                 // to power up in versus what this app's UI is telling the
                 // user is selected.
-                exposureController.setExposureMode(selectedExposureMode)
+                exposureController.reassertMode(selectedExposureMode)
                 focusController.startObserving()
                 focusController.refreshFocusRingRange()
                 meteringController.refreshCapability()
