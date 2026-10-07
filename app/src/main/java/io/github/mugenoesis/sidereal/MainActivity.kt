@@ -16,10 +16,14 @@ import io.github.mugenoesis.sidereal.audio.AudioRecorderController
 import io.github.mugenoesis.sidereal.audio.AudioSourceController
 import io.github.mugenoesis.sidereal.audio.AudioSourceKind
 import io.github.mugenoesis.sidereal.camera.CameraLabels
+import io.github.mugenoesis.sidereal.camera.BatteryLevel
 import io.github.mugenoesis.sidereal.camera.CameraModeController
+import io.github.mugenoesis.sidereal.camera.CameraStatusController
+import io.github.mugenoesis.sidereal.camera.CameraStatusFormat
 import io.github.mugenoesis.sidereal.camera.CycleHelpers
 import io.github.mugenoesis.sidereal.camera.ExposureController
 import io.github.mugenoesis.sidereal.camera.FocusController
+import io.github.mugenoesis.sidereal.camera.FocusRingStepper
 import io.github.mugenoesis.sidereal.camera.HistogramController
 import io.github.mugenoesis.sidereal.camera.HistogramView
 import io.github.mugenoesis.sidereal.camera.ImageTuningController
@@ -35,6 +39,11 @@ import io.github.mugenoesis.sidereal.gimbal.GimbalModeController
 import io.github.mugenoesis.sidereal.gimbal.JoystickView
 import io.github.mugenoesis.sidereal.gimbal.ManualGimbalController
 import io.github.mugenoesis.sidereal.gimbal.TimedMoveController
+import io.github.mugenoesis.sidereal.display.NightMode
+import io.github.mugenoesis.sidereal.focus.FocusAssistController
+import io.github.mugenoesis.sidereal.focus.FocusAssistView
+import io.github.mugenoesis.sidereal.sequence.Attitude
+import io.github.mugenoesis.sidereal.sequence.SequenceFeature
 import io.github.mugenoesis.sidereal.tracking.FaceTrackingController
 import io.github.mugenoesis.sidereal.tracking.FollowStyle
 import io.github.mugenoesis.sidereal.tracking.TrackingState
@@ -73,6 +82,12 @@ class MainActivity : AppCompatActivity() {
     private val faceTrackingController = FaceTrackingController(zoomController)
     private val videoFrameProvider = VideoFrameProvider(faceTrackingController, targetFps = 12)
     private lateinit var gimbalModeController: GimbalModeController
+    private lateinit var sequenceFeature: SequenceFeature
+
+    private companion object {
+        /** Zoom scale change per 50 ms tick at full right-stick deflection (~1.2x per second). */
+        const val GAMEPAD_ZOOM_PER_TICK = 0.06f
+    }
 
     private val exposureController = ExposureController()
     private val focusController = FocusController()
@@ -83,9 +98,24 @@ class MainActivity : AppCompatActivity() {
     private val imageTuningController = ImageTuningController()
     private val mediaFormatController = MediaFormatController()
     private val audioRecorderController = AudioRecorderController()
+    private val focusAssistController = FocusAssistController()
+    private lateinit var cameraStatusController: CameraStatusController
+    private lateinit var shootingControls: io.github.mugenoesis.sidereal.camera.ShootingControls
+    private lateinit var cameraSounds: io.github.mugenoesis.sidereal.camera.CameraSoundsFeature
+    private lateinit var gamepadInput: io.github.mugenoesis.sidereal.input.GamepadInput
+    private var wearBridge: io.github.mugenoesis.sidereal.wear.WearBridge? = null
+    private var wearLiveViewWanted = false
+    private val gamepadMapper by lazy {
+        io.github.mugenoesis.sidereal.input.GamepadMapper(
+            gamepadActions,
+            io.github.mugenoesis.sidereal.input.GamepadConfig.decode(AppPreferences.gamepadConfig),
+            io.github.mugenoesis.sidereal.input.GamepadBindings.decode(AppPreferences.gamepadBindings)
+        )
+    }
+    private var gamepadZoomRate = 0f
 
     /** Which settings tray (if any) is open - only one at a time, mirrors the rail icon's selected state. UI-only, not a controller concern. */
-    private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, MORE }
+    private enum class SettingsPanel { NONE, EXPOSURE, WHITE_BALANCE, METERING, FOCUS, SEQUENCE, MORE }
     private var activeSettingsPanel = SettingsPanel.NONE
 
     // ExposureSettings.getISO() pushes back a plain Int (the camera's real
@@ -162,23 +192,26 @@ class MainActivity : AppCompatActivity() {
     // position.
     private var selectedExposureMode = AppPreferences.exposureMode
 
-    private val videoResolutionOptions = listOf(
-        SettingsDefinitions.VideoResolution.RESOLUTION_1920x1080 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_30_FPS,
-        SettingsDefinitions.VideoResolution.RESOLUTION_1920x1080 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_60_FPS,
-        SettingsDefinitions.VideoResolution.RESOLUTION_4096x2160 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_24_FPS,
-        SettingsDefinitions.VideoResolution.RESOLUTION_4096x2160 to SettingsDefinitions.VideoFrameRate.FRAME_RATE_30_FPS
-    )
-    private var selectedVideoResolutionIndex = 0
+    // Cycle positions for the video-side cyclers - tracked here, not derived from the camera's state, same lesson as
+    // every other cycle button (a rejected value must not trap the button). The lists themselves come from the camera
+    // (MediaFormatController.videoModeRange etc.); the old hard-coded resolution list offered 30/60 fps modes that a
+    // PAL camera rejects.
+    private var selectedVideoResolutionIndex = -1
+    private var videoStandardCycleIndex: Int? = null
+    private var colorCycleIndex: Int? = null
 
     // Each of these enums ends with SDK sentinel members (FIXED/UNKNOWN) that
     // aren't real settable values - they're state-reporting placeholders, not
     // options a stepper should ever be able to land on. They sit at the tail
     // of each enum's ordinal order, so dropping them here doesn't disturb the
     // ordinal-as-array-index assumption step() relies on for every real value.
-    private val isoStepValues = SettingsDefinitions.ISO.values()
+    // isoStepValues / shutterSpeedStepValues are vars: replaced by the real
+    // per-camera range once CameraKey.ISO_RANGE / SHUTTER_SPEED_RANGE
+    // resolve (see observeExposure()).
+    private var isoStepValues = SettingsDefinitions.ISO.values()
         .filter { it != SettingsDefinitions.ISO.FIXED && it != SettingsDefinitions.ISO.UNKNOWN }
         .toTypedArray()
-    private val shutterSpeedStepValues = SettingsDefinitions.ShutterSpeed.values()
+    private var shutterSpeedStepValues = SettingsDefinitions.ShutterSpeed.values()
         .filter { it != SettingsDefinitions.ShutterSpeed.UNKNOWN }
         .toTypedArray()
     private val apertureStepValues = SettingsDefinitions.Aperture.values()
@@ -281,6 +314,8 @@ class MainActivity : AppCompatActivity() {
         // screen dim or lock out from under the operator.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_main)
+        SystemBars.applyInsets(this, immersive = true)
+        NightMode.apply(window)
 
         gimbalModeController = GimbalModeController(
             manualController, timedMoveController, faceTrackingController
@@ -289,6 +324,15 @@ class MainActivity : AppCompatActivity() {
         requestPermissionsIfNeeded()
         bindViews()
         bindCameraSettingsViews()
+        bindSequenceFeature()
+        bindCameraStatus()
+        bindGamepad()
+        shootingControls = io.github.mugenoesis.sidereal.camera.ShootingControls(this, mediaFormatController)
+        cameraSounds = io.github.mugenoesis.sidereal.camera.CameraSoundsFeature(
+            this, softwareAfcController.isLocked, sequenceRunning = { sequenceFeature.controller.isRunning.value }
+        )
+        shootingControls.onTimerTick = cameraSounds::onTimerTick
+        io.github.mugenoesis.sidereal.input.GamepadSettingsFeature(this, gamepadMapper)
         observeConnectionState()
         observeWifiState()
         observeComponentChanges()
@@ -305,6 +349,266 @@ class MainActivity : AppCompatActivity() {
         updateGimbalModeUi()
     }
 
+    // --- Game controller support: the pure mapper decides WHAT was asked; these do it with the same code paths
+    // the touch controls use, so every guard (recording lock-out, sequence lock-out, capability checks) still applies.
+    private val gamepadActions = object : io.github.mugenoesis.sidereal.input.GamepadActions {
+        override fun gimbal(yaw: Float, pitch: Float) {
+            if (yaw == 0f && pitch == 0f) manualController.onJoystickReleased() else manualController.onJoystickMoved(yaw, pitch)
+        }
+
+        override fun zoom(rate: Float) {
+            gamepadZoomRate = rate
+        }
+
+        override fun shutter() {
+            val button = findViewById<android.widget.Button>(R.id.btnShutter)
+            if (button.isEnabled) button.performClick()
+        }
+
+        override fun togglePhotoVideo() {
+            if (DJIConnectionManager.cameraSystemState.value?.isRecording == true) {
+                showErrorToast("Stop recording before switching mode")
+                return
+            }
+            val video = DJIConnectionManager.cameraSystemState.value?.mode == SettingsDefinitions.CameraMode.RECORD_VIDEO
+            cameraModeController.setMode(if (video) SettingsDefinitions.CameraMode.SHOOT_PHOTO else SettingsDefinitions.CameraMode.RECORD_VIDEO)
+        }
+
+        // Hold = show the tap-to-focus crosshair in the middle (the stick keeps moving the gimbal under it);
+        // release = hide it and focus there. A quick tap does both at once.
+        override fun autofocusHold(pressed: Boolean) {
+            val overlay = findViewById<io.github.mugenoesis.sidereal.tracking.FaceOverlayView>(R.id.faceOverlay)
+            if (pressed) {
+                overlay.showAimReticle(0.5f, 0.5f)
+            } else {
+                overlay.hideAimReticle()
+                overlay.flashReticle(0.5f, 0.5f)
+                focusController.setFocusTarget(0.5f, 0.5f)
+            }
+        }
+
+        override fun focusRing(direction: Int) {
+            if (findViewById<android.view.View>(R.id.focusRingRow).visibility != android.view.View.VISIBLE) {
+                // The ring only does something in manual focus - switch there first, the next step moves it.
+                gamepadRingValue = null
+                focusController.setFocusMode(SettingsDefinitions.FocusMode.MANUAL)
+                return
+            }
+            val bar = findViewById<SeekBar>(R.id.focusRingSeekBar)
+            val known = gamepadRingValue
+            if (known != null) {
+                applyGamepadRing(FocusRingStepper.next(known, direction, bar.max))
+                return
+            }
+            // First nudge since manual focus engaged: start from where the camera's ring really is, not from the
+            // slider (which only moves when touched).
+            DJIConnectionManager.camera?.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                override fun onSuccess(value: Int) {
+                    runOnUiThread { applyGamepadRing(FocusRingStepper.next(value, direction, bar.max)) }
+                }
+
+                override fun onFailure(error: dji.common.error.DJIError) {
+                    android.util.Log.w("MainActivity", "getFocusRingValue failed: ${error.description}")
+                }
+            })
+        }
+
+        override fun exposureMode(direction: Int) {
+            val order = listOf(
+                SettingsDefinitions.ExposureMode.PROGRAM,
+                SettingsDefinitions.ExposureMode.APERTURE_PRIORITY,
+                SettingsDefinitions.ExposureMode.SHUTTER_PRIORITY,
+                SettingsDefinitions.ExposureMode.MANUAL
+            )
+            val current = order.indexOf(selectedExposureMode).coerceAtLeast(0)
+            selectExposureMode(order[(current + direction).mod(order.size)])
+        }
+
+        override fun recenter() = manualController.onDoubleTap()
+        override fun toggleAeLock() = shootingControls.toggleAeLock()
+        override fun cycleGrid() = shootingControls.cycleGrid()
+
+        // Same rules as the on-screen buttons: they are disabled when the camera won't take an EV change (Manual
+        // mode, recording) or the step would run past the end of the range, so follow their state.
+        override fun exposureCompensation(direction: Int) {
+            val button = findViewById<android.widget.Button>(if (direction > 0) R.id.btnEvUp else R.id.btnEvDown)
+            if (button.isEnabled) stepEv(direction)
+        }
+    }
+
+    /** The manual-focus ring value the pad last set (null until its first nudge reads the camera's own). */
+    private var gamepadRingValue: Int? = null
+
+    private fun applyGamepadRing(value: Int) {
+        gamepadRingValue = value
+        findViewById<SeekBar>(R.id.focusRingSeekBar).progress = value
+        focusController.setFocusRingValue(value)
+    }
+
+    // --- Watch remote: what a connected Wear OS watch can make this app do (see wear/WearBridge). ---
+    private val wearHost = object : io.github.mugenoesis.sidereal.wear.WearHost {
+        override fun status() = io.github.mugenoesis.sidereal.wear.WearStatusBuilder.build(
+            camera = cameraStatusController.status.value,
+            connected = DJIConnectionManager.connectionState.value is DJIConnectionManager.ConnectionState.ProductConnected,
+            sequence = sequenceFeature.controller.let { it.settings.value.mode.label to it.progress.value }
+        )
+
+        override fun capture(): String? {
+            val button = findViewById<android.widget.Button>(R.id.btnShutter)
+            if (DJIConnectionManager.cameraSystemState.value?.mode == SettingsDefinitions.CameraMode.RECORD_VIDEO) return "Switch to photo mode first"
+            if (!button.isEnabled) return "The camera is busy"
+            button.performClick()
+            return null
+        }
+
+        override fun toggleRecord(): String? {
+            val button = findViewById<android.widget.Button>(R.id.btnShutter)
+            if (!button.isEnabled) return "The camera is busy"
+            button.performClick()
+            return null
+        }
+
+        override fun toggleMode(): String? { gamepadActions.togglePhotoVideo(); return null }
+        override fun recenter() = manualController.onDoubleTap()
+        override fun gimbal(yaw: Float, pitch: Float) = gamepadActions.gimbal(yaw, pitch)
+
+        override fun setLiveView(on: Boolean) {
+            wearLiveViewWanted = on
+            updateFrameCaptureState()
+        }
+
+        override fun connectOsmo(): String? {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return "This phone's Android version can't join the Osmo's WiFi from the app"
+            // The system shows its own confirmation on the phone the first time.
+            runOnUiThread { joinOsmoWifi() }
+            return null
+        }
+    }
+
+    private val osmoWifiConnector by lazy { io.github.mugenoesis.sidereal.dji.OsmoWifiConnector(this) }
+
+    /** Joins the Osmo's WiFi from inside the app; falls back to Android's WiFi settings if that isn't possible. */
+    private fun joinOsmoWifi() {
+        osmoWifiConnector.connect(AppPreferences.osmoWifiPassphrase) { error ->
+            runOnUiThread {
+                if (error != null) showErrorToast(error)
+            }
+        }
+    }
+
+    private fun promptForOsmoWifiPassword() {
+        val input = android.widget.EditText(this).apply {
+            setText(AppPreferences.osmoWifiPassphrase)
+            setSingleLine()
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Osmo WiFi password")
+            .setMessage("The factory default is ${io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.DEFAULT}")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val problem = io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.validate(input.text.toString())
+                if (problem != null) showErrorToast(problem)
+                else AppPreferences.osmoWifiPassphrase = io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.clean(input.text.toString())
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+        NightMode.apply(dialog)
+    }
+
+    private fun bindGamepad() {
+        // A button chord on the controller opens the reticle drill screen.
+        gamepadMapper.onChord = {
+            runOnUiThread { startActivity(android.content.Intent(this, io.github.mugenoesis.sidereal.drill.DrillActivity::class.java)) }
+        }
+        gamepadInput = io.github.mugenoesis.sidereal.input.GamepadInput(this, gamepadMapper) {
+            val capability = zoomController.capability.value
+            if (gamepadZoomRate != 0f && capability.supported) zoomController.adjustZoomBy(gamepadZoomRate * GAMEPAD_ZOOM_PER_TICK)
+        }
+    }
+
+    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean =
+        (::gamepadInput.isInitialized && gamepadInput.handleMotion(event)) || super.dispatchGenericMotionEvent(event)
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        (::gamepadInput.isInitialized && gamepadInput.handleKey(event)) || super.dispatchKeyEvent(event)
+
+    private fun bindCameraStatus() {
+        cameraStatusController = CameraStatusController(lifecycleScope)
+        val text = findViewById<android.widget.TextView>(R.id.cameraStatusText)
+        cameraStatusController.status
+            .onEach { status ->
+                val connected = DJIConnectionManager.connectionState.value is DJIConnectionManager.ConnectionState.ProductConnected
+                text.visibility = if (connected) android.view.View.VISIBLE else android.view.View.GONE
+                text.text = "${CameraStatusFormat.battery(status.batteryPercent)}  ·  ${CameraStatusFormat.card(status)}"
+                val warn = CameraStatusFormat.cardWarning(status) || CameraStatusFormat.batteryLevel(status.batteryPercent) == BatteryLevel.CRITICAL
+                text.setTextColor(if (warn) 0xFFFFB74D.toInt() else android.graphics.Color.WHITE)
+            }
+            .launchIn(lifecycleScope)
+        DJIConnectionManager.connectionState
+            .onEach { cameraStatusController.status.value.let { _ -> text.visibility = if (it is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE } }
+            .launchIn(lifecycleScope)
+    }
+
+    private fun bindSequenceFeature() {
+        sequenceFeature = SequenceFeature(
+            activity = this,
+            tray = findViewById(R.id.sequenceTray),
+            banner = findViewById(R.id.sequenceBanner),
+            shutterButton = findViewById(R.id.btnShutter),
+            shutterNameProvider = { exposureController.readout.value?.shutterSpeed?.name },
+            rampIo = io.github.mugenoesis.sidereal.sequence.RampIo(
+                shutterOptions = {
+                    exposureController.shutterRange.value.orEmpty().mapNotNull { s ->
+                        io.github.mugenoesis.sidereal.camera.ShutterLogic.exposureSeconds(s.name)?.let { io.github.mugenoesis.sidereal.sequence.ShutterOption(s.name, it) }
+                    }
+                },
+                isoOptions = {
+                    exposureController.isoRange.value.orEmpty().mapNotNull { i ->
+                        Regex("ISO_(\\d+)").matchEntire(i.name)?.let { io.github.mugenoesis.sidereal.sequence.IsoOption(i.name, it.groupValues[1].toInt()) }
+                    }
+                },
+                currentNames = { exposureController.readout.value?.let { it.shutterSpeed.name to "ISO_${it.iso}" } },
+                meanLuma = { io.github.mugenoesis.sidereal.camera.HistogramModel.stats(histogramController.histogramData.value)?.meanLuma },
+                setMetering = { on ->
+                    if (on) histogramController.activate()
+                    else if (findViewById<HistogramView>(R.id.histogramView).visibility != android.view.View.VISIBLE) histogramController.deactivate()
+                }
+            ),
+            pointsProvider = {
+                fun TimedMoveController.Point?.toAttitude() = this?.let { Attitude(it.pitch.toFloat(), it.yaw.toFloat()) }
+                timedMoveController.capturedA.toAttitude() to timedMoveController.capturedB.toAttitude()
+            }
+        )
+        findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setOnClickListener { setActiveSettingsPanel(SettingsPanel.SEQUENCE) }
+
+        // Back would finish the activity and cancel the sequence with it; while one runs, back only backgrounds the app
+        // (the keep-alive service carries on, and the notification brings the user back).
+        val keepRunningOnBack = object : androidx.activity.OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                moveTaskToBack(true)
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, keepRunningOnBack)
+        sequenceFeature.controller.isRunning
+            .onEach { running -> keepRunningOnBack.isEnabled = running }
+            .launchIn(lifecycleScope)
+
+        // A running sequence owns the camera and gimbal: the pad is locked out until it ends.
+        sequenceFeature.controller.isRunning
+            .onEach { running -> gamepadMapper.locked = running }
+            .launchIn(lifecycleScope)
+
+        findViewById<FocusAssistView>(R.id.focusAssistView).bind(focusAssistController, lifecycleScope)
+        val starAssistButton = findViewById<android.widget.Button>(R.id.btnStarAssist)
+        starAssistButton.setOnClickListener { focusAssistController.setEnabled(!focusAssistController.enabled.value) }
+        focusAssistController.enabled
+            .onEach { on ->
+                starAssistButton.text = if (on) "On" else "Off"
+                updateFrameCaptureState()
+            }
+            .launchIn(lifecycleScope)
+    }
+
     private fun observeTimedMove() {
         timedMoveController.state
             .onEach { updateTimedMoveUi() }
@@ -313,11 +617,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        gamepadInput.start()
+        wearBridge = io.github.mugenoesis.sidereal.wear.WearBridge(this, lifecycleScope, wearHost).also { it.start() }
         OsmoWifiChecker.start(this)
     }
 
     override fun onStop() {
         super.onStop()
+        gamepadInput.stop()
+        wearBridge?.stop()
+        wearBridge = null
+        wearLiveViewWanted = false
         OsmoWifiChecker.stop(this)
     }
 
@@ -501,7 +811,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<android.widget.Button>(R.id.btnShutter).setOnClickListener {
-            cameraModeController.triggerShutter()
+            if (!shootingControls.handleShutter { cameraModeController.triggerShutter() }) {
+                cameraModeController.triggerShutter()
+            }
         }
 
         // Browsing media switches the camera to CameraMode.MEDIA_DOWNLOAD,
@@ -589,6 +901,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<android.widget.ImageButton>(R.id.btnNightMode).setOnClickListener {
+            NightMode.enabled = !NightMode.enabled
+            NightMode.apply(window)
+        }
+
         findViewById<android.widget.ImageButton>(R.id.readoutFocusIcon).setOnClickListener {
             setDefaultTapAction(io.github.mugenoesis.sidereal.tracking.FaceOverlayView.TapMode.TAP_TO_FOCUS)
         }
@@ -658,6 +975,11 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.Button>(R.id.btnPhotoAspectCycle).setOnClickListener { cyclePhotoAspectRatio() }
         findViewById<android.widget.Button>(R.id.btnVideoFormatCycle).setOnClickListener { cycleVideoFormat() }
         findViewById<android.widget.Button>(R.id.btnVideoResCycle).setOnClickListener { cycleVideoResolution() }
+        findViewById<android.widget.Button>(R.id.btnVideoStandardCycle).setOnClickListener { cycleVideoStandard() }
+        findViewById<android.widget.Button>(R.id.btnColorCycle).setOnClickListener { cycleColor() }
+        findViewById<android.widget.Button>(R.id.btnAudioSync).setOnClickListener {
+            startActivity(android.content.Intent(this, io.github.mugenoesis.sidereal.sync.AudioSyncActivity::class.java))
+        }
         findViewById<android.widget.Button>(R.id.btnAudioSourceCycle).setOnClickListener { cycleAudioSource() }
 
         // Tap-to-focus/spot-meter: fires instead of face-tap-select whenever
@@ -898,7 +1220,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Frame capture (TextureView.getBitmap() at ~12fps) is only worth running while something actually consumes it. */
     private fun updateFrameCaptureState() {
-        val needed = findViewById<android.widget.ToggleButton>(R.id.toggleFaceTrack).isChecked || softwareAfcController.isRunning.value
+        val needed = findViewById<android.widget.ToggleButton>(R.id.toggleFaceTrack).isChecked || softwareAfcController.isRunning.value || focusAssistController.enabled.value || wearLiveViewWanted
         if (needed) startFrameCapture() else stopFrameCapture()
     }
 
@@ -945,9 +1267,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun cycleVideoResolution() {
-        selectedVideoResolutionIndex = (selectedVideoResolutionIndex + 1) % videoResolutionOptions.size
-        val (resolution, frameRate) = videoResolutionOptions[selectedVideoResolutionIndex]
-        mediaFormatController.setVideoResolutionAndFrameRate(resolution, frameRate)
+        val options = mediaFormatController.videoModeRange.value
+        if (options.isEmpty()) {
+            showErrorToast("The camera hasn't reported its video modes yet")
+            return
+        }
+        val current = mediaFormatController.videoResolutionAndFrameRate.value
+            ?.let { it.getResolution().name to it.getFrameRate().name }
+        val start = if (selectedVideoResolutionIndex >= 0) selectedVideoResolutionIndex else options.indexOf(current)
+        selectedVideoResolutionIndex = (start + 1).mod(options.size)
+        val (resolution, frameRate) = options[selectedVideoResolutionIndex]
+        mediaFormatController.setVideoResolutionAndFrameRate(
+            SettingsDefinitions.VideoResolution.valueOf(resolution),
+            SettingsDefinitions.VideoFrameRate.valueOf(frameRate)
+        )
+    }
+
+    private fun cycleVideoStandard() {
+        val options = mediaFormatController.videoStandardRange.value.ifEmpty { listOf("PAL", "NTSC") }
+        val (index, next) = nextCycleValue(videoStandardCycleIndex, mediaFormatController.videoStandard.value, options)
+        videoStandardCycleIndex = index
+        mediaFormatController.setVideoStandard(next)
+        // The frame-rate list changes with the standard, so the resolution cycler starts over from the camera's state.
+        selectedVideoResolutionIndex = -1
+    }
+
+    private fun cycleColor() {
+        val options = mediaFormatController.colorRange.value
+        if (options.isEmpty()) {
+            showErrorToast("The camera hasn't reported its colour profiles yet")
+            return
+        }
+        val (index, next) = nextCycleValue(colorCycleIndex, mediaFormatController.cameraColor.value, options)
+        colorCycleIndex = index
+        mediaFormatController.setColor(next)
     }
 
     /**
@@ -1031,12 +1384,14 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.view.View>(R.id.whiteBalanceTray).visibility = if (activeSettingsPanel == SettingsPanel.WHITE_BALANCE) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.meteringTray).visibility = if (activeSettingsPanel == SettingsPanel.METERING) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.focusTray).visibility = if (activeSettingsPanel == SettingsPanel.FOCUS) android.view.View.VISIBLE else android.view.View.GONE
+        findViewById<android.view.View>(R.id.sequenceTray).visibility = if (activeSettingsPanel == SettingsPanel.SEQUENCE) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.moreSettingsScroll).visibility = if (activeSettingsPanel == SettingsPanel.MORE) android.view.View.VISIBLE else android.view.View.GONE
 
         findViewById<android.widget.ImageButton>(R.id.btnExposureRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.EXPOSURE) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnWhiteBalanceRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.WHITE_BALANCE) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnMeteringRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.METERING) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnFocusRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.FOCUS) R.drawable.bg_segment_selected else android.R.color.transparent)
+        findViewById<android.widget.ImageButton>(R.id.btnSequenceRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.SEQUENCE) R.drawable.bg_segment_selected else android.R.color.transparent)
         findViewById<android.widget.ImageButton>(R.id.btnMoreRail).setBackgroundResource(if (activeSettingsPanel == SettingsPanel.MORE) R.drawable.bg_segment_selected else android.R.color.transparent)
 
         if (activeSettingsPanel == SettingsPanel.MORE) {
@@ -1058,7 +1413,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeExposure() {
         exposureController.readout
-            .onEach { updateExposureReadoutUi(); updateExposureTrayUi() }
+            .onEach { updateExposureReadoutUi(); updateExposureTrayUi(); sequenceFeature.refreshPreview() }
             .launchIn(lifecycleScope)
         exposureController.apertureSupported
             .onEach { updateExposureTrayUi(); updateExposureReadoutUi() }
@@ -1079,6 +1434,22 @@ class MainActivity : AppCompatActivity() {
                 if (range != null) {
                     evStepValues = range.toTypedArray()
                     evBounds = LearnedStepBounds(evStepValues.size)
+                    updateExposureTrayUi()
+                }
+            }
+            .launchIn(lifecycleScope)
+        exposureController.isoRange
+            .onEach { range ->
+                if (range != null) {
+                    isoStepValues = range.toTypedArray()
+                    updateExposureTrayUi()
+                }
+            }
+            .launchIn(lifecycleScope)
+        exposureController.shutterRange
+            .onEach { range ->
+                if (range != null) {
+                    shutterSpeedStepValues = range.toTypedArray()
                     updateExposureTrayUi()
                 }
             }
@@ -1167,6 +1538,8 @@ class MainActivity : AppCompatActivity() {
         mediaFormatController.photoAspectRatio.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
         mediaFormatController.videoFileFormat.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
         mediaFormatController.videoResolutionAndFrameRate.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
+        mediaFormatController.videoStandard.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
+        mediaFormatController.cameraColor.onEach { updateMoreSettingsTrayUi() }.launchIn(lifecycleScope)
         // Media format/resolution changes are especially likely to be
         // rejected mid-recording (MediaFormatController's own doc comment
         // flags this) - surfaced here rather than silently failing.
@@ -1367,6 +1740,16 @@ class MainActivity : AppCompatActivity() {
             isEnabled = !recording
             alpha = lockedDuringRecordingAlpha
         }
+        findViewById<android.widget.Button>(R.id.btnVideoStandardCycle).apply {
+            text = CameraLabels.videoStandardLabel(mediaFormatController.videoStandard.value)
+            isEnabled = !recording
+            alpha = lockedDuringRecordingAlpha
+        }
+        findViewById<android.widget.Button>(R.id.btnColorCycle).apply {
+            text = CameraLabels.colorLabel(mediaFormatController.cameraColor.value)
+            isEnabled = !recording
+            alpha = lockedDuringRecordingAlpha
+        }
         findViewById<android.widget.Button>(R.id.btnAudioSourceCycle).apply {
             val label = AudioSourceController.label(this@MainActivity, AudioSourceController.selectedKind)
             text = if (audioRecorderController.isRecording.value) "$label (rec)" else label
@@ -1435,7 +1818,7 @@ class MainActivity : AppCompatActivity() {
     private fun photoAspectLabel(ratio: SettingsDefinitions.PhotoAspectRatio?): String = CameraLabels.photoAspectLabel(ratio?.name)
 
     private fun videoResolutionLabel(rf: dji.common.camera.ResolutionAndFrameRate?): String =
-        if (rf == null) "1080p30" else CameraLabels.videoResolutionLabel(rf.getResolution().name, rf.getFrameRate().name)
+        if (rf == null) "--" else CameraLabels.videoResolutionLabel(rf.getResolution().name, rf.getFrameRate().name)
 
     /** Routes a mode switch through both the controller and joystickView.armed, which must stay in sync. */
     private fun switchGimbalMode(mode: GimbalMode) {
@@ -1631,6 +2014,8 @@ class MainActivity : AppCompatActivity() {
         val bitmap = videoPreview.bitmap ?: return
         videoFrameProvider.onBitmapFrame(bitmap)
         softwareAfcController.onBitmapFrame(bitmap)
+        focusAssistController.onBitmapFrame(bitmap)
+        wearBridge?.offerFrame(bitmap)
     }
 
     private fun observeConnectionState() {
@@ -1671,7 +2056,7 @@ class MainActivity : AppCompatActivity() {
 
         connectionStatus.text = if (wrongWifi) {
             val current = ssid ?: "no WiFi network"
-            "Not on your Osmo's WiFi (currently: $current) - tap to open WiFi settings"
+            "Not on your Osmo's WiFi (currently: $current) - tap to join it (hold to set its password)"
         } else {
             when (djiState) {
                 is DJIConnectionManager.ConnectionState.Disconnected -> "Waiting for Osmo..."
@@ -1683,7 +2068,15 @@ class MainActivity : AppCompatActivity() {
         }
         connectionStatus.visibility = android.view.View.VISIBLE
         connectionStatus.setOnClickListener {
-            startActivity(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+            if (wrongWifi && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                joinOsmoWifi()
+            } else {
+                startActivity(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+            }
+        }
+        connectionStatus.setOnLongClickListener {
+            promptForOsmoWifiPassword()
+            true
         }
     }
 
@@ -1707,6 +2100,7 @@ class MainActivity : AppCompatActivity() {
                 // same reasoning as DJIConnectionManager's own
                 // bindComponents() re-registering system/gimbal/storage
                 // state callbacks every time.
+                shootingControls.onCameraRebound()
                 exposureController.startObserving()
                 exposureController.refreshCapability()
                 // Litchi showed aperture as genuinely adjustable (f/1.7
@@ -1828,6 +2222,7 @@ class MainActivity : AppCompatActivity() {
                 updateExposureTrayUi()
                 updateMoreSettingsTrayUi()
                 val nowRecording = state?.isRecording == true
+                if (!lastCameraIsRecording && nowRecording) audioRecorderController.onCameraRecordingStarted()
                 if (lastCameraIsRecording && !nowRecording) stopPhoneAudioIfCameraReallyStopped()
                 lastCameraIsRecording = nowRecording
             }
@@ -1915,6 +2310,7 @@ class MainActivity : AppCompatActivity() {
         stopFrameCapture()
         videoFrameProvider.release()
         softwareAfcController.stop()
+        cameraSounds.release()
         histogramController.deactivate()
         // Safety net, not the normal path - the isRecordingIntent observer
         // above already stops this on a normal shutter-button stop press.

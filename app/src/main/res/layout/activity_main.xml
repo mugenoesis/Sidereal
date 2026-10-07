@@ -25,6 +25,16 @@
         app:layout_constraintStart_toStartOf="@id/videoPreview"
         app:layout_constraintEnd_toEndOf="@id/videoPreview" />
 
+    <!-- Composition grid, drawn over the picture (see camera/GridOverlayView). Touch-transparent. -->
+    <io.github.mugenoesis.sidereal.camera.GridOverlayView
+        android:id="@+id/gridOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview"
+        app:layout_constraintStart_toStartOf="@id/videoPreview"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview" />
+
     <!-- On-screen virtual joystick for manual gimbal control - drawn on top
          of everything else in the video area, but declines touches (see
          JoystickView.armed) whenever the current mode isn't MANUAL, so they
@@ -164,7 +174,37 @@
             android:src="@drawable/ic_histogram"
             android:contentDescription="@string/cd_histogram_toggle" />
 
+        <!-- Red-only night display: see display/NightMode. -->
+        <ImageButton
+            android:id="@+id/btnNightMode"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="4dp"
+            android:padding="4dp"
+            android:scaleType="fitCenter"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_night"
+            android:contentDescription="@string/cd_night_mode" />
+
     </LinearLayout>
+
+    <!-- Battery / card status, top-left of the video. Filled by CameraStatusController. -->
+    <TextView
+        android:id="@+id/cameraStatusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="68dp"
+        android:layout_marginTop="22dp"
+        android:background="@drawable/bg_pill_container"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- Live histogram graph - only streams/renders while visible (see
          HistogramController.activate()/deactivate() and MainActivity's
@@ -247,6 +287,17 @@
                 android:src="@drawable/ic_focus_mode"
                 android:background="@android:color/transparent"
                 android:contentDescription="@string/cd_focus_settings" />
+
+            <ImageButton
+                android:id="@+id/btnSequenceRail"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_sequence"
+                android:background="@android:color/transparent"
+                android:contentDescription="@string/cd_sequence_settings" />
 
             <ImageButton
                 android:id="@+id/btnMoreRail"
@@ -548,6 +599,36 @@
 
     </LinearLayout>
 
+    <!-- Sequence tray (intervalometer / timelapse / panorama / calibration):
+         built in code by SequenceTrayView, opened from btnSequenceRail. -->
+    <io.github.mugenoesis.sidereal.sequence.SequenceTrayView
+        android:id="@+id/sequenceTray"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintStart_toEndOf="@id/settingsRail"
+        app:layout_constraintTop_toTopOf="@id/settingsRail"
+        android:layout_marginStart="8dp" />
+
+    <!-- Progress strip shown at the top while a sequence runs, so it is
+         visible even with the tray closed. -->
+    <TextView
+        android:id="@+id/sequenceBanner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="68dp"
+        android:background="@drawable/bg_pill_container"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <!-- White balance tray: icon-cycle through presets + a text readout
          (icon + value readout, not one icon per preset - keeps the
          resource footprint small). Custom Kelvin row only appears once
@@ -757,7 +838,49 @@
             android:visibility="gone"
             android:text="Tap video to focus" />
 
+        <!-- Star focus assist: magnified star + live FWHM readout (see
+             focus/FocusAssistController). -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:text="Star assist" />
+
+            <Button
+                android:id="@+id/btnStarAssist"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="10dp"
+                android:textColor="@color/white"
+                android:textSize="12sp"
+                android:background="@drawable/bg_stepper_button"
+                android:text="Off" />
+
+        </LinearLayout>
+
     </LinearLayout>
+
+    <!-- Magnified star + FWHM, bottom-right of the video, shown only while
+         star assist is on. -->
+    <io.github.mugenoesis.sidereal.focus.FocusAssistView
+        android:id="@+id/focusAssistView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview" />
 
     <!-- "More" overflow tray: sharpness/contrast/saturation steppers +
          anti-flicker/photo/video format tap-to-cycle rows - lowest
@@ -1085,6 +1208,64 @@
 
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="Video standard" />
+
+                <Button
+                    android:id="@+id/btnVideoStandardCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="PAL (25/50)" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="Color profile" />
+
+                <Button
+                    android:id="@+id/btnColorCycle"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="Standard" />
+
+            </LinearLayout>
+
             <!-- The DJI camera's own recording only carries audio if a mic
                  is physically plugged into the gimbal - this cycles which
                  mic (if any) the phone should separately record from
@@ -1116,6 +1297,36 @@
                     android:textSize="12sp"
                     android:background="@drawable/bg_stepper_button"
                     android:text="Gimbal" />
+
+            </LinearLayout>
+
+            <!-- Lines phone audio up with a downloaded video and exports one MP4: see sync/AudioSyncActivity. -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:text="Audio sync" />
+
+                <Button
+                    android:id="@+id/btnAudioSync"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="32dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/white"
+                    android:textSize="12sp"
+                    android:background="@drawable/bg_stepper_button"
+                    android:text="Open" />
 
             </LinearLayout>
 
@@ -1196,11 +1407,112 @@
 
     </LinearLayout>
 
+    <!-- Quick shooting controls above and below the shutter column: drive
+         (single/HDR/burst/AEB) and self-timer on top, exposure lock and
+         composition grid below. Wired by camera/ShootingControls. -->
+    <LinearLayout
+        android:id="@+id/driveControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="14dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/videoPreview">
+
+        <Button
+            android:id="@+id/btnDrive"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="86dp"
+            android:layout_height="34dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:background="@drawable/bg_pill_container"
+            android:text="Single" />
+
+        <Button
+            android:id="@+id/btnTimer"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="86dp"
+            android:layout_height="34dp"
+            android:layout_marginTop="6dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:background="@drawable/bg_pill_container"
+            android:text="Timer off" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/aidControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginBottom="14dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview">
+
+        <Button
+            android:id="@+id/btnAeLock"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="86dp"
+            android:layout_height="34dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:background="@drawable/bg_pill_container"
+            android:text="AE lock" />
+
+        <Button
+            android:id="@+id/btnGrid"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="86dp"
+            android:layout_height="34dp"
+            android:layout_marginTop="6dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:background="@drawable/bg_pill_container"
+            android:text="Grid off" />
+
+    </LinearLayout>
+
+    <!-- Self-timer countdown, big and centred over the video. -->
+    <TextView
+        android:id="@+id/countdownText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/white"
+        android:textSize="110sp"
+        android:textStyle="bold"
+        android:shadowColor="#AA000000"
+        android:shadowRadius="12"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@id/videoPreview"
+        app:layout_constraintEnd_toEndOf="@id/videoPreview"
+        app:layout_constraintTop_toTopOf="@id/videoPreview"
+        app:layout_constraintBottom_toBottomOf="@id/videoPreview" />
+
     <!-- Shown whenever we're not fully connected to the Osmo yet (SDK still
          registering, or waiting for the physical product/camera to come up)
          so a blank preview doesn't read as broken. Hidden once connected. -->
     <TextView
         android:id="@+id/connectionStatus"
+        android:maxWidth="420dp"
+        android:gravity="center"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="#AA000000"

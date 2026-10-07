@@ -25,8 +25,14 @@
 
 **Camera**
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
+- Day-to-night ("holy grail") timelapse ramp: meters the live histogram before each frame
+  and follows the light with shutter then ISO in smooth third-stop steps; Keep-darkness
+  and Max-ISO options.
+- Camera sounds played on the phone (shutter click, self-timer beeps, record
+  start/stop, focus-lock beep), each switchable in the More tray - the DJI SDK has
+  no setting for the camera's own sounds.
 - Focus modes, tap-to-focus, and a software continuous-autofocus mode
-  (contrast-detect hill climbing) for lenses that don't support AFC
+  (contrast-detect scan-and-refine search) for lenses that don't support AFC
 - White balance, metering modes, and tap-to-spot-meter
 - Live histogram
 - Sharpness, contrast, saturation and anti-flicker
@@ -34,10 +40,39 @@
 - Settings the camera can't change mid-recording are greyed out while
   recording
 
+**Shooting**
+- Intervalometer with a settling delay, optional dithering between frames,
+  motion timelapse (an A→B gimbal move spread across the run), matrix
+  panorama, and dark / bias / flat calibration frames
+- Drive modes (single, burst, AEB bracketing), self-timer, exposure lock
+  and a composition grid
+- Star focus assistant: magnified star with a live FWHM readout
+- Red night display that keeps your night vision
+- Battery, card space and recording time at a glance
+- Colour profiles (D-Log, D-Cinelike, B&W and more), PAL/NTSC and the
+  camera's own list of video resolutions and frame rates
+
+**Wear OS**
+- A watch remote (separate `wear` module): live view, shutter or record,
+  photo/video switch, drag to aim the gimbal, battery and card status, and
+  a button to make the phone join the Osmo's WiFi. The phone app stays the
+  only thing that talks to the camera.
+
+**Game controller**
+- Bluetooth or USB gamepad: left stick aims the gimbal, right stick zooms,
+  R2 is the shutter, R1 switches photo/video, L1/L2 pull focus, hold A to
+  show the focus crosshair in the middle (aim the gimbal with it up) and
+  let go to focus there, d-pad left/right step P/A/S/M, d-pad up/down
+  change exposure compensation, X locks exposure, Y shows the grid.
+  Every button can be remapped (More > Game controller), and the stick
+  speeds, dead zone and response are adjustable.
+
 **Media and audio**
 - Browse, preview and download photos and videos from the camera's SD card
 - Record audio on the phone (built-in or Bluetooth mic) alongside the video,
   since the X5 rig records no audio of its own
+- Audio sync: line the phone audio up with the video by ear against a live
+  preview, then export one merged MP4 (no re-encoding)
 
 ## Requirements
 
@@ -65,8 +100,21 @@
    Or just open the project in Android Studio and set *Settings → Build Tools →
    Gradle → Gradle JDK* to a JDK 17.
 
-Run the unit tests with `./gradlew testDebugUnitTest`. The instrumented
-tests in `app/src/androidTest` are hardware probes that need a connected Osmo.
+### Release builds
+
+To make a signed release, copy `keystore.properties.example` to
+`keystore.properties` (gitignored), point it at your own keystore, then run:
+
+```sh
+./gradlew assembleRelease   # signed APK, for GitHub releases
+./gradlew bundleRelease     # signed app bundle (.aab), for Google Play
+```
+
+Without a `keystore.properties`, release builds are produced unsigned.
+
+Run the unit tests with `./gradlew testDebugUnitTest`. Debug builds also
+include an adb-driven hardware test harness (`app/src/debug`) that runs
+scenarios against a connected Osmo and logs `RESULT … PASS/FAIL` lines.
 
 ## Using it
 
@@ -94,21 +142,48 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - Locking out settings the camera can't change mid-recording
 - Starting video recording and taking photos from the app
 - Browsing and downloading photos and videos from the SD card
+- Intervalometer, dithering, timelapse, panorama and calibration frames
+  (checked against the real number of files on the card)
+- Drive modes single / burst 3, 5, 7 / AEB 3, 5, self-timer, exposure lock
+  and composition grid
+- Star focus assistant (a manual focus sweep over a point light gives a
+  clean FWHM minimum at best focus)
+- Red night display (checked pixel by pixel: no green or blue is drawn)
+- Video resolution and frame rate, video standard and colour profile, all
+  read from the camera and verified by setting and reading back
+- Sharpness, contrast and saturation range of −3 to +3
 
 ### 🧪 Beta
 
 - **Face tracking:** follows a locked face, but it still needs tuning to be
   smooth and accurate.
-- **Software continuous autofocus:** works for photos, but it hunts a
-  little even once settled. It hasn't been tested while recording video or
-  in bright light.
-- **Phone audio recording:** records from the phone's mic or a Bluetooth
-  mic alongside the video. Lining the audio up with the video is a manual
-  job in your editor for now.
+- **Software continuous autofocus:** seeds from the camera's own
+  autofocus, scans the lens ring for the sharpness peak, locks, and then
+  leaves the ring alone until the scene changes (about 6-8 s to first
+  lock). It hasn't been tested while recording video or in bright light.
+- **Phone audio recording and sync:** records from the phone's mic or a
+  Bluetooth mic alongside the video, and the Audio sync screen lines it up
+  and exports a merged MP4. The automatic starting offset is only as good
+  as the camera's reported record-start time, so check it by ear.
+- **Game controller (remappable in More > Game controller):** built and checked with injected events, but not yet
+  with a physical controller.
+- **Wear OS watch app:** the screens are checked on a Wear OS emulator and
+  the phone side against the real camera, but the Bluetooth link between a
+  real watch and phone is untested.
+- **Joining the Osmo's WiFi from the app** (tap the "not on your Osmo's
+  WiFi" message, Android 10+): works, but Android asks you to confirm the
+  network the first time. Uses the factory password `12341234` unless you
+  long-press the message and enter yours.
 - **Histogram:** shows live data, but the graph's scaling is a best guess.
-- **Video resolution and frame rate, and image tuning ranges:** the
-  options are best guesses, because the SDK has no way to ask the camera
-  which values it supports. Unsupported values show an error message.
+- **Switching video standard (PAL/NTSC):** works, but the camera takes
+  about five seconds to settle afterwards and refuses queries meanwhile.
+  Flipping it repeatedly in a short time once left the camera's media
+  browser stuck until the Osmo was power-cycled, so don't toggle it for fun.
+- **HDR and burst of 10:** the camera lists HDR but rejects it, and rejects
+  a burst of 10, so only the modes that work are offered.
+- **Star focus assistant measures the phone's preview**, so the number is
+  in preview pixels: use it to find the smallest value, not as an absolute
+  star size.
 - **Face tracking after the subject leaves the frame:** the tracker doesn't
   recognise the same person when they come back, so tap them again to
   relock.
@@ -123,14 +198,23 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 
 ## Project layout
 
+Other modules: `wear/` is the Wear OS app and `wearprotocol/` is the plain-Kotlin
+protocol and display logic shared by the phone and the watch.
+
 ```
 app/src/main/java/io/github/mugenoesis/sidereal/
 ├── dji/        SDK registration, connection state, camera gateway
 ├── gimbal/     joystick, A→B moves, mode switching, PID
 ├── tracking/   face detection, tracking and overlay
 ├── camera/     exposure, focus, WB, metering, histogram, formats, media
+├── sequence/   intervalometer, timelapse, panorama, calibration frames
+├── focus/      star finder, FWHM metrics and the focus assistant
+├── display/    red night mode
 ├── zoom/       digital zoom and size-locked auto-zoom
 ├── audio/      phone-side audio recording and source selection
+├── sync/       audio/video offset, sidecar files, MP4 merge and the sync screen
+├── input/      game controller mapping
+├── wear/       watch bridge on the phone (commands, status, live-view stream)
 └── media/      on-camera media library
 ```
 

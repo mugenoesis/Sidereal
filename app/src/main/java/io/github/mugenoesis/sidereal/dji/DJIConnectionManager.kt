@@ -64,6 +64,11 @@ object DJIConnectionManager {
     private val _storageState = MutableStateFlow<StorageState?>(null)
     val storageState: StateFlow<StorageState?> = _storageState.asStateFlow()
 
+    // Battery charge in percent, pushed via Battery.setStateCallback; null until the first push or when the
+    // product has no battery component.
+    private val _batteryPercent = MutableStateFlow<Int?>(null)
+    val batteryPercent: StateFlow<Int?> = _batteryPercent.asStateFlow()
+
     // Bumped every time bindComponents() runs - i.e. on initial product
     // connect *and* on a mid-session component swap (lens change, gimbal
     // hot-swap). connectionState alone doesn't cover the latter: it's a
@@ -162,6 +167,9 @@ object DJIConnectionManager {
 
         _storageState.value = null
         camera?.setStorageStateCallBack { state -> _storageState.value = state }
+
+        _batteryPercent.value = null
+        product?.battery?.setStateCallback { state -> _batteryPercent.value = state.chargeRemainingInPercent }
 
         _componentsBoundTick.value += 1
     }

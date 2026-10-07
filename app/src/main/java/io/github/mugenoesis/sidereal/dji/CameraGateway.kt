@@ -68,6 +68,16 @@ interface CameraGateway {
     fun setVideoFileFormat(formatName: String, onResult: (error: String?) -> Unit)
     fun setVideoResolutionAndFrameRate(resolutionName: String, frameRateName: String, onResult: (error: String?) -> Unit)
 
+    // --- Video standard / picture profile (MediaFormatController) ---
+    fun setVideoStandard(standardName: String, onResult: (error: String?) -> Unit)
+    fun setColor(colorName: String, onResult: (error: String?) -> Unit)
+
+    // --- Drive modes / AE lock (DriveController, AeLockController) ---
+    fun setShootPhotoMode(modeName: String, onResult: (error: String?) -> Unit)
+    fun setPhotoBurstCount(countName: String, onResult: (error: String?) -> Unit)
+    fun setPhotoAebCount(countName: String, onResult: (error: String?) -> Unit)
+    fun setAeLock(locked: Boolean, onResult: (error: String?) -> Unit)
+
     // --- Camera mode / shutter (CameraModeController) ---
     fun setCameraMode(modeName: String, onResult: (error: String?) -> Unit)
     fun startShootPhoto(onResult: (error: String?) -> Unit)

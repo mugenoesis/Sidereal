@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: lets adb drive on-device hardware scenarios
+             (see DebugCommandReceiver) inside the real app process, where
+             the DJI SDK actually works - it crashes under instrumentation. -->
+        <receiver
+            android:name=".debug.DebugCommandReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.github.mugenoesis.sidereal.DEBUG" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

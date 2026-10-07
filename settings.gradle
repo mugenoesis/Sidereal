@@ -18,3 +18,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Sidereal"
 include ':app'
+include ':wearprotocol'
+include ':wear'

@@ -97,6 +97,14 @@ class MediaLibraryController {
         }
     }
 
+    /** The caller's watchdog decided the camera has stopped answering - stop showing "loading" and say so. */
+    fun reportStalled() {
+        if (_loadState.value != MediaLoadState.ENTERING_MODE && _loadState.value != MediaLoadState.LOADING) return
+        Log.w(TAG, "media load stalled - the camera's file list never finished syncing")
+        _loadState.value = MediaLoadState.ERROR
+        _errorEvents.tryEmit("The camera isn't responding to the file list request")
+    }
+
     fun refreshList() {
         val manager = DJIConnectionManager.camera?.mediaManager
         if (manager == null) {

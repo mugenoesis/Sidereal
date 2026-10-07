@@ -12,10 +12,14 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.github.mugenoesis.sidereal.R
+import io.github.mugenoesis.sidereal.SystemBars
 import io.github.mugenoesis.sidereal.camera.DownloadStatus
+import io.github.mugenoesis.sidereal.camera.LoadStallDetector
 import io.github.mugenoesis.sidereal.camera.MediaLibraryController
 import io.github.mugenoesis.sidereal.camera.MediaLoadState
+import io.github.mugenoesis.sidereal.display.NightMode
 import dji.sdk.media.MediaFile
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -63,6 +67,8 @@ class MediaLibraryActivity : AppCompatActivity() {
         // wrong time for the screen to be allowed to sleep.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_media_library)
+        SystemBars.applyInsets(this, immersive = false)
+        NightMode.apply(window)
 
         adapter = MediaFileAdapter(onItemClick = ::onItemTapped)
         findViewById<RecyclerView>(R.id.mediaRecyclerView).apply {
@@ -76,6 +82,31 @@ class MediaLibraryActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnMediaCancelDownload).setOnClickListener { mediaLibraryController.cancelDownloads() }
 
         observeController()
+        findViewById<View>(R.id.mediaEmptyText).setOnClickListener {
+            if (mediaLibraryController.loadState.value == MediaLoadState.ERROR) retryLoad()
+        }
+        mediaLibraryController.enterAndLoad()
+        watchForStall()
+    }
+
+    private val stallDetector = LoadStallDetector(timeoutMs = 45_000)
+
+    /**
+     * The camera's media index can wedge in a syncing state, after which the SDK neither answers nor fails; without
+     * this the screen would sit on "Loading files..." forever. Turns that into an error with a way out.
+     */
+    private fun watchForStall() {
+        lifecycleScope.launch {
+            while (true) {
+                delay(2_000)
+                if (stallDetector.isStalled(mediaLibraryController.loadState.value, android.os.SystemClock.elapsedRealtime())) {
+                    mediaLibraryController.reportStalled()
+                }
+            }
+        }
+    }
+
+    private fun retryLoad() {
         mediaLibraryController.enterAndLoad()
     }
 
@@ -88,8 +119,18 @@ class MediaLibraryActivity : AppCompatActivity() {
             } else {
                 "Loading files..."
             }
-            findViewById<View>(R.id.mediaEmptyText).visibility =
-                if (state == MediaLoadState.LOADED && allFiles.isEmpty()) View.VISIBLE else View.GONE
+            val emptyText = findViewById<TextView>(R.id.mediaEmptyText)
+            when {
+                state == MediaLoadState.ERROR -> {
+                    emptyText.text = "The camera isn't answering.\nIf this keeps happening, power-cycle the Osmo.\nTap to retry."
+                    emptyText.visibility = View.VISIBLE
+                }
+                state == MediaLoadState.LOADED && allFiles.isEmpty() -> {
+                    emptyText.text = "No photos or videos found"
+                    emptyText.visibility = View.VISIBLE
+                }
+                else -> emptyText.visibility = View.GONE
+            }
         }.launchIn(lifecycleScope)
 
         mediaLibraryController.files.onEach { files ->

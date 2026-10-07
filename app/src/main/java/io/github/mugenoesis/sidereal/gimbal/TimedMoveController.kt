@@ -52,6 +52,10 @@ class TimedMoveController {
     private var pauseRequested = false
     private var elapsedAtPause = 0L
 
+    /** The captured A / B points, or null if not set yet - read by the sequence feature's motion timelapse. */
+    val capturedA: Point? get() = pointA
+    val capturedB: Point? get() = pointB
+
     /** Call when the user taps "Set Point A" - captures current attitude. */
     fun captureA() {
         pointA = currentAttitudeAsPoint()

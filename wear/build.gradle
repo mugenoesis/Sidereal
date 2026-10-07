@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// The Wear OS companion: a wrist remote for the phone app (live view, shutter, aim the gimbal). It never talks
+// to the Osmo itself - everything goes through the phone over the Wearable Data Layer. The wire protocol and
+// the display rules live in :wearprotocol, shared with the phone and unit-tested there.
+android {
+    namespace 'io.github.mugenoesis.sidereal.wear'
+    compileSdk 36
+
+    defaultConfig {
+        // Same id as the phone app so the two are one product on Google Play; they are installed on different devices.
+        applicationId "io.github.mugenoesis.sidereal"
+        minSdk 30
+        targetSdk 36
+        versionCode 1
+        versionName "0.1"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+dependencies {
+    implementation project(':wearprotocol')
+    implementation 'com.google.android.gms:play-services-wearable:19.0.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2'
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    // Asks the phone to open its app (RemoteActivityHelper) when the watch hears nothing from it.
+    implementation 'androidx.wear:wear-remote-interactions:1.1.0'
+}

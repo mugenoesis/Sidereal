@@ -11,11 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
  * that panel's visibility, not connection state - streaming this data has
  * a real cost, so it shouldn't run unwatched in the background.
  *
- * The raw bucket data in [histogramData] is exposed as-is; this controller
- * doesn't interpret it. Its length and layout (luma-only vs. RGB-interleaved
- * buckets) aren't documented in the verified SDK surface, so the rendering
- * code will need to inspect real pushed data on hardware to work out the
- * bucket-to-pixel mapping.
+ * The raw bucket data in [histogramData] is exposed as-is; [HistogramModel]
+ * documents the layout (64 luma buckets, video range) and interprets it.
  */
 class HistogramController {
 
@@ -26,12 +23,20 @@ class HistogramController {
     private val _histogramData = MutableStateFlow<ShortArray?>(null)
     val histogramData: StateFlow<ShortArray?> = _histogramData
 
+    /**
+     * The SDK pushes the SAME array instance every time, rewritten in place, and a StateFlow only emits when the
+     * reference differs - so publish a copy, or the view never sees a second frame.
+     */
+    fun onData(data: ShortArray) {
+        _histogramData.value = data.copyOf()
+    }
+
     fun activate() {
         val camera = DJIConnectionManager.camera ?: return
         camera.setHistogramEnabled(true) { error ->
             if (error != null) Log.w(TAG, "setHistogramEnabled(true) failed: ${error.description}")
         }
-        camera.setHistogramCallback { data -> _histogramData.value = data }
+        camera.setHistogramCallback { data -> onData(data) }
     }
 
     fun deactivate() {

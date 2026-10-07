@@ -35,6 +35,15 @@ object AppPreferences {
     private const val KEY_AUTO_ZOOM_ENABLED = "auto_zoom_enabled"
     private const val KEY_MOVE_DURATION_MS = "move_duration_ms"
     private const val KEY_AUDIO_SOURCE_KIND = "audio_source_kind"
+    private const val KEY_NIGHT_MODE = "night_mode"
+    private const val KEY_OSMO_WIFI_PASSPHRASE = "osmo_wifi_passphrase"
+    private const val KEY_GRID_MODE = "grid_mode"
+    private const val KEY_SELF_TIMER_SEC = "self_timer_sec"
+    private const val KEY_CAMERA_SOUNDS = "camera_sounds"
+    private const val KEY_GAMEPAD_BINDINGS = "gamepad_bindings"
+    private const val KEY_GAMEPAD_CONFIG = "gamepad_config"
+    private const val KEY_DRILL_BEST = "drill_best"
+    private const val KEY_DRILL_OVERLAY = "drill_overlay"
 
     private lateinit var prefs: SharedPreferences
 
@@ -68,6 +77,52 @@ object AppPreferences {
     var moveDurationMs: Long
         get() = prefs.getLong(KEY_MOVE_DURATION_MS, 3000L)
         set(value) = prefs.edit().putLong(KEY_MOVE_DURATION_MS, value).apply()
+
+    /** Red-only night display - see display/NightMode. Persisted so a restart in the field doesn't blast white light. */
+    var nightMode: Boolean
+        get() = prefs.getBoolean(KEY_NIGHT_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_NIGHT_MODE, value).apply()
+
+    /** The camera's WiFi password, used to join its network from the app. Defaults to the Osmo's factory value. */
+    var osmoWifiPassphrase: String
+        get() = prefs.getString(KEY_OSMO_WIFI_PASSPHRASE, null) ?: io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.DEFAULT
+        set(value) = prefs.edit().putString(KEY_OSMO_WIFI_PASSPHRASE, value).apply()
+
+    var gridMode: io.github.mugenoesis.sidereal.camera.GridMode
+        get() = prefs.getString(KEY_GRID_MODE, null)
+            ?.let { runCatching { io.github.mugenoesis.sidereal.camera.GridMode.valueOf(it) }.getOrNull() }
+            ?: io.github.mugenoesis.sidereal.camera.GridMode.OFF
+        set(value) = prefs.edit().putString(KEY_GRID_MODE, value.name).apply()
+
+    /** Photo self-timer delay in seconds; 0 = off. */
+    var selfTimerSeconds: Int
+        get() = prefs.getInt(KEY_SELF_TIMER_SEC, 0)
+        set(value) = prefs.edit().putInt(KEY_SELF_TIMER_SEC, value).apply()
+
+    /** Which camera sounds are on, as CameraSoundSettings.encode() writes it; null = the defaults (all on). */
+    var cameraSounds: String?
+        get() = prefs.getString(KEY_CAMERA_SOUNDS, null)
+        set(value) = prefs.edit().putString(KEY_CAMERA_SOUNDS, value).apply()
+
+    /** Game-controller button assignments (GamepadBindings.encode()); null = the default layout. */
+    var gamepadBindings: String?
+        get() = prefs.getString(KEY_GAMEPAD_BINDINGS, null)
+        set(value) = prefs.edit().putString(KEY_GAMEPAD_BINDINGS, value).apply()
+
+    /** Game-controller stick settings (GamepadConfig.encode()); null = the defaults. */
+    var gamepadConfig: String?
+        get() = prefs.getString(KEY_GAMEPAD_CONFIG, null)
+        set(value) = prefs.edit().putString(KEY_GAMEPAD_CONFIG, value).apply()
+
+    /** Best result in the reticle drill. */
+    var drillBest: Int
+        get() = prefs.getInt(KEY_DRILL_BEST, 0)
+        set(value) = prefs.edit().putInt(KEY_DRILL_BEST, value).apply()
+
+    /** The reticle drill over the live view (true) or on plain black (false). */
+    var drillOverlay: Boolean
+        get() = prefs.getBoolean(KEY_DRILL_OVERLAY, true)
+        set(value) = prefs.edit().putBoolean(KEY_DRILL_OVERLAY, value).apply()
 
     // GIMBAL (no phone-side recording) is the safe default - only a real
     // choice once a mic is actually plugged into the gimbal, which this

@@ -52,6 +52,24 @@ class MediaFormatController(private val gateway: CameraGateway = RealCameraGatew
     private val _videoResolutionAndFrameRate = MutableStateFlow<ResolutionAndFrameRate?>(null)
     val videoResolutionAndFrameRate: StateFlow<ResolutionAndFrameRate?> = _videoResolutionAndFrameRate
 
+    // Plain-string names for the newer settings (video standard, picture profile) and for the camera's own
+    // lists of what it accepts - strings keep them testable and keep live SDK enums out of app logic.
+    private val _videoStandard = MutableStateFlow<String?>(null)
+    val videoStandard: StateFlow<String?> = _videoStandard
+
+    private val _cameraColor = MutableStateFlow<String?>(null)
+    val cameraColor: StateFlow<String?> = _cameraColor
+
+    /** Resolution/frame-rate pairs (enum names) the camera really accepts right now - depends on PAL/NTSC. Empty until queried. */
+    private val _videoModeRange = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val videoModeRange: StateFlow<List<Pair<String, String>>> = _videoModeRange
+
+    private val _videoStandardRange = MutableStateFlow<List<String>>(emptyList())
+    val videoStandardRange: StateFlow<List<String>> = _videoStandardRange
+
+    private val _colorRange = MutableStateFlow<List<String>>(emptyList())
+    val colorRange: StateFlow<List<String>> = _colorRange
+
     // One-shot events, not persistent state - see FocusController.errorEvents.
     private val _errorEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val errorEvents: SharedFlow<String> = _errorEvents
@@ -138,6 +156,77 @@ class MediaFormatController(private val gateway: CameraGateway = RealCameraGatew
     }
 
     /**
+     * PAL (25/50 fps) vs NTSC (24/30/60 fps): switching it changes which frame rates the camera offers, so the
+     * resolution/frame-rate list is re-read afterwards ([onRangeChanged] gives the caller a chance to do that).
+     */
+    internal fun setVideoStandardByName(standardName: String, onComplete: (Boolean) -> Unit = {}) {
+        gateway.setVideoStandard(standardName) { error ->
+            if (error != null) {
+                Log.w(TAG, "setVideoStandard($standardName) failed: $error")
+                _errorEvents.tryEmit("Video standard $standardName rejected ($error)")
+                onComplete(false)
+            } else {
+                _videoStandard.value = standardName
+                onComplete(true)
+            }
+        }
+    }
+
+    fun setVideoStandard(standardName: String) {
+        setVideoStandardByName(standardName) { success ->
+            if (!success) return@setVideoStandardByName
+            // Measured on the X5: the camera accepts the switch at once but then refuses every query for several
+            // seconds while it reconfigures, so re-read its lists after it has settled, not immediately.
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+            for (delayMs in listOf(3_000L, 6_000L, 10_000L)) {
+                handler.postDelayed({ refreshVideoRanges() }, delayMs)
+            }
+        }
+    }
+
+    /** The camera's picture profile (D-Log, D-Cinelike, B&W, ...) - applies to both stills and video. */
+    internal fun setColorByName(colorName: String, onComplete: (Boolean) -> Unit = {}) {
+        gateway.setColor(colorName) { error ->
+            if (error != null) {
+                Log.w(TAG, "setColor($colorName) failed: $error")
+                _errorEvents.tryEmit("Colour profile $colorName rejected ($error)")
+                onComplete(false)
+            } else {
+                _cameraColor.value = colorName
+                onComplete(true)
+            }
+        }
+    }
+
+    fun setColor(colorName: String) = setColorByName(colorName)
+
+    /** Reads what the camera accepts - lists of resolution/frame-rate pairs, video standards and colour profiles. */
+    fun refreshVideoRanges() {
+        val keyManager = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager ?: return
+        fun <T> read(key: String, onValue: (Any) -> Unit) {
+            keyManager.getValue(dji.keysdk.CameraKey.create(key), object : dji.keysdk.callback.GetCallback {
+                override fun onSuccess(value: Any) = onValue(value)
+                override fun onFailure(error: DJIError) {
+                    Log.w(TAG, "$key query failed: ${error.description}")
+                }
+            })
+        }
+        read<Unit>(dji.keysdk.CameraKey.VIDEO_RESOLUTION_FRAME_RATE_RANGE) { value ->
+            _videoModeRange.value = (value as? Array<*>).orEmpty()
+                .filterIsInstance<ResolutionAndFrameRate>()
+                .map { it.resolution.name to it.frameRate.name }
+        }
+        read<Unit>(dji.keysdk.CameraKey.VIDEO_STANDARD_RANGE) { value ->
+            _videoStandardRange.value = (value as? Array<*>).orEmpty().map { (it as Enum<*>).name }
+        }
+        read<Unit>(dji.keysdk.CameraKey.CAMERA_COLOR_RANGE) { value ->
+            _colorRange.value = (value as? Array<*>).orEmpty().map { (it as Enum<*>).name }
+        }
+        read<Unit>(dji.keysdk.CameraKey.VIDEO_STANDARD) { value -> _videoStandard.value = (value as Enum<*>).name }
+        read<Unit>(dji.keysdk.CameraKey.CAMERA_COLOR) { value -> _cameraColor.value = (value as Enum<*>).name }
+    }
+
+    /**
      * Re-queries all four settings and updates the StateFlows above. Call
      * once whenever the "More Settings" tray is opened - same
      * query-on-demand pattern as ImageTuningController.refresh().
@@ -174,6 +263,8 @@ class MediaFormatController(private val gateway: CameraGateway = RealCameraGatew
                 Log.w(TAG, "getVideoFileFormat failed: ${error.description}")
             }
         })
+
+        refreshVideoRanges()
 
         camera.getVideoResolutionAndFrameRate(object : CommonCallbacks.CompletionCallbackWith<ResolutionAndFrameRate> {
             override fun onSuccess(value: ResolutionAndFrameRate) {

@@ -5,6 +5,8 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
 import android.util.Log
+import io.github.mugenoesis.sidereal.sync.SyncSidecar
+import io.github.mugenoesis.sidereal.sync.SyncSidecarStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -55,6 +57,12 @@ class AudioRecorderController {
     private var recorder: MediaRecorder? = null
     private var outputFile: File? = null
 
+    // Wall-clock moments for the sync sidecar (see sync/SyncSidecar): when this phone audio began, and when the
+    // camera's own recording was seen to begin. Their difference is the automatic starting point for lining the
+    // two up; the camera time is only as good as the pushed isRecording state, so the user can tune it by ear.
+    private var audioStartEpochMs = 0L
+    private var cameraStartEpochMs: Long? = null
+
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording
 
@@ -100,6 +108,8 @@ class AudioRecorderController {
             }
             mr.prepare()
             mr.start()
+            audioStartEpochMs = System.currentTimeMillis()
+            cameraStartEpochMs = null
             recorder = mr
             outputFile = file
             _isRecording.value = true
@@ -112,6 +122,11 @@ class AudioRecorderController {
         }
     }
 
+    /** The camera's pushed isRecording just went true while a phone take is running - note when. */
+    fun onCameraRecordingStarted(nowEpochMs: Long = System.currentTimeMillis()) {
+        if (_isRecording.value && cameraStartEpochMs == null) cameraStartEpochMs = nowEpochMs
+    }
+
     /** Returns the finished file, or null if nothing was recording or it failed to finalize. */
     fun stop(): File? {
         val mr = recorder ?: return null
@@ -119,9 +134,16 @@ class AudioRecorderController {
         _isRecording.value = false
         val file = outputFile
         outputFile = null
+        val cameraStopEpochMs = System.currentTimeMillis()
         return try {
             mr.stop()
             mr.release()
+            file?.let {
+                SyncSidecarStore.save(
+                    it.parentFile!!,
+                    SyncSidecar(it.name, audioStartEpochMs, cameraStartEpochMs, cameraStopEpochMs)
+                )
+            }
             file
         } catch (e: Exception) {
             Log.w(TAG, "stop: failed to finalize recording: $e")
