@@ -47,6 +47,7 @@ object DebugScenarios {
                 Log.i(TAG, "iso ${callback<String?> { RealCameraGateway.setIso(args["iso"] ?: "ISO_100") { e -> it(e) } }}")
                 Log.i(TAG, "shutter ${callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"] ?: "SHUTTER_SPEED_1_250") { e -> it(e) } }}")
             }
+            "histogram_probe" -> histogramProbe()
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {
@@ -247,6 +248,30 @@ object DebugScenarios {
 
     suspend fun <T> callback(block: ((T) -> Unit) -> Unit): T = suspendCancellableCoroutine { cont ->
         block { if (cont.isActive) cont.resume(it) }
+    }
+
+    /** Logs the camera's raw pushed histogram at three exposures so the layout (length, channels, scale) can be read off. */
+    private suspend fun histogramProbe() {
+        val camera = DJIConnectionManager.camera ?: return
+        var latest: ShortArray? = null
+        camera.setHistogramEnabled(true) { Log.i(TAG, "hist enable ${it?.description}") }
+        camera.setHistogramCallback { latest = it }
+        callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
+        for ((label, iso, shutter) in listOf(
+            Triple("dark", "ISO_100", "SHUTTER_SPEED_1_8000"),
+            Triple("mid", "ISO_800", "SHUTTER_SPEED_1_60"),
+            Triple("bright", "ISO_1600", "SHUTTER_SPEED_1_8")
+        )) {
+            callback<String?> { RealCameraGateway.setIso(iso) { e -> it(e) } }
+            callback<String?> { RealCameraGateway.setShutterSpeed(shutter) { e -> it(e) } }
+            delay(3000)
+            val d = latest
+            if (d == null) { Log.i(TAG, "HIST $label: no data"); continue }
+            Log.i(TAG, "HIST $label: len=${d.size} min=${d.minOrNull()} max=${d.maxOrNull()} sum=${d.sumOf { it.toLong() }}")
+            Log.i(TAG, "HIST $label: ${d.joinToString(",")}")
+            delay(3500) // hold this exposure so the host can screenshot it
+        }
+        callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
     }
 
     private suspend fun photoProbe() {
