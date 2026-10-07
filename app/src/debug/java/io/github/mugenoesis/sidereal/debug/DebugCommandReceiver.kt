@@ -26,6 +26,7 @@ class DebugCommandReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val cmd = intent.getStringExtra("cmd") ?: return
+        DebugScenarios.appContext = context.applicationContext
         val args = intent.extras?.keySet()?.associateWith { intent.extras?.get(it)?.toString().orEmpty() } ?: emptyMap()
         scope.launch {
             try {

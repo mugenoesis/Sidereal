@@ -24,6 +24,9 @@ import kotlin.coroutines.resume
 object DebugScenarios {
     const val TAG = "SiderealDebug"
 
+    /** Set by the receiver on every command - scenarios that need files or a Context use it. */
+    @Volatile var appContext: android.content.Context? = null
+
     suspend fun run(cmd: String, args: Map<String, String>) {
         awaitConnected()
         when (cmd) {
@@ -96,6 +99,19 @@ object DebugScenarios {
                 Log.i(TAG, "RESULT video_probe: DONE")
             }
             "video_settings" -> videoSettings()
+            "mux_test" -> muxTest()
+            "sync_seed" -> syncSeed()
+            "sync_cleanup" -> {
+                val context = appContext ?: error("no context")
+                val deleted = context.contentResolver.delete(
+                    android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    "${android.provider.MediaStore.Video.Media.DISPLAY_NAME} LIKE ?", arrayOf("synthetic_video%")
+                )
+                val audioDir = java.io.File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC), "SiderealAudio")
+                val removed = audioDir.listFiles { f -> f.name.startsWith("audio_synthetic") }?.count { it.delete() } ?: 0
+                Log.i(TAG, "SYNC cleanup: removed $deleted videos and $removed audio files")
+            }
+            "verify_export" -> verifyExport(args)
             "tuning_range" -> {
                 val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager!!
                 suspend fun read(name: String): String = suspendCancellableCoroutine { cont ->
@@ -469,5 +485,93 @@ object DebugScenarios {
             override fun onSuccess(value: Any) { if (cont.isActive) cont.resume((value as Enum<*>).name) }
             override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume(null) }
         }) ?: cont.resume(null)
+    }
+
+    /** Merges synthetic phone audio into synthetic video at several offsets and decodes the result to find where the tone landed. */
+    private suspend fun muxTest() {
+        val context = appContext ?: error("no context")
+        val dir = java.io.File(context.cacheDir, "muxtest").apply { deleteRecursively(); mkdirs() }
+        val video = java.io.File(dir, "video.mp4")
+        val audio = java.io.File(dir, "audio.m4a")
+        SyntheticMedia.makeVideo(video)
+        SyntheticMedia.makeAudio(audio)
+        val problems = mutableListOf<String>()
+        val base = SyntheticMedia.toneOnsetMs(audio)
+        Log.i(TAG, "MUX source tone onset=$base ms (built at ${SyntheticMedia.TONE_START_MS})")
+        if (base == null || kotlin.math.abs(base - SyntheticMedia.TONE_START_MS) > 80) problems += "source onset $base"
+
+        for (offset in listOf(0L, 300L, 1_000L, -200L, -400L, -700L)) {
+            val out = java.io.File(dir, "out_$offset.mp4")
+            val result = io.github.mugenoesis.sidereal.sync.AudioMuxer.mux(video.absolutePath, audio.absolutePath, offset, out.absolutePath)
+            val onset = SyntheticMedia.toneOnsetMs(out)
+            val expected = (SyntheticMedia.TONE_START_MS + offset).coerceAtLeast(0)
+            val retriever = android.media.MediaMetadataRetriever().apply { setDataSource(out.absolutePath) }
+            val hasVideo = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
+            val hasAudio = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)
+            val frame = retriever.getFrameAtTime(500_000)
+            val duration = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+            retriever.release()
+            Log.i(TAG, "MUX offset=$offset -> onset=$onset expected=$expected video=$hasVideo audio=$hasAudio frame=${frame != null} duration=$duration stats=$result")
+            if (onset == null || kotlin.math.abs(onset - expected) > 80) problems += "offset $offset onset=$onset expected=$expected"
+            if (hasVideo != "yes" || hasAudio != "yes" || frame == null) problems += "offset $offset not a playable video+audio file"
+            if (result.videoSamples < 55) problems += "offset $offset video samples=${result.videoSamples}"
+        }
+        dir.deleteRecursively()
+        Log.i(TAG, "RESULT mux_test: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
+    }
+
+    /** Seeds one phone audio take (with sidecar) and one video in Movies/Sidereal, then opens the sync screen on that video. */
+    private suspend fun syncSeed() {
+        val context = appContext ?: error("no context")
+        val audioDir = java.io.File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC), "SiderealAudio").apply { mkdirs() }
+        val video = java.io.File(context.cacheDir, "seed_video.mp4")
+        SyntheticMedia.makeVideo(video)
+        SyntheticMedia.makeAudio(java.io.File(audioDir, "audio_synthetic.m4a"))
+        val now = System.currentTimeMillis()
+        io.github.mugenoesis.sidereal.sync.SyncSidecarStore.save(
+            audioDir,
+            io.github.mugenoesis.sidereal.sync.SyncSidecar("audio_synthetic.m4a", audioStartEpochMs = now, cameraStartEpochMs = now - 350, cameraStopEpochMs = now + 2_000)
+        )
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Video.Media.DISPLAY_NAME, "synthetic_video.mp4")
+            put(android.provider.MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_MOVIES + "/Sidereal")
+        }
+        val uri = context.contentResolver.insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)!!
+        context.contentResolver.openOutputStream(uri)!!.use { out -> video.inputStream().use { it.copyTo(out) } }
+        Log.i(TAG, "SYNC seeded video=$uri audio take with suggested offset +350 ms")
+        context.startActivity(
+            android.content.Intent(context, io.github.mugenoesis.sidereal.sync.AudioSyncActivity::class.java)
+                .setData(uri).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        Log.i(TAG, "RESULT sync_seed: DONE")
+    }
+
+    /** Finds the newest "*_synced.mp4" in Movies/Sidereal, copies it out of MediaStore and reports where its tone begins. */
+    private suspend fun verifyExport(args: Map<String, String>) {
+        val context = appContext ?: error("no context")
+        val expected = args["expected"]?.toLong()
+        val resolver = context.contentResolver
+        val cursor = resolver.query(
+            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(android.provider.MediaStore.Video.Media._ID, android.provider.MediaStore.Video.Media.DISPLAY_NAME),
+            "${android.provider.MediaStore.Video.Media.DISPLAY_NAME} LIKE ?", arrayOf("%_synced%"),
+            "${android.provider.MediaStore.Video.Media.DATE_ADDED} DESC"
+        )
+        val found = cursor?.use { if (it.moveToFirst()) it.getLong(0) to it.getString(1) else null }
+        if (found == null) { Log.i(TAG, "RESULT verify_export: FAIL no exported file"); return }
+        val uri = android.content.ContentUris.withAppendedId(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, found.first)
+        val copy = java.io.File(context.cacheDir, "verify_export.mp4")
+        resolver.openInputStream(uri)!!.use { input -> copy.outputStream().use { input.copyTo(it) } }
+        val onset = SyntheticMedia.toneOnsetMs(copy)
+        val retriever = android.media.MediaMetadataRetriever().apply { setDataSource(copy.absolutePath) }
+        val playable = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes" &&
+            retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes" && retriever.getFrameAtTime(500_000) != null
+        retriever.release()
+        // The synthetic source's own onset reads 546 for a tone built at 500 (encoder priming) - allow for that constant.
+        val pass = playable && onset != null && (expected == null || kotlin.math.abs(onset - (expected + 46)) <= 80)
+        Log.i(TAG, "VERIFY ${found.second}: tone onset=$onset ms expected~=${expected?.plus(46)} playable=$playable size=${copy.length()}")
+        Log.i(TAG, "RESULT verify_export: ${if (pass) "PASS" else "FAIL"}")
+        copy.delete()
     }
 }

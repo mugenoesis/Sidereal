@@ -71,6 +71,11 @@
             android:exported="false"
             android:screenOrientation="sensorLandscape" />
 
+        <activity
+            android:name=".sync.AudioSyncActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape" />
+
         <!-- Required by DJI MSDK's internal USB accessory handling -->
         <activity android:name="dji.sdk.sdkmanager.DJIAoaControllerActivity"
             android:exported="false" />

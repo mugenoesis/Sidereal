@@ -729,6 +729,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.Button>(R.id.btnVideoResCycle).setOnClickListener { cycleVideoResolution() }
         findViewById<android.widget.Button>(R.id.btnVideoStandardCycle).setOnClickListener { cycleVideoStandard() }
         findViewById<android.widget.Button>(R.id.btnColorCycle).setOnClickListener { cycleColor() }
+        findViewById<android.widget.Button>(R.id.btnAudioSync).setOnClickListener {
+            startActivity(android.content.Intent(this, io.github.mugenoesis.sidereal.sync.AudioSyncActivity::class.java))
+        }
         findViewById<android.widget.Button>(R.id.btnAudioSourceCycle).setOnClickListener { cycleAudioSource() }
 
         // Tap-to-focus/spot-meter: fires instead of face-tap-select whenever
@@ -1962,6 +1965,7 @@ class MainActivity : AppCompatActivity() {
                 updateExposureTrayUi()
                 updateMoreSettingsTrayUi()
                 val nowRecording = state?.isRecording == true
+                if (!lastCameraIsRecording && nowRecording) audioRecorderController.onCameraRecordingStarted()
                 if (lastCameraIsRecording && !nowRecording) stopPhoneAudioIfCameraReallyStopped()
                 lastCameraIsRecording = nowRecording
             }
