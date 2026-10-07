@@ -2063,7 +2063,7 @@ class MainActivity : AppCompatActivity() {
                 is DJIConnectionManager.ConnectionState.Registering -> "Registering with DJI..."
                 is DJIConnectionManager.ConnectionState.Registered -> "Registered - waiting for Osmo..."
                 is DJIConnectionManager.ConnectionState.ProductConnected -> null
-                is DJIConnectionManager.ConnectionState.Error -> "DJI SDK error: ${djiState.message}"
+                is DJIConnectionManager.ConnectionState.Error -> io.github.mugenoesis.sidereal.dji.RegistrationText.describe(djiState.message)
             }
         }
         connectionStatus.visibility = android.view.View.VISIBLE

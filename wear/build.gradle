@@ -6,6 +6,14 @@ plugins {
 // The Wear OS companion: a wrist remote for the phone app (live view, shutter, aim the gimbal). It never talks
 // to the Osmo itself - everything goes through the phone over the Wearable Data Layer. The wire protocol and
 // the display rules live in :wearprotocol, shared with the phone and unit-tested there.
+// Same release signing as the phone app (local, gitignored keystore.properties): the phone and the watch app must
+// be signed with the same key or the Wear OS Data Layer will not let them talk. Unsigned without it.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace 'io.github.mugenoesis.sidereal.wear'
     compileSdk 36
@@ -16,11 +24,25 @@ android {
         minSdk 25
         targetSdk 36
         versionCode 1
-        versionName "0.1"
+        versionName "0.1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropsFile.exists()) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
         }
     }
