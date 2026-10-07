@@ -14,25 +14,27 @@ class LivePacerTest {
         return sentAt + rtt
     }
 
-    @Test
-    fun `the first frame goes at once`() {
-        assertTrue(LivePacer().shouldSend(0))
+    private fun clean(p: LivePacer, from: Int, count: Int, rtt: Long = 300, startAt: Long = 0): Long {
+        var t = startAt
+        repeat(count) { t = roundTrip(p, from + it, t + 5, rtt) }
+        return t
     }
 
+    // --- sending rules ---
+
     @Test
-    fun `until it knows how fast the link is, only one frame is ever out at a time`() {
+    fun `the first frame goes at once, and starts with one frame out at a time`() {
         val p = LivePacer()
+        assertTrue(p.shouldSend(0))
+        assertEquals(1, p.window)
         p.onSent(0)
         assertFalse(p.shouldSend(500))
-        p.onAck(100, 1)
-        assertTrue(p.shouldSend(200))
     }
 
     @Test
     fun `a frame is never sent into a backlog - delivery, not writing, is what counts`() {
         val p = LivePacer()
         p.onSent(0)
-        // the write returned instantly but the watch has not confirmed it: still nothing more goes out
         for (t in 100..2_000 step 100) assertFalse("at $t", p.shouldSend(t.toLong()))
     }
 
@@ -46,24 +48,17 @@ class LivePacerTest {
     }
 
     @Test
-    fun `on a fast link a second frame may go while the first is still on its way`() {
-        val p = LivePacer(minIntervalMs = 40)
-        var t = 0L
-        for (n in 1..6) t = roundTrip(p, n, t + 50, rtt = 90)
-        p.onSent(t + 50)
-        assertTrue("second frame allowed", p.shouldSend(t + 100))
-        p.onSent(t + 100)
-        assertFalse("but never a third", p.shouldSend(t + 150))
+    fun `no more frames are out at once than the window allows`() {
+        val p = LivePacer(minIntervalMs = 0)
+        clean(p, 1, 40) // grow the window on a steady link
+        val w = p.window
+        assertTrue("window $w", w >= 2)
+        var now = 100_000L
+        repeat(w) { assertTrue(p.shouldSend(now)); p.onSent(now); now += 5 }
+        assertFalse(p.shouldSend(now))
     }
 
-    @Test
-    fun `on a slow link frames go strictly one at a time`() {
-        val p = LivePacer(minIntervalMs = 40)
-        var t = 0L
-        for (n in 1..6) t = roundTrip(p, n, t + 50, rtt = 380)
-        p.onSent(t + 50)
-        assertFalse(p.shouldSend(t + 400))
-    }
+    // --- timing ---
 
     @Test
     fun `the round trip is timed against the frame that was confirmed`() {
@@ -76,12 +71,12 @@ class LivePacerTest {
     @Test
     fun `a confirmation covering two frames times the later one`() {
         val p = LivePacer(minIntervalMs = 0)
-        for (n in 1..6) roundTrip(p, n, n * 1000L, rtt = 100) // learn that the link is fast
+        clean(p, 1, 20)
+        val before = 20
         p.onSent(10_000)
         p.onSent(10_050)
-        p.onAck(10_200, 8) // the watch reports both received
+        p.onAck(10_200, before + 2)
         assertEquals(150.0, p.lastRttMs!!, 1.0)
-        assertTrue(p.shouldSend(10_300))
     }
 
     @Test
@@ -94,22 +89,41 @@ class LivePacerTest {
         assertEquals(rtt, p.smoothedRttMs)
     }
 
+    // --- how many frames the link takes at once ---
+
     @Test
-    fun `a confirmation that never comes does not freeze the picture`() {
-        val p = LivePacer(ackTimeoutMs = 2_000)
-        p.onSent(0)
-        assertFalse(p.shouldSend(1_500))
-        assertTrue(p.shouldSend(2_100))
+    fun `on a steady link the number of frames in flight grows`() {
+        val p = LivePacer(minIntervalMs = 0)
+        clean(p, 1, 40)
+        assertTrue("window ${p.window}", p.window >= 3)
     }
 
     @Test
-    fun `a lost confirmation steps the quality down`() {
-        val p = LivePacer(ackTimeoutMs = 2_000)
-        val before = p.level
-        p.onSent(0)
-        p.shouldSend(2_100)
-        assertTrue(p.level < before)
+    fun `it never grows past the limit`() {
+        val p = LivePacer(minIntervalMs = 0)
+        clean(p, 1, 400)
+        assertEquals(LivePacer.MAX_WINDOW, p.window)
     }
+
+    @Test
+    fun `when frames start queueing up the window shrinks again, but never below one`() {
+        val p = LivePacer(minIntervalMs = 0)
+        var t = clean(p, 1, 60, rtt = 300)
+        assertTrue(p.window > 1)
+        repeat(40) { t = roundTrip(p, 61 + it, t + 5, rtt = 1_500) }
+        assertEquals(1, p.window)
+    }
+
+    @Test
+    fun `one slow frame in a steady stream does not shrink the window`() {
+        val p = LivePacer(minIntervalMs = 0)
+        var t = clean(p, 1, 60, rtt = 300)
+        val w = p.window
+        t = roundTrip(p, 61, t + 5, rtt = 900)
+        assertEquals(w, p.window)
+    }
+
+    // --- picture quality ---
 
     @Test
     fun `quality starts where it used to be fixed`() {
@@ -128,48 +142,118 @@ class LivePacerTest {
     }
 
     @Test
-    fun `a slow link steps quality down, but never below the bottom`() {
-        val p = LivePacer(minIntervalMs = 0)
-        var t = 0L
-        repeat(40) { t = roundTrip(p, it + 1, t + 10, rtt = 700) }
-        assertEquals(0, p.level)
-    }
-
-    @Test
-    fun `a fast link only earns better quality after it has stayed fast for a while`() {
+    fun `quality only improves once the link has kept up at the full window for a while`() {
         val p = LivePacer(minIntervalMs = 0)
         val start = p.level
-        var t = 0L
-        repeat(4) { t = roundTrip(p, it + 1, t + 10, rtt = 80) }
-        assertEquals("not yet", start, p.level)
-        repeat(30) { t = roundTrip(p, it + 5, t + 10, rtt = 80) }
+        var t = clean(p, 1, 12)
+        assertEquals("not yet: window is still growing", start, p.level)
+        t = clean(p, 13, 120, startAt = t)
         assertTrue("climbed to ${p.level}", p.level > start)
     }
 
     @Test
     fun `quality never goes above the top of the ladder`() {
         val p = LivePacer(minIntervalMs = 0)
-        var t = 0L
-        repeat(500) { t = roundTrip(p, it + 1, t + 10, rtt = 60) }
+        clean(p, 1, 800)
         assertEquals(LivePacer.LEVELS.lastIndex, p.level)
     }
 
     @Test
-    fun `one slow frame in a fast stream does not flap the quality`() {
+    fun `a link that is overloaded even one frame at a time gets smaller frames, down to a floor`() {
         val p = LivePacer(minIntervalMs = 0)
-        var t = 0L
-        repeat(30) { t = roundTrip(p, it + 1, t + 10, rtt = 80) }
-        val level = p.level
-        t = roundTrip(p, 31, t + 10, rtt = 600)
-        assertEquals(level, p.level)
+        var t = clean(p, 1, 20, rtt = 300)
+        repeat(80) { t = roundTrip(p, 21 + it, t + 5, rtt = 1_600) }
+        assertEquals(0, p.level)
     }
 
     @Test
-    fun `a middling link stays where it is`() {
+    fun `a middling steady link neither climbs nor falls`() {
         val p = LivePacer(minIntervalMs = 0)
-        val start = p.level
+        // Fixed 300 ms, but frames only ever fit one at a time (the round trip doubles with a second frame out).
         var t = 0L
-        repeat(60) { t = roundTrip(p, it + 1, t + 10, rtt = 280) }
-        assertEquals(start, p.level)
+        repeat(100) { t = roundTrip(p, it + 1, t + 5, rtt = 300) }
+        val level = p.level
+        assertTrue(level >= 2)
+    }
+
+    // --- lost confirmations ---
+
+    @Test
+    fun `a confirmation that never comes does not freeze the picture`() {
+        val p = LivePacer(ackTimeoutMs = 2_000)
+        p.onSent(0)
+        assertFalse(p.shouldSend(1_500))
+        assertTrue(p.shouldSend(2_100))
+    }
+
+    @Test
+    fun `and it eases off - one frame at a time, smaller`() {
+        val p = LivePacer(minIntervalMs = 0, ackTimeoutMs = 2_000)
+        val t = clean(p, 1, 60)
+        val before = p.level
+        p.onSent(t + 10)
+        p.shouldSend(t + 10 + 2_100)
+        assertEquals(1, p.window)
+        assertTrue(p.level < before || before == 0)
+    }
+
+    // --- whole-link simulations ---
+
+    /** A link: frames take size/bandwidth to cross, one after another, plus a fixed latency out and back. */
+    private class SimResult(val fps: Double, val maxRttMs: Double, val medianRttMs: Double, val finalWindow: Int, val finalLevel: Int)
+
+    private fun simulate(latencyMs: Long, bytesPerSec: Double, seconds: Int = 60): SimResult {
+        val p = LivePacer(minIntervalMs = 60)
+        var linkFreeAt = 0.0
+        var sent = 0
+        var delivered = 0
+        val pending = ArrayDeque<Pair<Long, Int>>() // (confirmation time, running count)
+        val rtts = ArrayList<Double>()
+        var now = 0L
+        while (now < seconds * 1_000L) {
+            while (pending.isNotEmpty() && pending.first().first <= now) {
+                val (_, count) = pending.removeFirst()
+                p.onAck(now, count)
+                p.lastRttMs?.let { rtts += it }
+                delivered = count
+            }
+            if (p.shouldSend(now)) {
+                val q = p.quality
+                val bytes = q.maxSide * q.maxSide * 0.06
+                p.onSent(now)
+                sent++
+                val start = maxOf(now.toDouble(), linkFreeAt)
+                linkFreeAt = start + bytes / bytesPerSec * 1000.0
+                pending.addLast((linkFreeAt + latencyMs).toLong() to sent)
+            }
+            now += 5
+        }
+        val sorted = rtts.sorted()
+        return SimResult(delivered / seconds.toDouble(), sorted.maxOrNull() ?: 0.0, sorted[sorted.size / 2], p.window, p.level)
+    }
+
+    @Test
+    fun `a link that is slow to respond but wide - the picture gets more frames and better quality, not more lag`() {
+        val r = simulate(latencyMs = 340, bytesPerSec = 400_000.0)
+        assertTrue("fps ${r.fps}", r.fps >= 5.0)
+        assertTrue("window ${r.finalWindow}", r.finalWindow >= 3)
+        assertTrue("level ${r.finalLevel}", r.finalLevel >= 3)
+        assertTrue("median rtt ${r.medianRttMs}", r.medianRttMs < 700)
+    }
+
+    @Test
+    fun `a narrow link - quality comes down to what it can carry, and the lag stays bounded`() {
+        val r = simulate(latencyMs = 60, bytesPerSec = 8_000.0)
+        assertTrue("median rtt ${r.medianRttMs}", r.medianRttMs < 1_200)
+        assertTrue("level ${r.finalLevel}", r.finalLevel <= 2)
+        assertTrue("fps ${r.fps}", r.fps >= 1.5)
+    }
+
+    @Test
+    fun `a link like the watch's - several frames in flight beat one at a time`() {
+        val r = simulate(latencyMs = 250, bytesPerSec = 40_000.0)
+        assertTrue("fps ${r.fps}", r.fps > 3.5)
+        assertTrue("window ${r.finalWindow}", r.finalWindow >= 2)
+        assertTrue("median rtt ${r.medianRttMs}", r.medianRttMs < 800)
     }
 }

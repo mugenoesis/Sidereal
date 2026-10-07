@@ -169,9 +169,9 @@ class WearBridge(
                     pacer.onAck(now, count)
                     if (now - windowStartedAt >= STATS_WINDOW_MS) {
                         val seconds = (now - windowStartedAt) / 1000.0
-                        Log.i(TAG, "live view: %.1f fps, %.0f KB/s, round trip %.0f ms, quality level %d (%dpx q%d)".format(
+                        Log.i(TAG, "live view: %.1f fps, %.0f KB/s, round trip %.0f ms, %d in flight, quality level %d (%dpx q%d)".format(
                             framesInWindow / seconds, bytesInWindow / 1024.0 / seconds, pacer.smoothedRttMs ?: 0.0,
-                            pacer.level, pacer.quality.maxSide, pacer.quality.encodeQuality
+                            pacer.window, pacer.level, pacer.quality.maxSide, pacer.quality.encodeQuality
                         ))
                         framesInWindow = 0
                         bytesInWindow = 0
