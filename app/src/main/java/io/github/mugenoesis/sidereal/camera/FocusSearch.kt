@@ -27,8 +27,11 @@ import kotlin.math.roundToInt
 class FocusSearch(private val bound: Int, private val config: Config = Config()) {
 
     data class Config(
-        /** The picture follows a ring move in ~150 ms; frames sooner than this after a command are ignored. */
-        val settleMs: Long = 500,
+        /** The picture follows a ring move in ~50-150 ms; frames sooner than this after a command are ignored. */
+        val settleMs: Long = 300,
+        /** The coarse pass only has to tell a peak from flat ground (several times apart), so one frame is enough. */
+        val coarseFramesPerPosition: Int = 1,
+        /** Refining and locking compare close values, so those are averaged. */
         val framesPerPosition: Int = 2,
         val globalStepFraction: Double = 0.06,
         val seededStepFraction: Double = 0.04,
@@ -99,7 +102,8 @@ class FocusSearch(private val bound: Int, private val config: Config = Config())
         if (phase == Phase.LOCKED) return monitor(nowMs, score, steady)
 
         frames += score
-        if (frames.size < config.framesPerPosition) return null
+        val needed = if (phase == Phase.COARSE) config.coarseFramesPerPosition else config.framesPerPosition
+        if (frames.size < needed) return null
         val mean = frames.average()
         measured[current] = mean
         frames.clear()

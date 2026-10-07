@@ -58,6 +58,7 @@ private fun run(
     lens: SimLens,
     seed: Int?,
     limitMs: Long = 90_000,
+    frameMs: Long = FRAME_MS,
     onTick: ((now: Long) -> Unit)? = null
 ): Outcome {
     var now = 0L
@@ -65,7 +66,7 @@ private fun run(
     lens.command(first.ring, now)
     val rings = mutableListOf(first.ring)
     while (now < limitMs) {
-        now += FRAME_MS
+        now += frameMs
         onTick?.invoke(now)
         when (val c = search.onFrame(now, lens.score(now))) {
             is FocusSearch.Command.MoveTo -> { lens.command(c.ring, now); rings += c.ring }
@@ -113,6 +114,24 @@ class FocusSearchTest {
         assertEquals(1600f, hinted.locked!!.ring.toFloat(), 40f)
         assertTrue("hinted ${hinted.elapsedMs} vs blind ${blind.elapsedMs}", hinted.elapsedMs < blind.elapsedMs * 0.7)
         assertTrue("hinted took ${hinted.elapsedMs} ms", hinted.elapsedMs < 14_000)
+    }
+
+    @Test
+    fun `with a good hint and a fast preview it locks in about five seconds`() {
+        // The sampling rate the controller uses (~150 ms frames) against the lens's measured ~150 ms latency.
+        for (peak in listOf(1500, 1560, 1640)) {
+            val out = run(FocusSearch(bound), SimLens(peak = peak), seed = 1610, frameMs = 150)
+            assertEquals("peak $peak", peak.toFloat(), out.locked!!.ring.toFloat(), 40f)
+            assertTrue("peak $peak took ${out.elapsedMs} ms", out.elapsedMs <= 5_500)
+        }
+    }
+
+    @Test
+    fun `speed does not cost accuracy with noisy frames`() {
+        for (s in 1L..8L) {
+            val out = run(FocusSearch(bound), SimLens(peak = 1560, noise = 0.15, seed = s), seed = 1610, frameMs = 150)
+            assertEquals("seed $s", 1560f, out.locked!!.ring.toFloat(), 80f)
+        }
     }
 
     @Test

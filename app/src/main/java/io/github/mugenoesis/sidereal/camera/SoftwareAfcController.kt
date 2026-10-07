@@ -34,7 +34,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
 
     companion object {
         private const val TAG = "SoftwareAfc"
-        private const val SAMPLE_INTERVAL_MS = 250L
+        private const val SAMPLE_INTERVAL_MS = 150L
         private const val CROP_FRACTION = 0.34
         private const val SAMPLE_SIZE = 100
 
@@ -42,7 +42,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
         private const val STEADY_PICTURE = 0.03f
 
         // Hardware AF hunts for 1.5-2.5 s on this camera: poll the ring until it holds still (RingSettleDetector).
-        private const val RING_POLL_MS = 400L
+        private const val RING_POLL_MS = 250L
 
         // The camera ignores a focus target sent the instant it switches to AUTO (seen intermittently), so wait a moment
         // after the mode switch, and send the target again once if the ring has not moved by the time it "settles".
@@ -51,7 +51,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
 
         // The camera drops commands sent on top of each other, so the Focus Assistant switch-off is given this long to
         // land before the AF commands start.
-        private const val ASSIST_SETTLE_MS = 800L
+        private const val ASSIST_SETTLE_MS = 400L
 
         // Never leave the controller waiting forever on an SDK callback that does not come (this SDK has several).
         private const val SEEDING_TIMEOUT_MS = 12_000L

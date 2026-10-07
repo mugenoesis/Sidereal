@@ -150,7 +150,7 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   smooth and accurate.
 - **Software continuous autofocus:** seeds from the camera's own
   autofocus, scans the lens ring for the sharpness peak, locks, and then
-  leaves the ring alone until the scene changes (about 10-13 s to first
+  leaves the ring alone until the scene changes (about 6-8 s to first
   lock). It hasn't been tested while recording video or in bright light.
 - **Phone audio recording and sync:** records from the phone's mic or a
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
