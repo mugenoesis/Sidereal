@@ -5,6 +5,7 @@ import android.hardware.input.InputManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -59,6 +60,10 @@ class GamepadInput(
         val layout = layouts.getOrPut(event.deviceId) {
             GamepadLayout.pick(event.device?.motionRanges?.map { it.axis }?.toSet().orEmpty())
         }
+        if (probeOnly) {
+            logAxes(event, layout)
+            return true
+        }
         val now = event.eventTime
         mapper.onAxis(GamepadAxis.LEFT_X, event.getAxisValue(layout.leftX), now)
         mapper.onAxis(GamepadAxis.LEFT_Y, event.getAxisValue(layout.leftY), now)
@@ -74,13 +79,38 @@ class GamepadInput(
     fun handleKey(event: KeyEvent): Boolean {
         val fromPad = event.source and (InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_DPAD) != 0
         if (!fromPad) return false
-        val button = GamepadKeyMap.button(event.keyCode) ?: return false
+        val button = GamepadKeyMap.button(event.keyCode)
+        if (probeOnly) {
+            if (event.repeatCount == 0 && event.action != KeyEvent.ACTION_MULTIPLE) {
+                Log.i(PROBE_TAG, "key ${KeyEvent.keyCodeToString(event.keyCode)} ${if (event.action == KeyEvent.ACTION_DOWN) "down" else "up"} -> ${button ?: "(unmapped)"} from ${event.device?.name}")
+            }
+            return true
+        }
+        if (button == null) return false
         when (event.action) {
             KeyEvent.ACTION_DOWN -> mapper.onButton(button, true, event.eventTime)
             KeyEvent.ACTION_UP -> mapper.onButton(button, false, event.eventTime)
             else -> return false
         }
         return true
+    }
+
+    private val lastLogged = HashMap<String, Float>()
+
+    /** Probe mode: report each axis when it moves meaningfully, by the name the mapper would give it. */
+    private fun logAxes(event: MotionEvent, layout: GamepadLayout) {
+        val axes = listOf(
+            "LEFT_X" to layout.leftX, "LEFT_Y" to layout.leftY, "RIGHT_X" to layout.rightX, "RIGHT_Y" to layout.rightY,
+            "L2" to layout.leftTrigger, "R2" to layout.rightTrigger, "HAT_X" to layout.hatX, "HAT_Y" to layout.hatY
+        )
+        for ((name, axis) in axes) {
+            val v = event.getAxisValue(axis)
+            val last = lastLogged[name] ?: 0f
+            if (Math.abs(v - last) >= 0.25f || (v == 0f && last != 0f)) {
+                lastLogged[name] = v
+                Log.i(PROBE_TAG, "axis $name = ${"%.2f".format(v)} (${MotionEvent.axisToString(axis)})")
+            }
+        }
     }
 
     override fun onInputDeviceAdded(deviceId: Int) = Unit
@@ -94,6 +124,16 @@ class GamepadInput(
 
     companion object {
         private const val TICK_MS = 50L
+        private const val PROBE_TAG = "GamepadProbe"
+
+        /**
+         * Diagnostic mode: log what the controller sends (button and axis names as the app understands them) and do
+         * NOT act on it - for checking a new pad without the shutter or record button firing on a live camera.
+         * It switches itself off when [probeUntilMs] passes, so it can never be left on by mistake.
+         */
+        @Volatile var probeUntilMs = 0L
+
+        val probeOnly: Boolean get() = SystemClock.elapsedRealtime() < probeUntilMs
 
         /** The running instance, for the debug harness to inject synthetic controller events into. */
         @Volatile var active: GamepadInput? = null

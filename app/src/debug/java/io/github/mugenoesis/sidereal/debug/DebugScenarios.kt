@@ -49,6 +49,21 @@ object DebugScenarios {
             }
             "histogram_probe" -> histogramProbe()
             "luma_vs_shutter" -> lumaVsShutter(args)
+            "gamepad_probe" -> {
+                val on = args["on"] != "false"
+                io.github.mugenoesis.sidereal.input.GamepadInput.probeUntilMs =
+                    if (on) android.os.SystemClock.elapsedRealtime() + 10 * 60_000L else 0L
+                Log.i(TAG, "gamepad probe only = $on")
+                appContext?.let { ctx ->
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        android.widget.Toast.makeText(
+                            ctx,
+                            if (on) "CONTROLLER TEST MODE: the controller is only being recorded (10 min)" else "Controller test mode off - controller is live",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
             "luma_now" -> {
                 val camera = DJIConnectionManager.camera
                 var latest: ShortArray? = null

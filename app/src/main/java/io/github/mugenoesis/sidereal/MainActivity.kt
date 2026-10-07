@@ -418,6 +418,13 @@ class MainActivity : AppCompatActivity() {
         override fun recenter() = manualController.onDoubleTap()
         override fun toggleAeLock() = shootingControls.toggleAeLock()
         override fun cycleGrid() = shootingControls.cycleGrid()
+
+        // Same rules as the on-screen buttons: they are disabled when the camera won't take an EV change (Manual
+        // mode, recording) or the step would run past the end of the range, so follow their state.
+        override fun exposureCompensation(direction: Int) {
+            val button = findViewById<android.widget.Button>(if (direction > 0) R.id.btnEvUp else R.id.btnEvDown)
+            if (button.isEnabled) stepEv(direction)
+        }
     }
 
     /** The manual-focus ring value the pad last set (null until its first nudge reads the camera's own). */

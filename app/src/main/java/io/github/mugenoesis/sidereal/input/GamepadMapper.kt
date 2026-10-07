@@ -29,6 +29,9 @@ interface GamepadActions {
     fun recenter()
     fun toggleAeLock()
     fun cycleGrid()
+
+    /** One step of exposure compensation: +1 brighter, -1 darker. Repeated while the button is held. */
+    fun exposureCompensation(direction: Int)
 }
 
 /** What a button can be set to do. [NONE] first so "unassigned" is where cycling starts. */
@@ -41,6 +44,8 @@ enum class GamepadAction(val label: String) {
     FOCUS_FARTHER("Focus farther (hold)"),
     EXPOSURE_MODE_PREVIOUS("Exposure mode back"),
     EXPOSURE_MODE_NEXT("Exposure mode next"),
+    EXPOSURE_COMP_UP("Exposure comp + (hold)"),
+    EXPOSURE_COMP_DOWN("Exposure comp − (hold)"),
     RECENTER("Recentre gimbal"),
     TOGGLE_AE_LOCK("Exposure lock"),
     CYCLE_GRID("Grid")
@@ -92,7 +97,9 @@ class GamepadBindings private constructor(private val map: Map<GamepadButton, Ga
                 GamepadButton.X to GamepadAction.TOGGLE_AE_LOCK,
                 GamepadButton.Y to GamepadAction.CYCLE_GRID,
                 GamepadButton.DPAD_LEFT to GamepadAction.EXPOSURE_MODE_PREVIOUS,
-                GamepadButton.DPAD_RIGHT to GamepadAction.EXPOSURE_MODE_NEXT
+                GamepadButton.DPAD_RIGHT to GamepadAction.EXPOSURE_MODE_NEXT,
+                GamepadButton.DPAD_UP to GamepadAction.EXPOSURE_COMP_UP,
+                GamepadButton.DPAD_DOWN to GamepadAction.EXPOSURE_COMP_DOWN
             )
         )
 
@@ -129,6 +136,9 @@ data class GamepadConfig(
     val triggerRelease: Float = 0.4f,
     val focusRepeatDelayMs: Long = 300,
     val focusRepeatMs: Long = 120,
+    /** Exposure compensation repeats slower than focus: each step is a camera round trip, and a third of a stop is a visible change. */
+    val evRepeatDelayMs: Long = 400,
+    val evRepeatMs: Long = 250,
     /** Stick up tilts the camera DOWN (and vice versa) - the owner's preference; set false for the usual way round. */
     val invertPitch: Boolean = true,
     /** Scales the gimbal stick's output, [MIN_SPEED]..1: lower is slower at full deflection (finer moves). */
@@ -240,9 +250,12 @@ class GamepadMapper(
     private var hatX = 0
     private var hatY = 0
 
-    private var focusDirection = 0
-    private var focusSource: GamepadButton? = null
-    private var nextFocusRepeatAt = 0L
+    /** The held button that keeps repeating (focus or exposure compensation) - the one pressed last wins. */
+    private enum class Repeat { FOCUS, EXPOSURE }
+    private var repeatKind: Repeat? = null
+    private var repeatDirection = 0
+    private var repeatSource: GamepadButton? = null
+    private var nextRepeatAt = 0L
 
     fun onAxis(axis: GamepadAxis, value: Float, nowMs: Long = 0) {
         if (locked) return
@@ -285,10 +298,13 @@ class GamepadMapper(
 
     /** Drive from a steady clock (e.g. every 50 ms) so a held focus button keeps stepping. */
     fun tick(nowMs: Long) {
-        if (locked || focusDirection == 0) return
-        if (nowMs >= nextFocusRepeatAt) {
-            actions.focusRing(focusDirection)
-            nextFocusRepeatAt = nowMs + config.focusRepeatMs
+        val kind = repeatKind
+        if (locked || kind == null) return
+        if (nowMs >= nextRepeatAt) {
+            when (kind) {
+                Repeat.FOCUS -> { actions.focusRing(repeatDirection); nextRepeatAt = nowMs + config.focusRepeatMs }
+                Repeat.EXPOSURE -> { actions.exposureCompensation(repeatDirection); nextRepeatAt = nowMs + config.evRepeatMs }
+            }
         }
     }
 
@@ -312,8 +328,10 @@ class GamepadMapper(
             GamepadAction.SHUTTER -> if (pressed) actions.shutter()
             GamepadAction.TOGGLE_PHOTO_VIDEO -> if (pressed) actions.togglePhotoVideo()
             GamepadAction.AUTOFOCUS -> if (pressed) actions.autofocus()
-            GamepadAction.FOCUS_NEARER -> if (pressed) startFocus(-1, button, nowMs) else stopFocus(button)
-            GamepadAction.FOCUS_FARTHER -> if (pressed) startFocus(+1, button, nowMs) else stopFocus(button)
+            GamepadAction.FOCUS_NEARER -> if (pressed) startRepeat(Repeat.FOCUS, -1, button, nowMs) else stopRepeat(button)
+            GamepadAction.FOCUS_FARTHER -> if (pressed) startRepeat(Repeat.FOCUS, +1, button, nowMs) else stopRepeat(button)
+            GamepadAction.EXPOSURE_COMP_UP -> if (pressed) startRepeat(Repeat.EXPOSURE, +1, button, nowMs) else stopRepeat(button)
+            GamepadAction.EXPOSURE_COMP_DOWN -> if (pressed) startRepeat(Repeat.EXPOSURE, -1, button, nowMs) else stopRepeat(button)
             GamepadAction.EXPOSURE_MODE_PREVIOUS -> if (pressed) actions.exposureMode(-1)
             GamepadAction.EXPOSURE_MODE_NEXT -> if (pressed) actions.exposureMode(+1)
             GamepadAction.RECENTER -> if (pressed) actions.recenter()
@@ -341,17 +359,21 @@ class GamepadMapper(
         else -> wasDown
     }
 
-    private fun startFocus(direction: Int, source: GamepadButton, nowMs: Long) {
-        focusDirection = direction
-        focusSource = source
-        actions.focusRing(direction)
-        nextFocusRepeatAt = nowMs + config.focusRepeatDelayMs
+    private fun startRepeat(kind: Repeat, direction: Int, source: GamepadButton, nowMs: Long) {
+        repeatKind = kind
+        repeatDirection = direction
+        repeatSource = source
+        when (kind) {
+            Repeat.FOCUS -> { actions.focusRing(direction); nextRepeatAt = nowMs + config.focusRepeatDelayMs }
+            Repeat.EXPOSURE -> { actions.exposureCompensation(direction); nextRepeatAt = nowMs + config.evRepeatDelayMs }
+        }
     }
 
-    private fun stopFocus(source: GamepadButton) {
-        if (focusSource == source) {
-            focusDirection = 0
-            focusSource = null
+    private fun stopRepeat(source: GamepadButton) {
+        if (repeatSource == source) {
+            repeatKind = null
+            repeatDirection = 0
+            repeatSource = null
         }
     }
 
@@ -393,7 +415,8 @@ class GamepadMapper(
             sentZoom = 0f
             actions.zoom(0f)
         }
-        focusDirection = 0
-        focusSource = null
+        repeatKind = null
+        repeatDirection = 0
+        repeatSource = null
     }
 }

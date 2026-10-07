@@ -25,8 +25,14 @@ class GamepadBindingsTest {
     }
 
     @Test
+    fun `the d-pad up and down start out on exposure compensation`() {
+        assertEquals(GamepadAction.EXPOSURE_COMP_UP, defaults.actionFor(GamepadButton.DPAD_UP))
+        assertEquals(GamepadAction.EXPOSURE_COMP_DOWN, defaults.actionFor(GamepadButton.DPAD_DOWN))
+    }
+
+    @Test
     fun `buttons nobody uses do nothing`() {
-        for (b in listOf(GamepadButton.B, GamepadButton.START, GamepadButton.SELECT, GamepadButton.R3, GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN)) {
+        for (b in listOf(GamepadButton.B, GamepadButton.START, GamepadButton.SELECT, GamepadButton.R3)) {
             assertEquals("$b", GamepadAction.NONE, defaults.actionFor(b))
         }
     }
@@ -122,6 +128,7 @@ class GamepadSensitivityTest {
         override fun recenter() {}
         override fun toggleAeLock() {}
         override fun cycleGrid() {}
+        override fun exposureCompensation(direction: Int) {}
     }
 
     @Test

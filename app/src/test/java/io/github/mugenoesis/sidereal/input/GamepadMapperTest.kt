@@ -19,6 +19,7 @@ private class Recorder : GamepadActions {
     override fun recenter() { events += "recenter" }
     override fun toggleAeLock() { events += "ae" }
     override fun cycleGrid() { events += "grid" }
+    override fun exposureCompensation(direction: Int) { events += "ev($direction)" }
 }
 
 class GamepadMapperTest {
@@ -327,5 +328,66 @@ class GamepadMapperTest {
         m.onButton(GamepadButton.START, true)
         m.onButton(GamepadButton.SELECT, true)
         assertEquals(listOf("exposure(1)", "exposure(-1)"), actions.events)
+    }
+
+    // --- exposure compensation ---
+
+    @Test
+    fun `the d-pad up and down step exposure compensation by default`() {
+        mapper.onButton(GamepadButton.DPAD_UP, true)
+        mapper.onButton(GamepadButton.DPAD_UP, false)
+        mapper.onButton(GamepadButton.DPAD_DOWN, true)
+        mapper.onButton(GamepadButton.DPAD_DOWN, false)
+        assertEquals(listOf("ev(1)", "ev(-1)"), actions.events)
+    }
+
+    @Test
+    fun `the hat's up and down steps it too - up is brighter`() {
+        mapper.onAxis(GamepadAxis.HAT_Y, -1f)
+        mapper.onAxis(GamepadAxis.HAT_Y, 0f)
+        mapper.onAxis(GamepadAxis.HAT_Y, 1f)
+        mapper.onAxis(GamepadAxis.HAT_Y, 0f)
+        assertEquals(listOf("ev(1)", "ev(-1)"), actions.events)
+    }
+
+    @Test
+    fun `holding the button keeps stepping, a little slower than focus, and releasing stops`() {
+        mapper.onButton(GamepadButton.DPAD_UP, true, nowMs = 0)
+        mapper.tick(399)
+        assertEquals(1, actions.events.size)
+        mapper.tick(400)
+        assertEquals(2, actions.events.size)
+        mapper.tick(649)
+        assertEquals(2, actions.events.size)
+        mapper.tick(650)
+        assertEquals(listOf("ev(1)", "ev(1)", "ev(1)"), actions.events)
+        mapper.onButton(GamepadButton.DPAD_UP, false, nowMs = 660)
+        actions.events.clear()
+        mapper.tick(5_000)
+        assertTrue(actions.events.isEmpty())
+    }
+
+    @Test
+    fun `any button can be given the exposure compensation actions`() {
+        val m = remapped(GamepadBindings.default().with(GamepadButton.R1, GamepadAction.EXPOSURE_COMP_UP).with(GamepadButton.L1, GamepadAction.EXPOSURE_COMP_DOWN))
+        m.onButton(GamepadButton.R1, true)
+        m.onButton(GamepadButton.L1, true)
+        assertEquals(listOf("ev(1)", "ev(-1)"), actions.events)
+    }
+
+    @Test
+    fun `focus and exposure holds do not mix - the one pressed last repeats`() {
+        mapper.onButton(GamepadButton.L1, true, nowMs = 0)
+        mapper.onButton(GamepadButton.DPAD_UP, true, nowMs = 50)
+        actions.events.clear()
+        mapper.tick(2_000)
+        assertEquals(listOf("ev(1)"), actions.events)
+    }
+
+    @Test
+    fun `while locked the exposure buttons do nothing`() {
+        mapper.locked = true
+        mapper.onButton(GamepadButton.DPAD_UP, true)
+        assertTrue(actions.events.isEmpty())
     }
 }
