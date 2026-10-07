@@ -51,7 +51,8 @@ object DebugScenarios {
             "luma_vs_shutter" -> lumaVsShutter(args)
             "pad_key" -> kotlin.run {
                 // Holds or releases one pad button through the real input path (unlike `input gamepad keyevent`, which is a blink).
-                val code = android.view.KeyEvent.keyCodeFromString("KEYCODE_BUTTON_" + (args["key"] ?: "A"))
+                val keyName = args["key"] ?: "A"
+                val code = android.view.KeyEvent.keyCodeFromString(if (keyName.startsWith("DPAD")) "KEYCODE_$keyName" else "KEYCODE_BUTTON_$keyName")
                 val down = args["state"] != "up"
                 val now = android.os.SystemClock.uptimeMillis()
                 val event = android.view.KeyEvent(now, now, if (down) android.view.KeyEvent.ACTION_DOWN else android.view.KeyEvent.ACTION_UP, code, 0, 0, 0, 0, 0, android.view.InputDevice.SOURCE_GAMEPAD)

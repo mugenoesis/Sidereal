@@ -242,6 +242,10 @@ class GamepadMapper(
             field = value
         }
 
+    /** Called when the button chord is entered. */
+    var onChord: (() -> Unit)? = null
+    private val chord = io.github.mugenoesis.sidereal.drill.ChordDetector()
+
     private var leftX = 0f
     private var leftY = 0f
     private var rightY = 0f
@@ -344,6 +348,8 @@ class GamepadMapper(
 
     /** Does whatever [button] is currently bound to; held actions (focus) start on press and stop on release. */
     private fun dispatch(button: GamepadButton, pressed: Boolean, nowMs: Long) {
+        // The code is read from the raw buttons, before bindings: it works whatever they are set to do (and they still do it).
+        if (pressed) chordKey(button)?.let { if (chord.onKey(it, nowMs)) onChord?.invoke() }
         // Letting go of a button that is aiming always ends the aim - even if it was rebound while held.
         if (!pressed && aimButtons.remove(button) && aimButtons.isEmpty()) actions.autofocusHold(false)
         when (bindings.actionFor(button)) {
@@ -365,6 +371,17 @@ class GamepadMapper(
             GamepadAction.TOGGLE_AE_LOCK -> if (pressed) actions.toggleAeLock()
             GamepadAction.CYCLE_GRID -> if (pressed) actions.cycleGrid()
         }
+    }
+
+    private fun chordKey(button: GamepadButton): io.github.mugenoesis.sidereal.drill.ChordKey? = when (button) {
+        GamepadButton.DPAD_UP -> io.github.mugenoesis.sidereal.drill.ChordKey.UP
+        GamepadButton.DPAD_DOWN -> io.github.mugenoesis.sidereal.drill.ChordKey.DOWN
+        GamepadButton.DPAD_LEFT -> io.github.mugenoesis.sidereal.drill.ChordKey.LEFT
+        GamepadButton.DPAD_RIGHT -> io.github.mugenoesis.sidereal.drill.ChordKey.RIGHT
+        GamepadButton.B -> io.github.mugenoesis.sidereal.drill.ChordKey.B
+        GamepadButton.A -> io.github.mugenoesis.sidereal.drill.ChordKey.A
+        GamepadButton.START -> io.github.mugenoesis.sidereal.drill.ChordKey.START
+        else -> null
     }
 
     private fun direction(value: Float) = when {

@@ -42,6 +42,8 @@ object AppPreferences {
     private const val KEY_CAMERA_SOUNDS = "camera_sounds"
     private const val KEY_GAMEPAD_BINDINGS = "gamepad_bindings"
     private const val KEY_GAMEPAD_CONFIG = "gamepad_config"
+    private const val KEY_DRILL_BEST = "drill_best"
+    private const val KEY_DRILL_OVERLAY = "drill_overlay"
 
     private lateinit var prefs: SharedPreferences
 
@@ -111,6 +113,16 @@ object AppPreferences {
     var gamepadConfig: String?
         get() = prefs.getString(KEY_GAMEPAD_CONFIG, null)
         set(value) = prefs.edit().putString(KEY_GAMEPAD_CONFIG, value).apply()
+
+    /** Best result in the reticle drill. */
+    var drillBest: Int
+        get() = prefs.getInt(KEY_DRILL_BEST, 0)
+        set(value) = prefs.edit().putInt(KEY_DRILL_BEST, value).apply()
+
+    /** The reticle drill over the live view (true) or on plain black (false). */
+    var drillOverlay: Boolean
+        get() = prefs.getBoolean(KEY_DRILL_OVERLAY, true)
+        set(value) = prefs.edit().putBoolean(KEY_DRILL_OVERLAY, value).apply()
 
     // GIMBAL (no phone-side recording) is the safe default - only a real
     // choice once a mic is actually plugged into the gimbal, which this

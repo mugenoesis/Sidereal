@@ -487,4 +487,88 @@ class GamepadMapperTest {
         mapper.tick(5_000)
         assertTrue(actions.events.isEmpty())
     }
+
+    // --- the Chord code ---
+
+    private fun tap(m: GamepadMapper, b: GamepadButton, at: Long) { m.onButton(b, true, at); m.onButton(b, false, at + 50) }
+
+    private fun chordByButtons(m: GamepadMapper, start: Long = 0) {
+        val seq = listOf(
+            GamepadButton.DPAD_UP, GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_DOWN,
+            GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT,
+            GamepadButton.B, GamepadButton.A, GamepadButton.START
+        )
+        seq.forEachIndexed { i, b -> tap(m, b, start + i * 300L) }
+    }
+
+    @Test
+    fun `entering the Chord code - d-pad, B, A, Start - announces it once`() {
+        var count = 0
+        mapper.onChord = { count++ }
+        chordByButtons(mapper)
+        assertEquals(1, count)
+    }
+
+    @Test
+    fun `the d-pad as a hat counts the same`() {
+        var count = 0
+        mapper.onChord = { count++ }
+        var t = 0L
+        fun hat(axis: GamepadAxis, v: Float) { mapper.onAxis(axis, v, t); t += 100; mapper.onAxis(axis, 0f, t); t += 100 }
+        hat(GamepadAxis.HAT_Y, -1f); hat(GamepadAxis.HAT_Y, -1f)
+        hat(GamepadAxis.HAT_Y, 1f); hat(GamepadAxis.HAT_Y, 1f)
+        hat(GamepadAxis.HAT_X, -1f); hat(GamepadAxis.HAT_X, 1f); hat(GamepadAxis.HAT_X, -1f); hat(GamepadAxis.HAT_X, 1f)
+        tap(mapper, GamepadButton.B, t); tap(mapper, GamepadButton.A, t + 300); tap(mapper, GamepadButton.START, t + 600)
+        assertEquals(1, count)
+    }
+
+    @Test
+    fun `the buttons still do their normal jobs while the code is being entered`() {
+        mapper.onChord = { }
+        chordByButtons(mapper)
+        // d-pad up/down are EV steps, left/right step the exposure mode, A aims and releases
+        assertEquals(
+            listOf("ev(1)", "ev(1)", "ev(-1)", "ev(-1)", "exposure(-1)", "exposure(1)", "exposure(-1)", "exposure(1)", "af+", "af-"),
+            actions.events
+        )
+    }
+
+    @Test
+    fun `without the final Start it is not the code`() {
+        var count = 0
+        mapper.onChord = { count++ }
+        listOf(
+            GamepadButton.DPAD_UP, GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_DOWN,
+            GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT,
+            GamepadButton.B, GamepadButton.A
+        ).forEachIndexed { i, b -> tap(mapper, b, i * 300L) }
+        assertEquals(0, count)
+    }
+
+    @Test
+    fun `a different order is not the code`() {
+        var count = 0
+        mapper.onChord = { count++ }
+        listOf(GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.B, GamepadButton.A)
+            .forEachIndexed { i, b -> tap(mapper, b, i * 300L) }
+        assertEquals(0, count)
+    }
+
+    @Test
+    fun `while locked the code does nothing`() {
+        var count = 0
+        mapper.onChord = { count++ }
+        mapper.locked = true
+        chordByButtons(mapper)
+        assertEquals(0, count)
+    }
+
+    @Test
+    fun `other buttons pressed in between do not break it`() {
+        var count = 0
+        mapper.onChord = { count++ }
+        mapper.onButton(GamepadButton.X, true); mapper.onButton(GamepadButton.X, false)
+        chordByButtons(mapper, start = 1_000)
+        assertEquals(1, count)
+    }
 }

@@ -516,6 +516,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindGamepad() {
+        // A button chord on the controller opens the reticle drill screen.
+        gamepadMapper.onChord = {
+            runOnUiThread { startActivity(android.content.Intent(this, io.github.mugenoesis.sidereal.drill.DrillActivity::class.java)) }
+        }
         gamepadInput = io.github.mugenoesis.sidereal.input.GamepadInput(this, gamepadMapper) {
             val capability = zoomController.capability.value
             if (gamepadZoomRate != 0f && capability.supported) zoomController.adjustZoomBy(gamepadZoomRate * GAMEPAD_ZOOM_PER_TICK)
