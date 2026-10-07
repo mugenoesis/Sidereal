@@ -23,6 +23,9 @@ object DitherGenerator {
         require(config.minDeg > 0f && config.maxDeg >= config.minDeg) { "dither needs 0 < minDeg <= maxDeg" }
         if (count <= 0) return emptyList()
         val rng = Random(config.seed)
+        // Offsets live on the gimbal's 0.1 degree grid (it can't be seen to reach anything finer) and
+        // never round outward past maxDeg.
+        val limit = Math.floor(config.maxDeg / GimbalArrival.RESOLUTION_DEG + 1e-4).toFloat() * GimbalArrival.RESOLUTION_DEG
         val result = ArrayList<Attitude>(count)
         result += Attitude(0f, 0f)
         repeat(count - 1) {
@@ -31,16 +34,16 @@ object DitherGenerator {
             repeat(200) {
                 if (next == null) {
                     val candidate = Attitude(
-                        (rng.nextFloat() * 2f - 1f) * config.maxDeg,
-                        (rng.nextFloat() * 2f - 1f) * config.maxDeg
+                        GimbalArrival.quantize((rng.nextFloat() * 2f - 1f) * limit).coerceIn(-limit, limit),
+                        GimbalArrival.quantize((rng.nextFloat() * 2f - 1f) * limit).coerceIn(-limit, limit)
                     )
                     if (hypot(candidate.pitch - prev.pitch, candidate.yaw - prev.yaw) >= config.minDeg) next = candidate
                 }
             }
             // Vanishingly unlikely with sane settings; the far corner always satisfies the minimum.
             result += next ?: Attitude(
-                if (prev.pitch > 0) -config.maxDeg else config.maxDeg,
-                if (prev.yaw > 0) -config.maxDeg else config.maxDeg
+                if (prev.pitch > 0) -limit else limit,
+                if (prev.yaw > 0) -limit else limit
             )
         }
         return result

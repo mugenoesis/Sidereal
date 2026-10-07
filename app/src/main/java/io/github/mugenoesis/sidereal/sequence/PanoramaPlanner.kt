@@ -10,6 +10,8 @@ import kotlin.math.PI
  * @param hFovDeg / [vFovDeg] one frame's field of view
  * @param overlap fraction (0 until 1) neighbouring frames must share
  * @param shotsPerNode exposures stacked at each node
+ * @param pitchLimits / [yawLimits] the gimbal's real reachable range (from `DJIConnectionManager.pitchRangeDegrees()`
+ *   - never a guessed constant, a wrong guess was already a real bug once); null skips that check
  */
 data class PanoramaConfig(
     val center: Attitude,
@@ -20,7 +22,9 @@ data class PanoramaConfig(
     val overlap: Float,
     val settleMs: Long,
     val exposureMs: Long,
-    val shotsPerNode: Int = 1
+    val shotsPerNode: Int = 1,
+    val pitchLimits: ClosedFloatingPointRange<Float>? = null,
+    val yawLimits: ClosedFloatingPointRange<Float>? = null
 )
 
 data class Node(val row: Int, val col: Int, val pitch: Float, val yaw: Float)
@@ -29,10 +33,6 @@ data class Node(val row: Int, val col: Int, val pitch: Float, val yaw: Float)
 data class PanoramaPlan(val rows: Int, val cols: Int, val nodes: List<Node>, val steps: List<SequenceStep>)
 
 object PanoramaPlanner {
-
-    /** The Osmo gimbal's usable pitch range in degrees - nodes outside it can't be reached. */
-    const val MIN_PITCH = -90f
-    const val MAX_PITCH = 30f
 
     /** Micro four thirds sensor, 4:3 - the X5's. Returns (horizontal, vertical) FOV in degrees. */
     fun fovFor(focalMm: Float, sensorWidthMm: Float = 17.3f, sensorHeightMm: Float = 13f): Pair<Float, Float> =
@@ -47,8 +47,15 @@ object PanoramaPlanner {
 
         val yaws = positions(config.center.yaw, config.yawSpanDeg, config.hFovDeg, config.overlap)
         val pitches = positions(config.center.pitch, config.pitchSpanDeg, config.vFovDeg, config.overlap)
-        require(pitches.all { it in MIN_PITCH..MAX_PITCH }) {
-            "panorama needs pitch ${pitches.min()}..${pitches.max()} but the gimbal only reaches $MIN_PITCH..$MAX_PITCH"
+        config.pitchLimits?.let { limits ->
+            require(pitches.all { it in limits }) {
+                "panorama needs pitch ${pitches.min()}..${pitches.max()} but the gimbal only reaches ${limits.start}..${limits.endInclusive}"
+            }
+        }
+        config.yawLimits?.let { limits ->
+            require(yaws.all { it in limits }) {
+                "panorama needs yaw ${yaws.min()}..${yaws.max()} but the gimbal only reaches ${limits.start}..${limits.endInclusive}"
+            }
         }
 
         val nodes = ArrayList<Node>()

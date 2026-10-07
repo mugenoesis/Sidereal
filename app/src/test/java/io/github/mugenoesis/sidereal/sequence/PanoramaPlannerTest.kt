@@ -12,12 +12,15 @@ class PanoramaPlannerTest {
         overlap: Float = 0.3f,
         shotsPerNode: Int = 1,
         centerPitch: Float = -20f,
-        centerYaw: Float = 0f
+        centerYaw: Float = 0f,
+        pitchLimits: ClosedFloatingPointRange<Float>? = null,
+        yawLimits: ClosedFloatingPointRange<Float>? = null
     ) = PanoramaConfig(
         center = Attitude(centerPitch, centerYaw),
         yawSpanDeg = yawSpan, pitchSpanDeg = pitchSpan,
         hFovDeg = 60f, vFovDeg = 46f,
-        overlap = overlap, settleMs = 500, exposureMs = 10_000, shotsPerNode = shotsPerNode
+        overlap = overlap, settleMs = 500, exposureMs = 10_000, shotsPerNode = shotsPerNode,
+        pitchLimits = pitchLimits, yawLimits = yawLimits
     )
 
     @Test
@@ -112,7 +115,30 @@ class PanoramaPlannerTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun `grid that tips the camera past the gimbal's pitch limit is rejected`() {
+        PanoramaPlanner.plan(config(centerPitch = 20f, pitchSpan = 120f, pitchLimits = -90f..30f))
+    }
+
+    @Test
+    fun `the same grid is fine on a gimbal whose real pitch range is wider`() {
+        PanoramaPlanner.plan(config(centerPitch = 20f, pitchSpan = 120f, pitchLimits = -120f..70f))
+    }
+
+    @Test
+    fun `without limits nothing is rejected - the caller opted out`() {
         PanoramaPlanner.plan(config(centerPitch = 20f, pitchSpan = 120f))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `grid that swings past the gimbal's yaw limit is rejected`() {
+        PanoramaPlanner.plan(config(centerYaw = 150f, yawSpan = 140f, yawLimits = -160f..160f))
+    }
+
+    @Test
+    fun `the error message names the range it needs and the range the gimbal has`() {
+        val message = try {
+            PanoramaPlanner.plan(config(centerPitch = 20f, pitchSpan = 120f, pitchLimits = -90f..30f)); ""
+        } catch (e: IllegalArgumentException) { e.message.orEmpty() }
+        assertTrue(message, message.contains("-90") && message.contains("30"))
     }
 
     @Test(expected = IllegalArgumentException::class)

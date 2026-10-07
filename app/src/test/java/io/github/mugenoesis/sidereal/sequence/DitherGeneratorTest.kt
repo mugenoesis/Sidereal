@@ -53,7 +53,8 @@ class DitherGeneratorTest {
     @Test
     fun `offsets spread out over the allowed area instead of collapsing to one spot`() {
         val offsets = DitherGenerator.offsets(config, 200)
-        assertTrue(offsets.map { it.pitch }.distinct().size > 50)
+        // maxDeg 0.4 on a 0.1 degree grid has 9 positions per axis; a long run should visit most of them.
+        assertTrue(offsets.map { Math.round(it.pitch * 10) }.distinct().size >= 7)
         assertTrue(offsets.maxOf { it.yaw } > 0.1f)
         assertTrue(offsets.minOf { it.yaw } < -0.1f)
     }
@@ -61,5 +62,25 @@ class DitherGeneratorTest {
     @Test(expected = IllegalArgumentException::class)
     fun `rejects a minDeg that cannot fit inside maxDeg`() {
         DitherGenerator.offsets(DitherConfig(minDeg = 1f, maxDeg = 0.2f, seed = 1L), 3)
+    }
+
+    @Test
+    fun `offsets land on the gimbal's 0_1 degree grid so the commanded pose is one it can report and reach`() {
+        for (o in DitherGenerator.offsets(config, 200)) {
+            assertEquals(0f, Math.abs(o.pitch / 0.1f - Math.round(o.pitch / 0.1f)), 1e-3f)
+            assertEquals(0f, Math.abs(o.yaw / 0.1f - Math.round(o.yaw / 0.1f)), 1e-3f)
+        }
+    }
+
+    @Test
+    fun `quantizing never pushes an offset past maxDeg or under minDeg`() {
+        val odd = DitherConfig(minDeg = 0.25f, maxDeg = 0.45f, seed = 9L)
+        val offsets = DitherGenerator.offsets(odd, 300)
+        for (o in offsets) {
+            assertTrue(abs(o.pitch) <= 0.45f + 1e-5f && abs(o.yaw) <= 0.45f + 1e-5f)
+        }
+        for (i in 1 until offsets.size) {
+            assertTrue(hypot(offsets[i].pitch - offsets[i - 1].pitch, offsets[i].yaw - offsets[i - 1].yaw) >= 0.25f - 1e-5f)
+        }
     }
 }

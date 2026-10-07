@@ -31,4 +31,25 @@ object ShutterLogic {
         "SHOOT_PHOTO" -> Action.StartShootPhoto
         else -> Action.Ignored(modeName)
     }
+
+    /**
+     * Shutter-open time in ms for a ShutterSpeed enum name, or null for
+     * AUTO/UNKNOWN (no fixed duration). Names are `SHUTTER_SPEED_<x>` for
+     * whole/decimal seconds (`3`, `3_DOT_2`) and `SHUTTER_SPEED_1_<d>` for a
+     * 1/d fraction (`1_100`, `1_2_DOT_5`). Never below 1ms.
+     */
+    fun exposureMs(speedName: String): Long? {
+        val raw = speedName.removePrefix("SHUTTER_SPEED_").replace("_DOT_", ".")
+        val parts = raw.split("_")
+        val seconds = when (parts.size) {
+            1 -> parts[0].toDoubleOrNull()
+            2 -> {
+                val num = parts[0].toDoubleOrNull()
+                val den = parts[1].toDoubleOrNull()
+                if (num != null && den != null && den > 0) num / den else null
+            }
+            else -> null
+        } ?: return null
+        return Math.round(seconds * 1000).coerceAtLeast(1L)
+    }
 }
