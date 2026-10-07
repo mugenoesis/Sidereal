@@ -32,6 +32,21 @@ class CycleHelpersTest {
     }
 
     @Test
+    fun `stepEnum steps by position within a narrowed range`() {
+        val narrowed = arrayOf(Fruit.APPLE, Fruit.CHERRY)
+        assertEquals(Fruit.CHERRY, CycleHelpers.stepEnum(Fruit.APPLE, 1, narrowed))
+        assertEquals(Fruit.APPLE, CycleHelpers.stepEnum(Fruit.CHERRY, -1, narrowed))
+    }
+
+    @Test
+    fun `stepEnum starts from the nearest entry when current is outside the range`() {
+        val narrowed = arrayOf(Fruit.BANANA, Fruit.CHERRY)
+        // APPLE isn't in the range; nearest by ordinal is BANANA, so +1 lands on CHERRY.
+        assertEquals(Fruit.CHERRY, CycleHelpers.stepEnum(Fruit.APPLE, 1, narrowed))
+        assertEquals(Fruit.BANANA, CycleHelpers.stepEnum(Fruit.APPLE, -1, narrowed))
+    }
+
+    @Test
     fun `nextCycleValue seeds from the real value on first call`() {
         val (index, value) = CycleHelpers.nextCycleValue(current = null, realValue = "b", options = listOf("a", "b", "c"))
         assertEquals(2, index)

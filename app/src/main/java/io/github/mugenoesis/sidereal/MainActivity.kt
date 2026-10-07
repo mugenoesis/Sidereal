@@ -175,10 +175,13 @@ class MainActivity : AppCompatActivity() {
     // options a stepper should ever be able to land on. They sit at the tail
     // of each enum's ordinal order, so dropping them here doesn't disturb the
     // ordinal-as-array-index assumption step() relies on for every real value.
-    private val isoStepValues = SettingsDefinitions.ISO.values()
+    // isoStepValues / shutterSpeedStepValues are vars: replaced by the real
+    // per-camera range once CameraKey.ISO_RANGE / SHUTTER_SPEED_RANGE
+    // resolve (see observeExposure()).
+    private var isoStepValues = SettingsDefinitions.ISO.values()
         .filter { it != SettingsDefinitions.ISO.FIXED && it != SettingsDefinitions.ISO.UNKNOWN }
         .toTypedArray()
-    private val shutterSpeedStepValues = SettingsDefinitions.ShutterSpeed.values()
+    private var shutterSpeedStepValues = SettingsDefinitions.ShutterSpeed.values()
         .filter { it != SettingsDefinitions.ShutterSpeed.UNKNOWN }
         .toTypedArray()
     private val apertureStepValues = SettingsDefinitions.Aperture.values()
@@ -1080,6 +1083,22 @@ class MainActivity : AppCompatActivity() {
                 if (range != null) {
                     evStepValues = range.toTypedArray()
                     evBounds = LearnedStepBounds(evStepValues.size)
+                    updateExposureTrayUi()
+                }
+            }
+            .launchIn(lifecycleScope)
+        exposureController.isoRange
+            .onEach { range ->
+                if (range != null) {
+                    isoStepValues = range.toTypedArray()
+                    updateExposureTrayUi()
+                }
+            }
+            .launchIn(lifecycleScope)
+        exposureController.shutterRange
+            .onEach { range ->
+                if (range != null) {
+                    shutterSpeedStepValues = range.toTypedArray()
                     updateExposureTrayUi()
                 }
             }

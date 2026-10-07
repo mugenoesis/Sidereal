@@ -64,6 +64,17 @@ class ExposureController(private val gateway: CameraGateway = RealCameraGateway)
     private val _evRange = MutableStateFlow<List<SettingsDefinitions.ExposureCompensation>?>(null)
     val evRange: StateFlow<List<SettingsDefinitions.ExposureCompensation>?> = _evRange
 
+    // Real per-camera ISO / shutter ranges from CameraKey.ISO_RANGE /
+    // SHUTTER_SPEED_RANGE - same role as _evRange above: lets the steppers
+    // walk only values the camera will accept instead of the full generic
+    // SDK enum. Null until the query succeeds (the steppers fall back to
+    // the full enum, minus sentinels, in the meantime).
+    private val _isoRange = MutableStateFlow<List<SettingsDefinitions.ISO>?>(null)
+    val isoRange: StateFlow<List<SettingsDefinitions.ISO>?> = _isoRange
+
+    private val _shutterRange = MutableStateFlow<List<SettingsDefinitions.ShutterSpeed>?>(null)
+    val shutterRange: StateFlow<List<SettingsDefinitions.ShutterSpeed>?> = _shutterRange
+
     // False (assume fixed aperture) until refreshCapability() says
     // otherwise. The X5/X5R prime lenses this app is normally used with
     // have no adjustable aperture at all, so "unsupported" is the safe
@@ -119,6 +130,32 @@ class ExposureController(private val gateway: CameraGateway = RealCameraGateway)
      */
     fun refreshKeyBasedEvTelemetry() {
         val keyManager = DJISDKManager.getInstance().keyManager ?: return
+        keyManager.getValue(CameraKey.create(CameraKey.ISO_RANGE), object : GetCallback {
+            override fun onSuccess(value: Any) {
+                val range = (value as? Array<*>)
+                    ?.filterIsInstance<SettingsDefinitions.ISO>()
+                    ?.filter { it != SettingsDefinitions.ISO.UNKNOWN && it != SettingsDefinitions.ISO.FIXED }
+                Log.i(TAG, "CameraKey.ISO_RANGE -> ${range?.map { it.name }}")
+                if (!range.isNullOrEmpty()) _isoRange.value = range.sortedBy { it.ordinal }
+            }
+
+            override fun onFailure(error: DJIError) {
+                Log.w(TAG, "CameraKey.ISO_RANGE query failed: ${error.description}")
+            }
+        })
+        keyManager.getValue(CameraKey.create(CameraKey.SHUTTER_SPEED_RANGE), object : GetCallback {
+            override fun onSuccess(value: Any) {
+                val range = (value as? Array<*>)
+                    ?.filterIsInstance<SettingsDefinitions.ShutterSpeed>()
+                    ?.filter { it != SettingsDefinitions.ShutterSpeed.UNKNOWN }
+                Log.i(TAG, "CameraKey.SHUTTER_SPEED_RANGE -> ${range?.map { it.name }}")
+                if (!range.isNullOrEmpty()) _shutterRange.value = range.sortedBy { it.ordinal }
+            }
+
+            override fun onFailure(error: DJIError) {
+                Log.w(TAG, "CameraKey.SHUTTER_SPEED_RANGE query failed: ${error.description}")
+            }
+        })
         keyManager.getValue(CameraKey.create(CameraKey.EXPOSURE_COMPENSATION_RANGE), object : GetCallback {
             override fun onSuccess(value: Any) {
                 val range = (value as? Array<*>)
