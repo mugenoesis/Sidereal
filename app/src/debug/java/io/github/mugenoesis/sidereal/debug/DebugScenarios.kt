@@ -96,6 +96,32 @@ object DebugScenarios {
                 Log.i(TAG, "RESULT video_probe: DONE")
             }
             "video_settings" -> videoSettings()
+            "tuning_range" -> {
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager!!
+                suspend fun read(name: String): String = suspendCancellableCoroutine { cont ->
+                    km.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                        override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                        override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL") }
+                    })
+                }
+                for ((label, key, setter) in listOf(
+                    Triple("sharpness", dji.keysdk.CameraKey.SHARPNESS, { v: Int, d: (String?) -> Unit -> RealCameraGateway.setSharpness(v, d) }),
+                    Triple("contrast", dji.keysdk.CameraKey.CONTRAST, { v: Int, d: (String?) -> Unit -> RealCameraGateway.setContrast(v, d) }),
+                    Triple("saturation", dji.keysdk.CameraKey.SATURATION, { v: Int, d: (String?) -> Unit -> RealCameraGateway.setSaturation(v, d) })
+                )) {
+                    val original = read(key)
+                    val accepted = mutableListOf<Int>()
+                    for (v in -8..8) {
+                        val err = callback<String?> { done -> setter(v) { e -> done(e) } }
+                        delay(250)
+                        val back = read(key)
+                        if (err == null && back == v.toString()) accepted += v
+                    }
+                    Log.i(TAG, "TUNING $label accepted=${accepted.min()}..${accepted.max()} (${accepted.size} values) original=$original")
+                    original.toIntOrNull()?.let { o -> callback<String?> { done -> setter(o) { e -> done(e) } } }
+                }
+                Log.i(TAG, "RESULT tuning_range: DONE")
+            }
             "media_debug" -> {
                 val media = io.github.mugenoesis.sidereal.camera.MediaLibraryController()
                 val manager = DJIConnectionManager.camera?.mediaManager

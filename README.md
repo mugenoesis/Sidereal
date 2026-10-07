@@ -34,6 +34,18 @@
 - Settings the camera can't change mid-recording are greyed out while
   recording
 
+**Shooting**
+- Intervalometer with a settling delay, optional dithering between frames,
+  motion timelapse (an A→B gimbal move spread across the run), matrix
+  panorama, and dark / bias / flat calibration frames
+- Drive modes (single, burst, AEB bracketing), self-timer, exposure lock
+  and a composition grid
+- Star focus assistant: magnified star with a live FWHM readout
+- Red night display that keeps your night vision
+- Battery, card space and recording time at a glance
+- Colour profiles (D-Log, D-Cinelike, B&W and more), PAL/NTSC and the
+  camera's own list of video resolutions and frame rates
+
 **Media and audio**
 - Browse, preview and download photos and videos from the camera's SD card
 - Record audio on the phone (built-in or Bluetooth mic) alongside the video,
@@ -77,8 +89,9 @@ To make a signed release, copy `keystore.properties.example` to
 
 Without a `keystore.properties`, release builds are produced unsigned.
 
-Run the unit tests with `./gradlew testDebugUnitTest`. The instrumented
-tests in `app/src/androidTest` are hardware probes that need a connected Osmo.
+Run the unit tests with `./gradlew testDebugUnitTest`. Debug builds also
+include an adb-driven hardware test harness (`app/src/debug`) that runs
+scenarios against a connected Osmo and logs `RESULT … PASS/FAIL` lines.
 
 ## Using it
 
@@ -106,6 +119,16 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - Locking out settings the camera can't change mid-recording
 - Starting video recording and taking photos from the app
 - Browsing and downloading photos and videos from the SD card
+- Intervalometer, dithering, timelapse, panorama and calibration frames
+  (checked against the real number of files on the card)
+- Drive modes single / burst 3, 5, 7 / AEB 3, 5, self-timer, exposure lock
+  and composition grid
+- Star focus assistant (a manual focus sweep over a point light gives a
+  clean FWHM minimum at best focus)
+- Red night display (checked pixel by pixel: no green or blue is drawn)
+- Video resolution and frame rate, video standard and colour profile, all
+  read from the camera and verified by setting and reading back
+- Sharpness, contrast and saturation range of −3 to +3
 
 ### 🧪 Beta
 
@@ -118,9 +141,15 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   mic alongside the video. Lining the audio up with the video is a manual
   job in your editor for now.
 - **Histogram:** shows live data, but the graph's scaling is a best guess.
-- **Video resolution and frame rate, and image tuning ranges:** the
-  options are best guesses, because the SDK has no way to ask the camera
-  which values it supports. Unsupported values show an error message.
+- **Switching video standard (PAL/NTSC):** works, but the camera takes
+  about five seconds to settle afterwards and refuses queries meanwhile.
+  Flipping it repeatedly in a short time once left the camera's media
+  browser stuck until the Osmo was power-cycled, so don't toggle it for fun.
+- **HDR and burst of 10:** the camera lists HDR but rejects it, and rejects
+  a burst of 10, so only the modes that work are offered.
+- **Star focus assistant measures the phone's preview**, so the number is
+  in preview pixels: use it to find the smallest value, not as an absolute
+  star size.
 - **Face tracking after the subject leaves the frame:** the tracker doesn't
   recognise the same person when they come back, so tap them again to
   relock.
@@ -141,6 +170,9 @@ app/src/main/java/io/github/mugenoesis/sidereal/
 ├── gimbal/     joystick, A→B moves, mode switching, PID
 ├── tracking/   face detection, tracking and overlay
 ├── camera/     exposure, focus, WB, metering, histogram, formats, media
+├── sequence/   intervalometer, timelapse, panorama, calibration frames
+├── focus/      star finder, FWHM metrics and the focus assistant
+├── display/    red night mode
 ├── zoom/       digital zoom and size-locked auto-zoom
 ├── audio/      phone-side audio recording and source selection
 └── media/      on-camera media library
