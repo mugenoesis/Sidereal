@@ -2,6 +2,7 @@ package io.github.mugenoesis.sidereal.wear
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.common.api.ApiException
@@ -170,7 +171,7 @@ class WearBridge(
                         val seconds = (now - windowStartedAt) / 1000.0
                         Log.i(TAG, "live view: %.1f fps, %.0f KB/s, round trip %.0f ms, quality level %d (%dpx q%d)".format(
                             framesInWindow / seconds, bytesInWindow / 1024.0 / seconds, pacer.smoothedRttMs ?: 0.0,
-                            pacer.level, pacer.quality.maxSide, pacer.quality.jpegQuality
+                            pacer.level, pacer.quality.maxSide, pacer.quality.encodeQuality
                         ))
                         framesInWindow = 0
                         bytesInWindow = 0
@@ -196,7 +197,13 @@ class WearBridge(
         val small = Bitmap.createScaledBitmap(source, w, h, true)
         frameThread.execute {
             try {
-                val jpeg = ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, quality.jpegQuality, it) }.toByteArray()
+                // WebP carries the same picture in about 40% fewer bytes than JPEG, and the watch link is the bottleneck
+                // (measured: ~13 KB/s). Phones before Android 11 only have JPEG, so give it a little more quality.
+                val encoded = ByteArrayOutputStream().also {
+                    if (Build.VERSION.SDK_INT >= 30) small.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality.encodeQuality, it)
+                    else small.compress(Bitmap.CompressFormat.JPEG, (quality.encodeQuality + 12).coerceAtMost(90), it)
+                }.toByteArray()
+                val jpeg = encoded
                 FrameCodec.write(stream, jpeg)
                 synchronized(pacerLock) { framesInWindow++; bytesInWindow += jpeg.size }
             } catch (e: Exception) {

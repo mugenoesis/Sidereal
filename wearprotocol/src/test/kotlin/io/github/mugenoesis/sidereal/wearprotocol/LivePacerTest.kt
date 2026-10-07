@@ -115,7 +115,7 @@ class LivePacerTest {
     fun `quality starts where it used to be fixed`() {
         val q = LivePacer().quality
         assertEquals(280, q.maxSide)
-        assertEquals(55, q.jpegQuality)
+        assertEquals(55, q.encodeQuality)
     }
 
     @Test
@@ -123,7 +123,7 @@ class LivePacerTest {
         val levels = LivePacer.LEVELS
         for (i in 1 until levels.size) {
             assertTrue(levels[i].maxSide > levels[i - 1].maxSide)
-            assertTrue(levels[i].jpegQuality >= levels[i - 1].jpegQuality)
+            assertTrue(levels[i].encodeQuality >= levels[i - 1].encodeQuality)
         }
     }
 

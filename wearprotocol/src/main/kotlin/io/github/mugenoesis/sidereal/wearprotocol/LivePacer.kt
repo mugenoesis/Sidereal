@@ -3,8 +3,8 @@ package io.github.mugenoesis.sidereal.wearprotocol
 import kotlin.math.max
 import kotlin.math.min
 
-/** How big and how compressed a live-view frame is. */
-data class FrameQuality(val maxSide: Int, val jpegQuality: Int)
+/** How big and how compressed a live-view frame is ([encodeQuality] is the lossy image encoder's 0-100 setting). */
+data class FrameQuality(val maxSide: Int, val encodeQuality: Int)
 
 /**
  * Keeps the watch's picture current. Writing a frame into the Bluetooth channel only means it was buffered - not that
