@@ -69,4 +69,25 @@ class FrameCodecTest {
             // expected
         }
     }
+
+    @Test
+    fun `confirmations round trip as received-frame counts`() {
+        val out = ByteArrayOutputStream()
+        FrameCodec.writeAck(out, 1)
+        FrameCodec.writeAck(out, 70_000)
+        val input = ByteArrayInputStream(out.toByteArray())
+        assertEquals(1, FrameCodec.readAck(input))
+        assertEquals(70_000, FrameCodec.readAck(input))
+        assertNull(FrameCodec.readAck(input))
+    }
+
+    @Test
+    fun `a confirmation cut short is an error`() {
+        try {
+            FrameCodec.readAck(ByteArrayInputStream(byteArrayOf(0, 0)))
+            fail("expected EOFException")
+        } catch (e: EOFException) {
+            // expected
+        }
+    }
 }

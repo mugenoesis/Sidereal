@@ -120,8 +120,13 @@ class WatchLink(
     private suspend fun readFrames(channel: ChannelClient.Channel) {
         try {
             val input = channels.getInputStream(channel).await()
+            val confirmations = channels.getOutputStream(channel).await()
+            var received = 0
             while (true) {
                 val jpeg = FrameCodec.read(input) ?: break
+                // Tell the phone this one has ARRIVED (before decoding it) - that is what keeps the picture current.
+                received++
+                runCatching { FrameCodec.writeAck(confirmations, received) }.onFailure { Log.w(TAG, "confirmation failed: ${it.message}") }
                 val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: continue
                 withContext(Dispatchers.Main) { onFrame(bitmap) }
             }
