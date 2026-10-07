@@ -102,6 +102,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraStatusController: CameraStatusController
     private lateinit var shootingControls: io.github.mugenoesis.sidereal.camera.ShootingControls
     private lateinit var gamepadInput: io.github.mugenoesis.sidereal.input.GamepadInput
+    private var wearBridge: io.github.mugenoesis.sidereal.wear.WearBridge? = null
+    private var wearLiveViewWanted = false
     private val gamepadMapper by lazy { io.github.mugenoesis.sidereal.input.GamepadMapper(gamepadActions) }
     private var gamepadZoomRate = 0f
 
@@ -415,6 +417,76 @@ class MainActivity : AppCompatActivity() {
         focusController.setFocusRingValue(value)
     }
 
+    // --- Watch remote: what a connected Wear OS watch can make this app do (see wear/WearBridge). ---
+    private val wearHost = object : io.github.mugenoesis.sidereal.wear.WearHost {
+        override fun status() = io.github.mugenoesis.sidereal.wear.WearStatusBuilder.build(
+            camera = cameraStatusController.status.value,
+            connected = DJIConnectionManager.connectionState.value is DJIConnectionManager.ConnectionState.ProductConnected,
+            sequence = sequenceFeature.controller.let { it.settings.value.mode.label to it.progress.value }
+        )
+
+        override fun capture(): String? {
+            val button = findViewById<android.widget.Button>(R.id.btnShutter)
+            if (DJIConnectionManager.cameraSystemState.value?.mode == SettingsDefinitions.CameraMode.RECORD_VIDEO) return "Switch to photo mode first"
+            if (!button.isEnabled) return "The camera is busy"
+            button.performClick()
+            return null
+        }
+
+        override fun toggleRecord(): String? {
+            val button = findViewById<android.widget.Button>(R.id.btnShutter)
+            if (!button.isEnabled) return "The camera is busy"
+            button.performClick()
+            return null
+        }
+
+        override fun toggleMode(): String? { gamepadActions.togglePhotoVideo(); return null }
+        override fun recenter() = manualController.onDoubleTap()
+        override fun gimbal(yaw: Float, pitch: Float) = gamepadActions.gimbal(yaw, pitch)
+
+        override fun setLiveView(on: Boolean) {
+            wearLiveViewWanted = on
+            updateFrameCaptureState()
+        }
+
+        override fun connectOsmo(): String? {
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return "This phone's Android version can't join the Osmo's WiFi from the app"
+            // The system shows its own confirmation on the phone the first time.
+            runOnUiThread { joinOsmoWifi() }
+            return null
+        }
+    }
+
+    private val osmoWifiConnector by lazy { io.github.mugenoesis.sidereal.dji.OsmoWifiConnector(this) }
+
+    /** Joins the Osmo's WiFi from inside the app; falls back to Android's WiFi settings if that isn't possible. */
+    private fun joinOsmoWifi() {
+        osmoWifiConnector.connect(AppPreferences.osmoWifiPassphrase) { error ->
+            runOnUiThread {
+                if (error != null) showErrorToast(error)
+            }
+        }
+    }
+
+    private fun promptForOsmoWifiPassword() {
+        val input = android.widget.EditText(this).apply {
+            setText(AppPreferences.osmoWifiPassphrase)
+            setSingleLine()
+        }
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Osmo WiFi password")
+            .setMessage("The factory default is ${io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.DEFAULT}")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val problem = io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.validate(input.text.toString())
+                if (problem != null) showErrorToast(problem)
+                else AppPreferences.osmoWifiPassphrase = io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.clean(input.text.toString())
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+        NightMode.apply(dialog)
+    }
+
     private fun bindGamepad() {
         gamepadInput = io.github.mugenoesis.sidereal.input.GamepadInput(this, gamepadMapper) {
             val capability = zoomController.capability.value
@@ -484,12 +556,16 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         gamepadInput.start()
+        wearBridge = io.github.mugenoesis.sidereal.wear.WearBridge(this, lifecycleScope, wearHost).also { it.start() }
         OsmoWifiChecker.start(this)
     }
 
     override fun onStop() {
         super.onStop()
         gamepadInput.stop()
+        wearBridge?.stop()
+        wearBridge = null
+        wearLiveViewWanted = false
         OsmoWifiChecker.stop(this)
     }
 
@@ -1082,7 +1158,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Frame capture (TextureView.getBitmap() at ~12fps) is only worth running while something actually consumes it. */
     private fun updateFrameCaptureState() {
-        val needed = findViewById<android.widget.ToggleButton>(R.id.toggleFaceTrack).isChecked || softwareAfcController.isRunning.value || focusAssistController.enabled.value
+        val needed = findViewById<android.widget.ToggleButton>(R.id.toggleFaceTrack).isChecked || softwareAfcController.isRunning.value || focusAssistController.enabled.value || wearLiveViewWanted
         if (needed) startFrameCapture() else stopFrameCapture()
     }
 
@@ -1877,6 +1953,7 @@ class MainActivity : AppCompatActivity() {
         videoFrameProvider.onBitmapFrame(bitmap)
         softwareAfcController.onBitmapFrame(bitmap)
         focusAssistController.onBitmapFrame(bitmap)
+        wearBridge?.offerFrame(bitmap)
     }
 
     private fun observeConnectionState() {
@@ -1917,7 +1994,7 @@ class MainActivity : AppCompatActivity() {
 
         connectionStatus.text = if (wrongWifi) {
             val current = ssid ?: "no WiFi network"
-            "Not on your Osmo's WiFi (currently: $current) - tap to open WiFi settings"
+            "Not on your Osmo's WiFi (currently: $current) - tap to join it (hold to set its password)"
         } else {
             when (djiState) {
                 is DJIConnectionManager.ConnectionState.Disconnected -> "Waiting for Osmo..."
@@ -1929,7 +2006,15 @@ class MainActivity : AppCompatActivity() {
         }
         connectionStatus.visibility = android.view.View.VISIBLE
         connectionStatus.setOnClickListener {
-            startActivity(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+            if (wrongWifi && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                joinOsmoWifi()
+            } else {
+                startActivity(android.content.Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+            }
+        }
+        connectionStatus.setOnLongClickListener {
+            promptForOsmoWifiPassword()
+            true
         }
     }
 

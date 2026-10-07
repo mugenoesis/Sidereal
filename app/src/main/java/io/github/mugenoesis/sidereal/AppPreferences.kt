@@ -36,6 +36,7 @@ object AppPreferences {
     private const val KEY_MOVE_DURATION_MS = "move_duration_ms"
     private const val KEY_AUDIO_SOURCE_KIND = "audio_source_kind"
     private const val KEY_NIGHT_MODE = "night_mode"
+    private const val KEY_OSMO_WIFI_PASSPHRASE = "osmo_wifi_passphrase"
     private const val KEY_GRID_MODE = "grid_mode"
     private const val KEY_SELF_TIMER_SEC = "self_timer_sec"
 
@@ -76,6 +77,11 @@ object AppPreferences {
     var nightMode: Boolean
         get() = prefs.getBoolean(KEY_NIGHT_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_NIGHT_MODE, value).apply()
+
+    /** The camera's WiFi password, used to join its network from the app. Defaults to the Osmo's factory value. */
+    var osmoWifiPassphrase: String
+        get() = prefs.getString(KEY_OSMO_WIFI_PASSPHRASE, null) ?: io.github.mugenoesis.sidereal.dji.OsmoWifiPassphrase.DEFAULT
+        set(value) = prefs.edit().putString(KEY_OSMO_WIFI_PASSPHRASE, value).apply()
 
     var gridMode: io.github.mugenoesis.sidereal.camera.GridMode
         get() = prefs.getString(KEY_GRID_MODE, null)

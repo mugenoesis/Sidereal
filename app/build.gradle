@@ -106,6 +106,10 @@ dependencies {
     // Shared with the Wear OS app: message paths, command/status encoding, live-view frame codec and pacing.
     implementation project(':wearprotocol')
 
+    // Wear OS data layer (messages + live-view channel) and awaiting its Tasks from coroutines.
+    implementation 'com.google.android.gms:play-services-wearable:19.0.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2'
+
     // --- Face detection ---
     implementation 'com.google.mlkit:face-detection:16.1.7'
 

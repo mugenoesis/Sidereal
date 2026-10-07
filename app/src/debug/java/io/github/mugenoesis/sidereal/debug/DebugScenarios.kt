@@ -14,6 +14,7 @@ import io.github.mugenoesis.sidereal.sequence.SequenceRunner
 import io.github.mugenoesis.sidereal.sequence.SequenceState
 import io.github.mugenoesis.sidereal.sequence.SequenceStep
 import io.github.mugenoesis.sidereal.camera.ShutterLogic
+import io.github.mugenoesis.sidereal.wearprotocol.WearCommand as W
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -101,6 +102,7 @@ object DebugScenarios {
             "video_settings" -> videoSettings()
             "mux_test" -> muxTest()
             // Real controller events arrive on the main thread and touch views, so the injected ones must too.
+            "wear_host_test" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { wearHostTest() }
             "gamepad_test" -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { gamepadTest() }
             "sync_seed" -> syncSeed()
             "sync_cleanup" -> {
@@ -688,5 +690,63 @@ object DebugScenarios {
         callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }
         callback<String?> { RealCameraGateway.setExposureMode("PROGRAM") { e -> it(e) } }
         Log.i(TAG, "RESULT gamepad_test: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
+    }
+
+    /** Plays the part of a watch: feeds commands to the phone's bridge handler and checks what the camera and gimbal did. */
+    private suspend fun wearHostTest() {
+        val bridge = io.github.mugenoesis.sidereal.wear.WearBridge.active ?: run {
+            Log.i(TAG, "RESULT wear_host_test: FAIL no active WearBridge - open the app first"); return
+        }
+        val problems = mutableListOf<String>()
+        callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+        delay(2500)
+
+        val status = bridge.statusSnapshot()
+        Log.i(TAG, "WEAR status: $status")
+        if (!status.phoneOnOsmo) problems += "status says the phone is not on the Osmo"
+        if (status.batteryPercent !in 1..100) problems += "battery ${status.batteryPercent}"
+        if (status.photosLeft <= 0) problems += "photosLeft ${status.photosLeft}"
+        if (status.cameraMode != io.github.mugenoesis.sidereal.wearprotocol.WearCameraMode.PHOTO) problems += "mode ${status.cameraMode}"
+
+        // the status survives the wire format that really goes to the watch
+        val decoded = io.github.mugenoesis.sidereal.wearprotocol.WearProtocol.decodeStatus(io.github.mugenoesis.sidereal.wearprotocol.WearProtocol.encodeStatus(status))
+        if (decoded != status) problems += "status changed on the wire"
+
+        // capture
+        var started = false
+        val ack = bridge.handleCommand(W.Capture)
+        val end = System.currentTimeMillis() + 4000
+        while (System.currentTimeMillis() < end && !started) { started = DJIConnectionManager.cameraSystemState.value?.isShootingSinglePhoto == true; delay(50) }
+        Log.i(TAG, "WEAR capture: ack=$ack photoStarted=$started")
+        if (ack?.ok != true || !started) problems += "capture ack=$ack started=$started"
+        delay(5000)
+
+        // gimbal streams without acks
+        val yaw0 = DJIConnectionManager.gimbalState.value!!.attitudeInDegrees.yaw
+        val gimbalAck = bridge.handleCommand(W.Gimbal(1f, 0f))
+        delay(1500)
+        bridge.handleCommand(W.Gimbal(0f, 0f)); delay(800)
+        val yaw1 = DJIConnectionManager.gimbalState.value!!.attitudeInDegrees.yaw
+        Log.i(TAG, "WEAR gimbal: ack=$gimbalAck yaw $yaw0 -> $yaw1")
+        if (gimbalAck != null || yaw1 - yaw0 < 15f) problems += "gimbal ack=$gimbalAck yaw delta=${yaw1 - yaw0}"
+        bridge.handleCommand(W.Gimbal(-1f, 0f)); delay(1500); bridge.handleCommand(W.Gimbal(0f, 0f)); delay(800)
+
+        // record is refused in photo mode (and never actually sent)
+        val recordAck = bridge.handleCommand(W.ToggleRecord)
+        Log.i(TAG, "WEAR record in photo mode: $recordAck")
+        if (recordAck?.ok != false) problems += "record in photo mode was not refused: $recordAck"
+
+        // mode toggle to video and back (no shutter involved)
+        val toVideo = bridge.handleCommand(W.ToggleMode); delay(3000)
+        val modeAfter = bridge.statusSnapshot().cameraMode
+        val back = bridge.handleCommand(W.ToggleMode); delay(3000)
+        val modeBack = bridge.statusSnapshot().cameraMode
+        Log.i(TAG, "WEAR mode: ack=${toVideo?.ok} -> $modeAfter, ack=${back?.ok} -> $modeBack")
+        if (modeAfter != io.github.mugenoesis.sidereal.wearprotocol.WearCameraMode.VIDEO || modeBack != io.github.mugenoesis.sidereal.wearprotocol.WearCameraMode.PHOTO) problems += "mode toggle $modeAfter/$modeBack"
+
+        // live view flag turns the frame loop on and off without a channel being open
+        bridge.handleCommand(W.LiveView(true)); delay(1500); bridge.handleCommand(W.LiveView(false))
+
+        Log.i(TAG, "RESULT wear_host_test: ${if (problems.isEmpty()) "PASS" else "FAIL $problems"}")
     }
 }
