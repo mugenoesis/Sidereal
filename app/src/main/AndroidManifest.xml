@@ -71,6 +71,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- sidereal://open: what the Wear OS watch asks the phone to open when the app is not running. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sidereal" android:host="open" />
+            </intent-filter>
         </activity>
 
         <activity

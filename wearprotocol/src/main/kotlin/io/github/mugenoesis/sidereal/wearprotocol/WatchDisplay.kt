@@ -29,6 +29,9 @@ object WatchDisplay {
         }
     }
 
+    /** True when the phone is not answering - the watch then offers to open Sidereal on it. */
+    fun showOpenPhone(status: WearStatus?, ageMs: Long): Boolean = usable(status, ageMs) == null
+
     fun battery(status: WearStatus?): String =
         if (status == null || status.batteryPercent < 0) "--" else "${status.batteryPercent}%"
 

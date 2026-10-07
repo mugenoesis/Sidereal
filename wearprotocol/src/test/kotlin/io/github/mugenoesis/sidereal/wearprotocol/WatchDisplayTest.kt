@@ -111,4 +111,23 @@ class WatchDisplayTest {
         assertFalse(WatchDisplay.canWatchLive(null, 0))
         assertFalse(WatchDisplay.canWatchLive(ready, ageMs = 20_000))
     }
+
+    @Test
+    fun `the open-on-phone button is offered when the phone is not answering`() {
+        assertTrue(WatchDisplay.showOpenPhone(null, ageMs = 0))
+        assertTrue(WatchDisplay.showOpenPhone(ready, ageMs = 10_000))
+    }
+
+    @Test
+    fun `it is hidden while the phone app is answering, on the Osmo's WiFi or not`() {
+        assertFalse(WatchDisplay.showOpenPhone(ready, ageMs = 2_000))
+        assertFalse(WatchDisplay.showOpenPhone(ready.copy(phoneOnOsmo = false), ageMs = 2_000))
+    }
+
+    @Test
+    fun `the open-on-phone link is a stable custom-scheme address the phone app can claim`() {
+        assertEquals("sidereal", WearPaths.OPEN_PHONE_SCHEME)
+        assertEquals("sidereal://open", WearPaths.OPEN_PHONE_URI)
+        assertTrue(WearPaths.OPEN_PHONE_URI.startsWith(WearPaths.OPEN_PHONE_SCHEME + "://"))
+    }
 }

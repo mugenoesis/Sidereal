@@ -13,6 +13,14 @@ import java.nio.ByteBuffer
  * stored on either device.
  */
 object WearPaths {
+    /**
+     * What the watch asks the phone to open when the phone app is not running: a link the phone's main screen
+     * answers (see its manifest). Wear OS's remote-activity request carries it to the phone.
+     */
+    const val OPEN_PHONE_SCHEME = "sidereal"
+    const val OPEN_PHONE_URI = "$OPEN_PHONE_SCHEME://open"
+
+
     // watch -> phone (MessageClient)
     const val CAPTURE = "/cmd/capture"
     const val TOGGLE_RECORD = "/cmd/toggle_record"

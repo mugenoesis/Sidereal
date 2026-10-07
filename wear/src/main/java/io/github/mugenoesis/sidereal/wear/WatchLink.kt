@@ -85,6 +85,22 @@ class WatchLink(
         }
     }
 
+    /**
+     * Asks Wear OS to open Sidereal on the paired phone (the phone app answers [WearPaths.OPEN_PHONE_URI]) - for when
+     * the watch hears nothing because the phone app is not running. [onResult] says whether the request was delivered.
+     */
+    fun openOnPhone(onResult: (Boolean) -> Unit) {
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
+            .addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+            .setData(android.net.Uri.parse(WearPaths.OPEN_PHONE_URI))
+        val future = androidx.wear.remote.interactions.RemoteActivityHelper(appContext, java.util.concurrent.Executors.newSingleThreadExecutor())
+            .startRemoteActivity(intent)
+        future.addListener({
+            val ok = try { future.get(); true } catch (e: Exception) { Log.w(TAG, "open on phone failed: ${e.message}"); false }
+            android.os.Handler(android.os.Looper.getMainLooper()).post { onResult(ok) }
+        }, java.util.concurrent.Executors.newSingleThreadExecutor())
+    }
+
     private suspend fun phoneNode(): String? {
         phoneNodeId?.let { return it }
         val connected = runCatching { nodes.connectedNodes.await() }.getOrNull().orEmpty()

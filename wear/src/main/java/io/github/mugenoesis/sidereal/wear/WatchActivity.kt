@@ -44,6 +44,7 @@ class WatchActivity : ComponentActivity() {
     private lateinit var mode: Button
     private lateinit var liveToggle: Button
     private lateinit var join: Button
+    private lateinit var openPhone: Button
 
     private var status: WearStatus? = null
     private var liveOn = false
@@ -82,6 +83,17 @@ class WatchActivity : ComponentActivity() {
             setOnClickListener { link.send(WearCommand.ConnectOsmo) }
         }
 
+        openPhone = Button(this).apply {
+            text = "Open on phone"
+            textSize = 12f
+            visibility = View.GONE
+            setOnClickListener {
+                // The answer goes on the button itself - a toast would sit underneath it.
+                say("Opening…")
+                link.openOnPhone { ok -> say(if (ok) "Sent - check phone" else "Can't reach phone") }
+            }
+        }
+
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -102,7 +114,9 @@ class WatchActivity : ComponentActivity() {
             addView(live, FrameLayout.LayoutParams(-1, -1))
             // Round screens clip the corners, so the controls sit inside a generous inset.
             addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { topMargin = dp(26); marginStart = dp(30); marginEnd = dp(30) })
-            addView(join, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+            // Nudged up from dead centre so they clear the shutter button below.
+            addView(join, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER).apply { bottomMargin = dp(16) })
+            addView(openPhone, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER).apply { bottomMargin = dp(16) })
             addView(buttons, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(22) })
         }
         setContentView(root)
@@ -147,12 +161,25 @@ class WatchActivity : ComponentActivity() {
 
     private fun onAck(ack: WearAck) {
         vibrate(if (ack.ok) longArrayOf(0, 30) else longArrayOf(0, 40, 60, 40, 60, 40))
-        WatchDisplay.ackText(ack)?.let { text ->
-            toast.text = text
-            toast.visibility = View.VISIBLE
-            handler.postDelayed({ toast.visibility = View.GONE }, 2500)
-        }
+        WatchDisplay.ackText(ack)?.let { showToast(it) }
     }
+
+    private fun say(text: String) {
+        openPhone.text = text
+        handler.removeCallbacks(restoreOpenPhone)
+        handler.postDelayed(restoreOpenPhone, 2500)
+    }
+
+    private val restoreOpenPhone = Runnable { openPhone.text = "Open on phone" }
+
+    private fun showToast(text: String) {
+        toast.text = text
+        toast.visibility = View.VISIBLE
+        handler.removeCallbacks(hideToast)
+        handler.postDelayed(hideToast, 2500)
+    }
+
+    private val hideToast = Runnable { toast.visibility = View.GONE }
 
     private fun render() {
         val age = if (link.lastStatusAt == 0L) Long.MAX_VALUE else SystemClock.elapsedRealtime() - link.lastStatusAt
@@ -164,6 +191,7 @@ class WatchActivity : ComponentActivity() {
         shutter.isEnabled = canShoot
         mode.isEnabled = canShoot && s?.recording != true
         liveToggle.text = if (liveOn) "Live ●" else "Live"
+        openPhone.visibility = if (WatchDisplay.showOpenPhone(s, age)) View.VISIBLE else View.GONE
         join.visibility = if (s != null && age <= WatchDisplay.STALE_MS && !s.phoneOnOsmo) View.VISIBLE else View.GONE
         val canWatch = WatchDisplay.canWatchLive(s, age)
         liveToggle.isEnabled = canWatch || liveOn
