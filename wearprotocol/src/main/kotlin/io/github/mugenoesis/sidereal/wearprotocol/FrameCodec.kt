@@ -32,4 +32,19 @@ object FrameCodec {
         data.readFully(frame)
         return frame
     }
+
+    /** The watch's confirmation: how many frames it has received in total (a 4 byte big-endian count). */
+    fun writeAck(out: OutputStream, receivedCount: Int) {
+        val data = DataOutputStream(out)
+        data.writeInt(receivedCount)
+        data.flush()
+    }
+
+    /** The next confirmation, or null if the stream ended cleanly. One cut short throws [EOFException]. */
+    fun readAck(input: InputStream): Int? {
+        val first = input.read()
+        if (first < 0) return null
+        val data = DataInputStream(input)
+        return (first shl 24) or (data.readUnsignedByte() shl 16) or (data.readUnsignedByte() shl 8) or data.readUnsignedByte()
+    }
 }

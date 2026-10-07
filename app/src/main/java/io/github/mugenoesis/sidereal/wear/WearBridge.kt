@@ -2,6 +2,7 @@ package io.github.mugenoesis.sidereal.wear
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.common.api.ApiException
@@ -10,7 +11,7 @@ import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import io.github.mugenoesis.sidereal.wearprotocol.FrameCodec
-import io.github.mugenoesis.sidereal.wearprotocol.FramePacer
+import io.github.mugenoesis.sidereal.wearprotocol.LivePacer
 import io.github.mugenoesis.sidereal.wearprotocol.PushBackoff
 import io.github.mugenoesis.sidereal.wearprotocol.Thumbnail
 import io.github.mugenoesis.sidereal.wearprotocol.WearCommand
@@ -54,7 +55,13 @@ class WearBridge(
 
     private val frameThread = Executors.newSingleThreadExecutor { Thread(it, "wear-frames") }
     private val backoff = PushBackoff()
-    private val pacer = FramePacer(minIntervalMs = FRAME_INTERVAL_MS, maxIntervalMs = FRAME_INTERVAL_MAX_MS)
+    // Paced by the watch's delivery confirmations, not by when a write returns (see LivePacer). Guarded by itself:
+    // frames are offered from the preview thread, confirmations arrive on their own reader thread.
+    private val pacerLock = Any()
+    private var pacer = LivePacer(minIntervalMs = FRAME_INTERVAL_MS)
+    private var framesInWindow = 0
+    private var bytesInWindow = 0L
+    private var windowStartedAt = 0L
     @Volatile private var liveStream: OutputStream? = null
     @Volatile private var liveChannel: ChannelClient.Channel? = null
 
@@ -136,7 +143,9 @@ class WearBridge(
                 val channel = channels.openChannel(nodeId, WearPaths.LIVE_CHANNEL).await()
                 liveStream = channels.getOutputStream(channel).await()
                 liveChannel = channel
+                synchronized(pacerLock) { pacer = LivePacer(minIntervalMs = FRAME_INTERVAL_MS); framesInWindow = 0; bytesInWindow = 0; windowStartedAt = SystemClock.elapsedRealtime() }
                 Log.i(TAG, "live view channel open to $nodeId")
+                readConfirmations(channels.getInputStream(channel).await())
             }.onFailure { Log.w(TAG, "couldn't open live view: ${it.message}") }
         }
     }
@@ -150,25 +159,58 @@ class WearBridge(
         if (channel != null) channels.close(channel)
     }
 
+    /** The watch confirms every frame it receives with a running count; that, not the write, is what paces the next one. */
+    private fun readConfirmations(input: java.io.InputStream) {
+        try {
+            while (true) {
+                val count = FrameCodec.readAck(input) ?: break
+                val now = SystemClock.elapsedRealtime()
+                synchronized(pacerLock) {
+                    pacer.onAck(now, count)
+                    if (now - windowStartedAt >= STATS_WINDOW_MS) {
+                        val seconds = (now - windowStartedAt) / 1000.0
+                        Log.i(TAG, "live view: %.1f fps, %.0f KB/s, round trip %.0f ms, %d in flight, quality level %d (%dpx q%d)".format(
+                            framesInWindow / seconds, bytesInWindow / 1024.0 / seconds, pacer.smoothedRttMs ?: 0.0,
+                            pacer.window, pacer.level, pacer.quality.maxSide, pacer.quality.encodeQuality
+                        ))
+                        framesInWindow = 0
+                        bytesInWindow = 0
+                        windowStartedAt = now
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "live view confirmations ended: ${e.message}")
+        }
+    }
+
     /** Call with each preview frame (any thread); cheap unless the watch's live view is open and a frame is due. */
     fun offerFrame(source: Bitmap) {
         val stream = liveStream ?: return
         val now = SystemClock.elapsedRealtime()
-        if (!pacer.shouldSend(now)) return
-        pacer.onSendStarted()
-        val (w, h) = Thumbnail.fit(source.width, source.height, THUMBNAIL_SIDE)
+        val quality = synchronized(pacerLock) {
+            if (!pacer.shouldSend(now)) return
+            pacer.onSent(now)
+            pacer.quality
+        }
+        val (w, h) = Thumbnail.fit(source.width, source.height, quality.maxSide)
         val small = Bitmap.createScaledBitmap(source, w, h, true)
         frameThread.execute {
-            val started = SystemClock.elapsedRealtime()
             try {
-                val jpeg = ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }.toByteArray()
+                // WebP carries the same picture in about 40% fewer bytes than JPEG, and the watch link is the bottleneck
+                // (measured: ~13 KB/s). Phones before Android 11 only have JPEG, so give it a little more quality.
+                val encoded = ByteArrayOutputStream().also {
+                    if (Build.VERSION.SDK_INT >= 30) small.compress(Bitmap.CompressFormat.WEBP_LOSSY, quality.encodeQuality, it)
+                    else small.compress(Bitmap.CompressFormat.JPEG, (quality.encodeQuality + 12).coerceAtMost(90), it)
+                }.toByteArray()
+                val jpeg = encoded
                 FrameCodec.write(stream, jpeg)
+                synchronized(pacerLock) { framesInWindow++; bytesInWindow += jpeg.size }
             } catch (e: Exception) {
                 Log.w(TAG, "frame send failed, closing live view: ${e.message}")
                 closeLiveView()
             } finally {
                 small.recycle()
-                pacer.onSent(SystemClock.elapsedRealtime(), SystemClock.elapsedRealtime() - started)
             }
         }
     }
@@ -183,9 +225,7 @@ class WearBridge(
         private const val WEARABLE_API_UNAVAILABLE = 17 // ConnectionResult.API_UNAVAILABLE
         private const val STATUS_INTERVAL_MS = 1_500L
         private const val DEAD_MAN_CHECK_MS = 150L
-        private const val FRAME_INTERVAL_MS = 100L       // ~10 fps at best
-        private const val FRAME_INTERVAL_MAX_MS = 1_000L
-        private const val THUMBNAIL_SIDE = 280
-        private const val JPEG_QUALITY = 55
+        private const val FRAME_INTERVAL_MS = 60L        // ~16 fps at best, if the link keeps up
+        private const val STATS_WINDOW_MS = 5_000L
     }
 }
