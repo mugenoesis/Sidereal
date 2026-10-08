@@ -1,13 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - first-start and media fixes
 
 ### Fixed
 - The on-camera media browser lists the newest files first instead of oldest first.
-
-## 0.1.1 - first-start fixes
-
-### Fixed
 - First start no longer pops "Single/Exposure mode ... rejected (No camera connected)" messages while the camera is
   still connecting; the modes are re-applied quietly once the camera is ready.
 - The WiFi status no longer says "currently: no WiFi network" when the network name merely can't be read.
