@@ -69,3 +69,20 @@ Conclusion: the camera asks the lens for an aperture it cannot make at that zoom
 - A one-row panorama (1x3) cannot tell the field of view from the gimbal's rotation: the aligner pegged its field-of-view
   scale at the 0.7 limit and was rejected. A two-row panorama (2x3) aligned on 121 matches, field of view x0.961
   (about 18.7 mm real against the 18 mark), error 1.91 -> 0.39 degrees. Use two or more rows when checking the field of view.
+
+## 32 mm (ring marked 32)
+
+- Camera: ring limit 3824, program-mode aperture f/4 (the hang), 12-32 accepted only f/5.6 and narrower in the aperture
+  test. The state dump was taken without a photo (the photo step uses program mode, which hangs here).
+- The sharpness curve is a single narrow hill: peak at ring 3000, half-width about 250 units.
+- Autofocus before the changes below: 1 of 4 locks on the peak (others at 34%, 66%, 73%).
+- **Found:** a frame takes about 330-410 ms to show a ring move, plus the exposure time (the light was 1/4-1/5 s), and
+  keeps settling for several hundred ms more. The climb's flat 250 ms settle read the previous position. The settle
+  is now the camera's latency plus the shutter time (`FocusLight.settleMs`), also used by the scanning search.
+- **Found:** after the camera's own autofocus the lens can be physically on the peak while the ring readback says
+  something else (a mid-hunt value, 1535), and it may take about 2 s to obey the first ring command. Everything the
+  climb records meanwhile is a stale picture of the peak. When the climb finds out (the reading on arrival is far below
+  what was recorded) and nothing it has measured since comes near the stale level, it now hands over to the scanning search.
+- After the changes, 8 trials from starts 0, 1900 and 3824: six within 85% of the peak, one at 69%, one at 45%. Starts
+  at 0 usually end up in the scanning search (17-19 s). Autofocus on this lens at 32 mm is not as reliable as at
+  12 and 18 mm; the narrow hill and slow exposures are the likely reasons.

@@ -1,6 +1,7 @@
 package io.github.mugenoesis.sidereal.camera
 
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,5 +68,14 @@ class FocusLightTest {
 
     @Test fun `no seed at all is not trusted`() {
         assertFalse(FocusSeed.isTrusted(null, 2035))
+    }
+
+    @Test fun `the settle after a ring move is the camera's latency plus the exposure time`() {
+        val fast = FocusLight.settleMs("SHUTTER_SPEED_1_320")
+        val slow = FocusLight.settleMs("SHUTTER_SPEED_1_4")
+        assertTrue("fast=$fast", fast in 330..450)
+        assertTrue("slow=$slow", slow in 600..700)
+        assertEquals(FocusLight.settleMs(null), FocusLight.settleMs("nonsense"))
+        assertTrue(FocusLight.settleMs("SHUTTER_SPEED_2") <= 1500)
     }
 }

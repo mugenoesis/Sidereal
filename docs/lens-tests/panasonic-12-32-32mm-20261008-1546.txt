@@ -1,0 +1,29 @@
+# Lens test: panasonic-12-32-32mm  (2026-10-08T15:46:42+01:00)
+app version: versionName=0.2.1
+
+== 1. what the camera reports about the lens
+27075 27698 I SiderealDebug: LENS interchangeable=true adjustableAperture=true opticalZoom=false hybridZoom=false displayName=Zenmuse X5
+27075 27698 I SiderealDebug: LENS info=ok:Unknown
+27075 27698 I SiderealDebug: LENS opticalZoomFocalLength=fail:The feature is unsupported.
+27075 27698 I SiderealDebug: LENS key LensInformation = Unknown
+27075 27698 I SiderealDebug: LENS key ApertureRange = [Ldji.common.camera.SettingsDefinitions$Aperture;@9a4befd
+27075 27698 I SiderealDebug: LENS key OpticalZoomFocalLength = FAIL The feature is unsupported.
+27075 27698 I SiderealDebug: LENS key OpticalZoomSpec = FAIL The feature is unsupported.
+== 2. aperture: which values the camera accepts (widest first)
+27075 27698 I SiderealDebug: APERTURE adjustableSupported=true
+27075 27698 I SiderealDebug: APERTURE setMode MANUAL -> null
+27075 27698 I SiderealDebug: APERTURE set F_5_DOT_6 -> null
+27075 27698 I SiderealDebug: APERTURE set F_8 -> null
+27075 27698 I SiderealDebug: APERTURE set F_11 -> null
+== 3. sharpness over the whole focus ring (ground truth for autofocus)
+27075 27698 I SiderealDebug: AFCURVE panasonic-12-32-32mm 0:40 50:48 100:40 150:42 200:42 250:47 300:46 350:49 400:56 450:52 500:52 550:57 600:60 650:60 700:61 750:64 800:63 850:67 900:66 950:67 1000:68 1050:71 1100:72 1150:76 1200:75 1250:82 1300:86 1350:90 1400:97 1450:101 1500:110 1550:118 1600:129 1650:139 1700:155 1750:173 1800:186 1850:201 1900:210 1950:231 2000:252 2050:285 2100:315 2150:354 2200:396 2250:450 2300:508 2350:587 2400:690 2450:795 2500:985 2550:1195 2600:1528 2650:1954 2700:2576 2750:3489 2800:4387 2850:5486 2900:6156 2950:6738 3000:7058 3050:6964 3100:6372 3150:5834 3200:5148 3250:4327 3300:3331 3350:2638 3400:1957 3450:1494 3500:1203 3550:981 3600:822 3650:698 3700:626 3750:546 3800:490 
+27075 27698 I SiderealDebug: AFNOISE panasonic-12-32-32mm meanSpread=0.049 maxSpread=0.238
+== 4. software autofocus from blurred starts (time to lock, where it locked)
+27075 27075 I SoftwareAfc: AFC using the scanning search (SHUTTER_SPEED_1_4 ISO 800)
+27075 27698 I SiderealDebug: AFTRIAL panasonic-12-32-32mm start=0 locked=true lockMs=13463 ring=3378 sharp=2384
+27075 27075 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_4 ISO 800)
+27075 27698 I SiderealDebug: AFTRIAL panasonic-12-32-32mm start=1274 locked=true lockMs=7189 ring=3187 sharp=5121
+27075 27075 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_4 ISO 800)
+27075 27698 I SiderealDebug: AFTRIAL panasonic-12-32-32mm start=2549 locked=true lockMs=7949 ring=3022 sharp=7398
+27075 27075 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_4 ISO 800)
+27075 27698 I SiderealDebug: AFTRIAL panasonic-12-32-32mm start=3824 locked=true lockMs=7537 ring=3213 sharp=4666

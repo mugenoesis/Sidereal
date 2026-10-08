@@ -34,6 +34,11 @@ echo "keys answered: $(grep -E 'summary' "$TMP/dump.txt" | sed 's/.*summary: //'
 grep -E "CAMKEY $LABEL (HAS_ERROR|LENS_|IS_ADJUSTABLE_APERTURE|APERTURE |FOCUS_RING_VALUE_UPPER|FOCUS_MODE|FOCUS_STATUS)" "$TMP/dump.txt" \
   | sed "s/CAMKEY $LABEL //" | grep -v "FAIL" | tee -a "$REPORT"
 
+if [ -n "${SKIP_PHOTO:-}" ]; then
+  echo "(photo skipped: SKIP_PHOTO set - program mode can hang the camera on some lenses at some zooms)" | tee -a "$REPORT"
+  echo "Report: $REPORT"
+  exit 0
+fi
 echo "== one photo, and what its EXIF says about the lens" | tee -a "$REPORT"
 "$ADB" logcat -c; cmd series_run --es mode INTERVALOMETER --es ints "frames:1,intervalSec:5,settleMs:500"
 for _ in $(seq 1 60); do "$ADB" logcat -d -s SiderealDebug | grep -q "SERIES finished" && break; sleep 2; done

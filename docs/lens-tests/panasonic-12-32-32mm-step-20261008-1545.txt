@@ -1,0 +1,21 @@
+# panasonic-12-32-32mm (2026-10-08T15:45:52+01:00)
+== what the camera says
+27075 27698 I SiderealDebug: LENS interchangeable=true adjustableAperture=true opticalZoom=false hybridZoom=false displayName=Zenmuse X5
+27075 27698 I SiderealDebug: LENS info=ok:Unknown
+27075 27698 I SiderealDebug: LENS opticalZoomFocalLength=fail:The feature is unsupported.
+27075 27698 I SiderealDebug: LENS key LensInformation = Unknown
+27075 27698 I SiderealDebug: LENS key ApertureRange = FAIL The feature is unsupported.
+27075 27698 I SiderealDebug: LENS key OpticalZoomFocalLength = FAIL The feature is unsupported.
+27075 27698 I SiderealDebug: LENS key OpticalZoomSpec = FAIL The feature is unsupported.
+keys answered: 335 keys, 139 answered
+27075 27698 I SiderealDebug: APERTURE = F_4
+27075 27698 I SiderealDebug: FOCUS_MODE = AUTO
+27075 27698 I SiderealDebug: FOCUS_RING_VALUE_UPPER_BOUND = 3824
+27075 27698 I SiderealDebug: FOCUS_STATUS = IDLE
+27075 27698 I SiderealDebug: HAS_ERROR = false
+27075 27698 I SiderealDebug: IS_ADJUSTABLE_APERTURE_SUPPORTED = true
+27075 27698 I SiderealDebug: LENS_INFORMATION = Unknown
+27075 27698 I SiderealDebug: LENS_IS_AF_SWITCH_ON = true
+27075 27698 I SiderealDebug: LENS_IS_FOCUS_ASSISTANT_WORKING = false
+27075 27698 I SiderealDebug: LENS_IS_INSTALLED = true
+(photo skipped: SKIP_PHOTO set - program mode can hang the camera on some lenses at some zooms)

@@ -35,7 +35,9 @@ class SoftwareAfcController(
     /** True in good light (fast shutter, low ISO): the preview's sharpness is then a smooth hill and the quick climb can be used. */
     private val brightLight: () -> Boolean = { false },
     /** What the light decision was based on, for the log (e.g. "1/10 s ISO 100"). */
-    private val lightDescription: () -> String? = { null }
+    private val lightDescription: () -> String? = { null },
+    /** How long a frame takes to show a ring move in the current light; see [FocusLight.settleMs]. */
+    private val settleMs: () -> Long = { FocusLight.settleMs(null) }
 ) {
 
     companion object {
@@ -264,7 +266,7 @@ class SoftwareAfcController(
                 val trusted = FocusSeed.isTrusted(seed, bound)
                 if (!trusted && seed != null) Log.w(TAG, "hardware AF left the ring at $seed (an end stop): ignoring it and scanning the whole ring")
                 val bright = brightLight() && trusted
-                val fresh: FocusSearcher = if (bright) SmoothFocusClimb(bound) else FocusSearch(bound)
+                val fresh: FocusSearcher = if (bright) SmoothFocusClimb(bound, SmoothFocusClimb.Config(settleMs = settleMs())) else FocusSearch(bound, FocusSearch.Config(settleMs = maxOf(settleMs(), 300L)))
                 Log.i(TAG, "AFC using the ${if (bright) "quick climb (clean light)" else "scanning search"}${lightNote()}")
                 search = fresh
                 val first = fresh.begin(if (trusted) seed else null, System.currentTimeMillis())
@@ -326,7 +328,7 @@ class SoftwareAfcController(
             }
             is FocusSearch.Command.Unreliable -> {
                 Log.i(TAG, "t=$now the picture is too noisy for the quick climb - using the scanning search from ring ${command.seed}")
-                val scanning = FocusSearch(bound())
+                val scanning = FocusSearch(bound(), FocusSearch.Config(settleMs = maxOf(settleMs(), 300L)))
                 search = scanning
                 focusController.setFocusRingValue(scanning.begin(command.seed, now).ring)
             }

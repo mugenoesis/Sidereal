@@ -385,4 +385,85 @@ class SmoothFocusClimbTest {
             assertTrue("seed $seed locked at $locked", share(panasonic12, locked) > 0.8)
         }
     }
+
+    // Panasonic 12-32 at 32 mm (real, step 50, ring range 0-3824): one narrow hill peaking at ring 3000.
+    private val panasonic32 = (0..3800 step 50).associateWith { ring ->
+        val pts = mapOf(0 to 40, 1000 to 68, 2000 to 252, 2300 to 508, 2500 to 985, 2600 to 1528, 2700 to 2576, 2800 to 4387,
+            2900 to 6156, 3000 to 7058, 3100 to 6372, 3200 to 5148, 3300 to 3331, 3400 to 1957, 3500 to 1203, 3600 to 822, 3800 to 490)
+        val keys = pts.keys.sorted()
+        val lo = keys.last { it <= ring }; val hi = keys.first { it >= ring }
+        val a = pts.getValue(lo).toDouble(); val b = pts.getValue(hi).toDouble()
+        (if (hi == lo) a else a + (b - a) * (ring - lo) / (hi - lo)).toInt()
+    }
+
+    /** [curve] (steps of 50, up to 3800) at any ring. */
+    private fun wideCurveAt(curve: Map<Int, Int>, ring: Int): Double {
+        val lo = (ring / 50 * 50).coerceAtMost(3800); val hi = (lo + 50).coerceAtMost(3800)
+        val a = curve.getValue(lo).toDouble(); val b = curve.getValue(hi).toDouble()
+        return if (hi == lo) a else a + (b - a) * (ring - lo) / (hi - lo)
+    }
+
+    /**
+     * The picture takes [lagMs] to show a ring move (camera latency plus the exposure), and frames inside that window
+     * still show the position the lens was moved from.
+     */
+    private fun runWithLag(curve: Map<Int, Int>, bound: Int, seed: Int, settleMs: Long, lagMs: Long): Int {
+        val curveAt = { ring: Int -> wideCurveAt(curve, ring) }
+        val search = SmoothFocusClimb(bound, SmoothFocusClimb.Config(settleMs = settleMs))
+        var now = 0L
+        var ring = search.begin(seed, now).ring
+        var shown = seed
+        var movedAt = -lagMs
+        while (now < 40_000) {
+            now += 100
+            val seen = curveAt(if (now - movedAt < lagMs) shown else ring)
+            when (val command = search.onFrame(now, seen, steady = true)) {
+                is FocusSearch.Command.MoveTo -> { shown = if (now - movedAt < lagMs) shown else ring; ring = command.ring; movedAt = now }
+                is FocusSearch.Command.Locked -> return command.ring
+                null, is FocusSearch.Command.Unreliable -> {}
+            }
+        }
+        throw AssertionError("never locked")
+    }
+
+    @Test fun `with a long exposure the settle has to cover the lag or the climb reads the previous position`() {
+        val lag = 550L // a 1/4 s exposure plus the camera's latency, a little under the settle that is chosen for it
+        var shortSettleWorst = 1.0
+        var longSettleWorst = 1.0
+        for (seed in listOf(2700, 3000, 3080, 3163, 3315, 3500)) {
+            shortSettleWorst = minOf(shortSettleWorst, wideCurveAt(panasonic32, runWithLag(panasonic32, 3824, seed, 250, lag)) / panasonic32.values.max())
+            longSettleWorst = minOf(longSettleWorst, wideCurveAt(panasonic32, runWithLag(panasonic32, 3824, seed, FocusLight.settleMs("SHUTTER_SPEED_1_4"), lag)) / panasonic32.values.max())
+        }
+        assertTrue("with the settle covering the lag the worst lock is $longSettleWorst of the peak", longSettleWorst > 0.85)
+        assertTrue("the short settle should do worse ($shortSettleWorst) or this test shows nothing", shortSettleWorst < longSettleWorst)
+    }
+
+    @Test fun `when the lens ignores the first command for a while the climb does not lock on what it recorded meanwhile`() {
+        // The camera's autofocus has put the lens on the peak (about ring 3000) but reports ring 1535; the lens only obeys
+        // the first ring command 2 s later. Everything read before that shows the peak, whatever ring the climb believes.
+        val bound = 3824
+        val search = SmoothFocusClimb(bound)
+        var now = 0L
+        var ring = search.begin(1535, now).ring
+        var physical = 3000
+        var commandedAt = 0L
+        var obeyed = false
+        var previous: Double? = null
+        var outcome: String? = null
+        while (now < 40_000 && outcome == null) {
+            now += 100
+            if (!obeyed && now - commandedAt >= 2000) { obeyed = true; physical = ring }
+            if (obeyed) physical = ring
+            val seen = wideCurveAt(panasonic32, physical)
+            val steady = previous == null || kotlin.math.abs(seen - previous) <= 0.1 * maxOf(seen, previous)
+            previous = seen
+            when (val command = search.onFrame(now, seen, steady)) {
+                is FocusSearch.Command.MoveTo -> { ring = command.ring; if (obeyed) physical = ring }
+                is FocusSearch.Command.Locked -> outcome = "locked ${command.ring}:${wideCurveAt(panasonic32, command.ring) / panasonic32.values.max()}"
+                is FocusSearch.Command.Unreliable -> outcome = "scan"
+                null -> {}
+            }
+        }
+        assertTrue("outcome $outcome", outcome == "scan" || (outcome!!.startsWith("locked") && outcome.substringAfter(':').toDouble() > 0.8))
+    }
 }

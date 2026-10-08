@@ -120,6 +120,8 @@ class MainActivity : AppCompatActivity() {
         exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
     }, lightDescription = {
         exposureController.readout.value?.let { "${it.shutterSpeed.name} ISO ${it.iso}" } ?: "no exposure readout"
+    }, settleMs = {
+        FocusLight.settleMs(exposureController.readout.value?.shutterSpeed?.name)
     })
     private val meteringController = MeteringController()
     private val whiteBalanceController = WhiteBalanceController()

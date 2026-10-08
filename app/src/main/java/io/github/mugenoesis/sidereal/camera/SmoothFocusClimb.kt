@@ -45,6 +45,12 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
          */
         val staleRecordFraction: Double = 0.5,
         val maxLockRechecks: Int = 4,
+        /**
+         * Once a stale record has been found, the best position still standing must reach this share of the highest stale
+         * record. If it does not, a far sharper picture was seen at some point and the climb has not found it again (the
+         * lens was somewhere the climb did not know), so it hands over to the scanning search rather than lock on what is left.
+         */
+        val staleHillShare: Double = 0.5,
         val dropConfirmFrames: Int = 4,
         /** Averaging stops being worth the time once the noise of the mean is this small (fraction of the reading). */
         val targetNoise: Double = 0.03,
@@ -106,6 +112,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     private var lockedScore = 0.0
     private var belowStreak = 0
     private var lockRechecks = 0
+    private var staleMax = 0.0
 
     /** What was recorded at the current position before the latest reading replaced it. */
     private var replacedRecord: Double? = null
@@ -122,6 +129,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         extendedCentre = false
         wideChecked = false
         lockRechecks = 0
+        staleMax = 0.0
         confident = true
         belowStreak = 0
         stage = Stage.CENTRE
@@ -200,15 +208,23 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         }
         Stage.LOCKING -> {
             val recorded = replacedRecord
-            if (recorded != null && value < recorded * config.staleRecordFraction && lockRechecks < config.maxLockRechecks) {
-                lockRechecks++
-                lock(measured.maxByOrNull { it.value }!!.key, nowMs, confident)
+            if (recorded != null && value < recorded * config.staleRecordFraction) {
+                // The record at the position chosen to lock was wrong (taken while the lens was somewhere else).
+                staleMax = max(staleMax, recorded)
+                val best = measured.maxByOrNull { it.value }!!
+                if (lockRechecks >= config.maxLockRechecks || best.value < staleMax * config.staleHillShare) {
+                    stage = Stage.IDLE
+                    FocusSearch.Command.Unreliable(centre)
+                } else {
+                    lockRechecks++
+                    lock(best.key, nowMs, confident)
+                }
             } else {
-            lockedRing = current
-            lockedScore = value
-            belowStreak = 0
-            stage = Stage.LOCKED
-            FocusSearch.Command.Locked(current, value, confident)
+                lockedRing = current
+                lockedScore = value
+                belowStreak = 0
+                stage = Stage.LOCKED
+                FocusSearch.Command.Locked(current, value, confident)
             }
         }
         else -> null
