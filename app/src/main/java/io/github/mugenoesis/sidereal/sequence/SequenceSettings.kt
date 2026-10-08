@@ -50,7 +50,9 @@ data class SequenceSettings(
     /** Join the panorama's frames into one picture on the phone. */
     val stitch: Boolean = true,
     /** Encode the timelapse's frames into a video on the phone. */
-    val makeVideo: Boolean = false
+    val makeVideo: Boolean = false,
+    /** The lens' focal length, mm, for planning panoramas and sizing dither; null = use what the camera reports (else 15). */
+    val focalMm: Float? = null
 ) {
     companion object {
         private val FRAMES = listOf(1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 1000)
@@ -65,6 +67,17 @@ data class SequenceSettings(
         private val CAL_FRAMES = listOf(3, 5, 10, 15, 20, 30, 50)
         private val KEEP_DARK_PCT = listOf(0, 25, 50, 75, 100)
         private val MAX_ISO = listOf(400, 800, 1600, 3200, 6400, 12800, 25600)
+
+        /** Focal lengths a Micro Four Thirds lens commonly has; stepping below the first goes back to auto. */
+        private val FOCAL_MM = listOf(7.5f, 8f, 9f, 10f, 12f, 14f, 15f, 16f, 17f, 18f, 20f, 24f, 25f, 30f, 35f, 40f, 45f, 50f, 60f, 75f, 100f)
+
+        private fun stepFocal(current: Float?, base: Float, direction: Int): Float? {
+            val from = current ?: base
+            return if (direction > 0) FOCAL_MM.firstOrNull { it > from + 1e-3f } ?: FOCAL_MM.last()
+            else FOCAL_MM.lastOrNull { it < from - 1e-3f }.let { lower -> if (current != null && lower == null) null else lower ?: FOCAL_MM.first() }
+        }
+
+        private fun formatMm(mm: Float): String = if (mm % 1f == 0f) "${mm.toInt()} mm" else "$mm mm"
 
         /** Next rung strictly above [value] (or the top), or strictly below it (or the bottom) - so an off-ladder value steps to its neighbour. */
         private fun step(ladder: List<Int>, value: Int, direction: Int): Int =
@@ -106,6 +119,7 @@ data class SequenceSettings(
             FieldSpec("yawSpanDeg", "Yaw span", "$yawSpanDeg°"),
             FieldSpec("pitchSpanDeg", "Pitch span", "$pitchSpanDeg°"),
             FieldSpec("overlapPct", "Overlap", "$overlapPct%"),
+            FieldSpec("focalMm", "Focal length", focalMm?.let(::formatMm) ?: "Auto"),
             toggle("stitch", "Stitch", stitch),
             toggle("saveFrames", "Save frames", saveFrames),
             FieldSpec("shotsPerNode", "Shots/frame", "$shotsPerNode"),
@@ -121,7 +135,8 @@ data class SequenceSettings(
     private fun toggle(id: String, label: String, on: Boolean) = FieldSpec(id, label, if (on) "On" else "Off", toggle = true)
 
     /** Steps field [id] one rung in [direction] (+1/-1); toggles flip. Unknown ids leave the settings unchanged. */
-    fun adjust(id: String, direction: Int): SequenceSettings = when (id) {
+    fun adjust(id: String, direction: Int, baseFocalMm: Float = 15f): SequenceSettings = when (id) {
+        "focalMm" -> copy(focalMm = stepFocal(focalMm, baseFocalMm, direction))
         "frames" -> copy(frames = step(FRAMES, frames, direction))
         "intervalSec" -> copy(intervalSec = step(INTERVAL_SEC, intervalSec, direction))
         "settleMs" -> copy(settleMs = step(SETTLE_MS, settleMs, direction))

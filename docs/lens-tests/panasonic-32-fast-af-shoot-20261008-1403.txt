@@ -1,0 +1,19 @@
+ SHOOTPROBE panasonic-32-fast-af setup ringMax=3837 ring=2070 aperture=F_11 shutter=SHUTTER_SPEED_1_60 iso=ISO_800 focusMode=AUTO focusStatus=IDLE shootEnabled=true
+ SHOOTPROBE panasonic-32-fast-af shot1 command at +261ms -> accepted
+ SHOOTPROBE panasonic-32-fast-af shot1 +261ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-fast-af shot1 +261ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-fast-af shot1 +1384ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-fast-af shot1 +1893ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-fast-af shot1 RESULT done in 1893ms
+ SHOOTPROBE panasonic-32-fast-af shot2 command at +288ms -> accepted
+ SHOOTPROBE panasonic-32-fast-af shot2 +288ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-fast-af shot2 +288ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-fast-af shot2 +1308ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-fast-af shot2 +2222ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-fast-af shot2 RESULT done in 2222ms
+ SHOOTPROBE panasonic-32-fast-af shot3 command at +250ms -> accepted
+ SHOOTPROBE panasonic-32-fast-af shot3 +250ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-fast-af shot3 +250ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-fast-af shot3 +1278ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-fast-af shot3 +1992ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-fast-af shot3 RESULT done in 1992ms

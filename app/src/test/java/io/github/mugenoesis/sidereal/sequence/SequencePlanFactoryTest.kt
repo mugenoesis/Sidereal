@@ -1,5 +1,6 @@
 package io.github.mugenoesis.sidereal.sequence
 
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,6 +61,20 @@ class SequencePlanFactoryTest {
         val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 10, intervalSec = 5, fps = 24))
         assertTrue(plan.summary, plan.summary.contains("120 frames"))
         assertTrue(plan.summary, plan.summary.contains("5.0s clip"))
+    }
+
+    @Test
+    fun `a still timelapse re-aims at the starting pose before every frame so a gimbal that went to sleep is put back`() {
+        val moves = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 1, intervalSec = 10)).steps.filterIsInstance<SequenceStep.MoveTo>()
+        assertEquals(6, moves.size)
+        assertTrue(moves.all { it.pitch == -10f && it.yaw == 20f })
+    }
+
+    @Test
+    fun `a still timelapse without a gimbal reading just runs`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 1, intervalSec = 10), ctx.copy(attitude = null))
+        assertTrue(plan.steps.none { it is SequenceStep.MoveTo })
+        assertEquals(6, plan.captures)
     }
 
     @Test
@@ -273,5 +288,71 @@ class SequencePlanFactoryTest {
     fun `no download means no download warning however long the run`() {
         val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 600, intervalSec = 60))
         assertTrue(plan.warnings.toString(), plan.warnings.none { it.contains("download", ignoreCase = true) })
+    }
+
+    // --- lens awareness ---
+
+    private fun pano(settings: SequenceSettings = SequenceSettings(), context: ShootContext = ctx) =
+        ok(settings.copy(mode = SequenceMode.PANORAMA, yawSpanDeg = 180, pitchSpanDeg = 60), context)
+
+    @Test
+    fun `a longer lens needs more frames to cover the same panorama`() {
+        val wide = pano(SequenceSettings(focalMm = 15f))
+        val tele = pano(SequenceSettings(focalMm = 50f))
+        assertTrue("${wide.captures} vs ${tele.captures}", tele.captures > wide.captures * 3)
+        assertTrue(tele.series.panorama!!.hFovDeg < wide.series.panorama!!.hFovDeg / 2)
+    }
+
+    @Test
+    fun `with the focal length on auto the plan uses the lens the camera reported`() {
+        val detected = pano(context = ctx.copy(lensFocalMm = 25f))
+        val explicit = pano(SequenceSettings(focalMm = 25f))
+        assertEquals(explicit.captures, detected.captures)
+        assertEquals(explicit.series.panorama!!.hFovDeg, detected.series.panorama!!.hFovDeg, 1e-4f)
+    }
+
+    @Test
+    fun `your own focal length wins over what the camera reported`() {
+        val plan = pano(SequenceSettings(focalMm = 50f), ctx.copy(lensFocalMm = 15f))
+        assertEquals(pano(SequenceSettings(focalMm = 50f)).captures, plan.captures)
+    }
+
+    @Test
+    fun `with nothing known it falls back to 15 mm`() {
+        assertEquals(pano(SequenceSettings(focalMm = 15f)).captures, pano().captures)
+    }
+
+    @Test
+    fun `a zoom lens on auto asks for the focal length to be set`() {
+        val plan = pano(context = ctx.copy(lensFocalMm = null, lensZoomMm = 12f..40f))
+        val warning = plan.warnings.firstOrNull { it.contains("zoom", ignoreCase = true) }
+        assertTrue(plan.warnings.toString(), warning != null)
+        assertTrue(warning!!, warning.contains("12") && warning.contains("40"))
+        // planned for the wide end, so the overlap errs on the safe side
+        assertEquals(pano(SequenceSettings(focalMm = 12f)).captures, plan.captures)
+    }
+
+    @Test
+    fun `a zoom lens with the focal length set needs no warning`() {
+        val plan = pano(SequenceSettings(focalMm = 20f), ctx.copy(lensZoomMm = 12f..40f))
+        assertTrue(plan.warnings.toString(), plan.warnings.none { it.contains("zoom", ignoreCase = true) })
+    }
+
+    @Test
+    fun `the summary says which focal length it planned for`() {
+        assertTrue(pano(SequenceSettings(focalMm = 25f)).summary.contains("25 mm"))
+    }
+
+    @Test
+    fun `dither is smaller on a longer lens so it stays a few pixels, not a few hundred`() {
+        fun biggest(focal: Float): Float {
+            val plan = ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, frames = 60, dither = true, focalMm = focal))
+            val hold = ctx.attitude!!
+            return plan.steps.filterIsInstance<SequenceStep.MoveTo>().maxOf { maxOf(abs(it.pitch - hold.pitch), abs(it.yaw - hold.yaw)) }
+        }
+        val wide = biggest(15f)
+        val tele = biggest(60f)
+        assertTrue("wide $wide tele $tele", wide in 0.3f..0.85f)
+        assertTrue("wide $wide tele $tele", tele < wide / 2.5f)
     }
 }

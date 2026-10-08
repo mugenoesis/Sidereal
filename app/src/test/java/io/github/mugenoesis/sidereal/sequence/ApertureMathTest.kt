@@ -36,4 +36,15 @@ class ApertureMathTest {
         val names = listOf("F_8", "UNKNOWN", "F_1_DOT_7", "F_4", "F_2_DOT_2")
         assertEquals(listOf("F_1_DOT_7", "F_2_DOT_2", "F_4", "F_8"), ApertureMath.widestFirst(names))
     }
+
+    @Test fun `only apertures the lens can really do are candidates, widest first`() {
+        val all = listOf("F_1_DOT_4", "F_1_DOT_7", "F_2", "F_3_DOT_5", "F_4", "F_5_DOT_6", "F_8", "F_11")
+        // a 12-32 mm f/3.5-5.6 zoom: nothing wider than f/5.6 is safe at every zoom position
+        assertEquals(listOf("F_5_DOT_6", "F_8", "F_11"), ApertureMath.atOrNarrowerThan(all, 5.6f))
+        assertEquals(listOf("F_1_DOT_7", "F_2", "F_3_DOT_5", "F_4", "F_5_DOT_6", "F_8", "F_11"), ApertureMath.atOrNarrowerThan(all, 1.7f))
+    }
+
+    @Test fun `a tolerance for the rounding of 1_DOT_7 style names`() {
+        assertEquals(listOf("F_1_DOT_8"), ApertureMath.atOrNarrowerThan(listOf("F_1_DOT_7", "F_1_DOT_8"), 1.8f))
+    }
 }

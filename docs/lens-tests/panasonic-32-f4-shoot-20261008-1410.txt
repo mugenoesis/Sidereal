@@ -1,0 +1,14 @@
+ SHOOTPROBE panasonic-32-f4 setAperture(F_4) -> null
+ SHOOTPROBE panasonic-32-f4 setup ringMax=3830 ring=2063 aperture=F_5_DOT_6 shutter=SHUTTER_SPEED_1_60 iso=ISO_800 focusMode=MANUAL focusStatus=IDLE shootEnabled=true
+ SHOOTPROBE panasonic-32-f4 shot1 command at +245ms -> accepted
+ SHOOTPROBE panasonic-32-f4 shot1 +246ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-f4 shot1 +246ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +5334ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +10422ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +15519ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +20603ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +25672ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +30747ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +35823ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 +40902ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f4 shot1 RESULT STUCK after 45s (shooting=true storing=true)

@@ -215,7 +215,7 @@ object DebugScenarios {
                 val out = StringBuilder()
                 val spreads = ArrayList<Double>()
                 var ringPos = 0
-                while (ringPos <= 2035) {
+                while (ringPos <= (args["max"]?.toInt() ?: 2035)) {
                     callback<String?> { RealCameraGateway.setFocusRingValue(ringPos) { e -> it(e) } }
                     delay(700)
                     val samples = ArrayList<Double>()
@@ -229,6 +229,108 @@ object DebugScenarios {
                 Log.i(TAG, "AFCURVE $tag $out")
                 Log.i(TAG, "AFNOISE $tag meanSpread=${"%.3f".format(spreads.average())} maxSpread=${"%.3f".format(spreads.max())}")
             }
+            "gimbal_probe" -> {
+                // Read-only unless enable=true: what the gimbal says about its own health, and whether it can be told to restart.
+                val gimbal = DJIConnectionManager.gimbal ?: error("no gimbal")
+                val st = DJIConnectionManager.gimbalState.value
+                Log.i(TAG, "GIMBAL state: ${if (st == null) "none" else "mode=${st.mode} overloaded=${st.isMotorOverloaded} pitchAtStop=${st.isPitchAtStop} yawAtStop=${st.isYawAtStop} rollAtStop=${st.isRollAtStop} attitudeReset=${st.isAttitudeReset} calibrating=${st.isCalibrating} balance=${st.balanceState} att=${st.attitudeInDegrees}"}")
+                Log.i(TAG, "GIMBAL display=${gimbal.displayName}")
+                Log.i(TAG, "GIMBAL capabilities=${gimbal.capabilities?.keys}")
+                Log.i(TAG, "GIMBAL getMotorEnabled=" + callback<String> { cb -> gimbal.getMotorEnabled(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Boolean> {
+                    override fun onSuccess(v: Boolean?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                Log.i(TAG, "GIMBAL getControllerMode=" + callback<String> { cb -> gimbal.getControllerMode(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<dji.common.handheldcontroller.ControllerMode> {
+                    override fun onSuccess(v: dji.common.handheldcontroller.ControllerMode?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                val product = dji.sdk.sdkmanager.DJISDKManager.getInstance().product
+                Log.i(TAG, "GIMBAL product=${product?.javaClass?.simpleName} model=${product?.model}")
+                val hh = (product as? dji.sdk.products.HandHeld)?.handHeldController
+                Log.i(TAG, "GIMBAL handheldController=${hh?.javaClass?.simpleName} connected=${(hh as? dji.sdk.handheldcontroller.OSMOHandheldController)?.isConnected}")
+                if (hh != null) {
+                    hh.setPowerModeCallback { m -> Log.i(TAG, "GIMBAL powerMode push=$m"); DJIConnectionManager.handheldPower.onPush(m.name) }
+                    delay(1500)
+                }
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                for (name in listOf(dji.keysdk.HandheldControllerKey.POWER_MODE, dji.keysdk.HandheldControllerKey.STICK_GIMBAL_CONTROL_ENABLED, dji.keysdk.HandheldControllerKey.HANDHELD_NAME)) {
+                    val v = kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                        km?.getValue(dji.keysdk.HandheldControllerKey.create(name), object : dji.keysdk.callback.GetCallback {
+                            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                        }) ?: cont.resume("no key manager")
+                    }
+                    Log.i(TAG, "GIMBAL handheldKey $name = $v")
+                }
+                if (args["enable"] == "true") {
+                    Log.i(TAG, "GIMBAL setMotorEnabled(true)=" + callback<String> { cb -> gimbal.setMotorEnabled(true) { e -> cb(e?.description ?: "ok") } })
+                    delay(1000)
+                    Log.i(TAG, "GIMBAL getMotorEnabled after=" + callback<String> { cb -> gimbal.getMotorEnabled(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Boolean> {
+                        override fun onSuccess(v: Boolean?) = cb("ok:$v")
+                        override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                    }) })
+                }
+            }
+            "handheld_power" -> {
+                // args: mode=ON|SLEEPING|OFF - set the handle's power mode and log what it reports for 12 s after.
+                val product = dji.sdk.sdkmanager.DJISDKManager.getInstance().product
+                val hh = (product as? dji.sdk.products.HandHeld)?.handHeldController ?: error("no handheld controller")
+                hh.setPowerModeCallback { m -> Log.i(TAG, "HANDHELD powerMode push=$m"); DJIConnectionManager.handheldPower.onPush(m.name) }
+                val mode = dji.common.handheld.PowerMode.valueOf(args["mode"] ?: "ON")
+                Log.i(TAG, "HANDHELD setPowerMode($mode) -> " + callback<String> { cb -> hh.setPowerMode(mode) { e -> cb(e?.description ?: "ok") } })
+                repeat(12) {
+                    delay(1000)
+                    val st = DJIConnectionManager.gimbalState.value
+                    Log.i(TAG, "HANDHELD +${it + 1}s gimbal mode=${st?.mode} att=${st?.attitudeInDegrees} cameraConnected=${DJIConnectionManager.camera != null} state=${DJIConnectionManager.connectionState.value}")
+                }
+            }
+            "wake_then_shoot" -> {
+                // Sleeps the handle, wakes it, then tries a shot every 2 s and logs how long until the camera takes one.
+                // Run it with the camera in MANUAL at an aperture the lens can make (never program mode at 32 mm on the Panasonic).
+                val power = DJIConnectionManager.handheldPower
+                val hh = (dji.sdk.sdkmanager.DJISDKManager.getInstance().product as? dji.sdk.products.HandHeld)?.handHeldController ?: error("no handheld controller")
+                hh.setPowerModeCallback { m -> power.onPush(m.name) }
+                Log.i(TAG, "WAKESHOOT sleeping: " + callback<String> { cb -> hh.setPowerMode(dji.common.handheld.PowerMode.SLEEPING) { e -> cb(e?.description ?: "ok") } })
+                delay((args["sleepSec"]?.toLong() ?: 5L) * 1000)
+                val t0 = System.currentTimeMillis()
+                Log.i(TAG, "WAKESHOOT ensureAwake=" + power.ensureAwake() + " after ${System.currentTimeMillis() - t0} ms")
+                val t1 = System.currentTimeMillis()
+                var ok = false
+                while (!ok && System.currentTimeMillis() - t1 < 60_000) {
+                    val r = callback<String?> { RealCameraGateway.startShootPhoto { e -> it(e) } }
+                    Log.i(TAG, "WAKESHOOT +${System.currentTimeMillis() - t1} ms startShootPhoto -> ${r ?: "accepted"}")
+                    if (r == null) ok = true else delay(2000)
+                }
+                delay(4000)
+            }
+            "ring_lag" -> {
+                // args: from, to, tag - jump the ring and log, every 100 ms, what the camera says the ring is and how sharp the
+                // picture is, to see how long the picture takes to catch up with a ring move.
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                val ctrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { io.github.mugenoesis.sidereal.camera.SoftwareAfcController.latest } ?: error("no afc controller")
+                val from = args["from"]?.toInt() ?: 930
+                val to = args["to"]?.toInt() ?: 1312
+                val tag = args["tag"] ?: "lag"
+                callback<String?> { RealCameraGateway.setFocusAssistantEnabled(false, false) { e -> it(e) } }
+                callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.beginSharpnessProbe() }
+                callback<String?> { RealCameraGateway.setFocusRingValue(from) { e -> it(e) } }
+                delay(3000)
+                Log.i(TAG, "RINGLAG $tag settled at $from: sharp=${ctrl.lastSharpness.value.toInt()}")
+                val t0 = System.currentTimeMillis()
+                camera.setFocusRingValue(to, null)
+                val out = StringBuilder()
+                repeat(36) {
+                    val ring = callback<String> { cb -> camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                        override fun onSuccess(v: Int?) = cb("$v")
+                        override fun onFailure(e: dji.common.error.DJIError) = cb("?")
+                    }) }
+                    out.append("${System.currentTimeMillis() - t0}ms ring=$ring sharp=${ctrl.lastSharpness.value.toInt()}\n")
+                    delay(100)
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.endSharpnessProbe() }
+                Log.i(TAG, "RINGLAG $tag $from->$to\n$out")
+            }
             "aperture_probe" -> {
                 val camera = DJIConnectionManager.camera ?: error("no camera")
                 Log.i(TAG, "APERTURE adjustableSupported=${camera.isAdjustableApertureSupported}")
@@ -238,6 +340,114 @@ object DebugScenarios {
                     Log.i(TAG, "APERTURE set $name -> ${callback<String?> { RealCameraGateway.setAperture(name) { e -> it(e) } }}")
                     delay(1500)
                 }
+            }
+            "lens_probe" -> {
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                Log.i(TAG, "LENS interchangeable=${camera.isInterchangeableLensSupported} adjustableAperture=${camera.isAdjustableApertureSupported} opticalZoom=${camera.isOpticalZoomSupported} hybridZoom=${camera.isHybridZoomSupported} displayName=${camera.displayName}")
+                Log.i(TAG, "LENS info=" + callback<String> { cb -> camera.getLensInformation(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<String> {
+                    override fun onSuccess(v: String?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                Log.i(TAG, "LENS opticalZoomFocalLength=" + callback<String> { cb -> camera.getOpticalZoomFocalLength(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                    override fun onSuccess(v: Int?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                for (name in listOf(dji.keysdk.CameraKey.LENS_INFORMATION, dji.keysdk.CameraKey.APERTURE_RANGE, dji.keysdk.CameraKey.OPTICAL_ZOOM_FOCAL_LENGTH, dji.keysdk.CameraKey.OPTICAL_ZOOM_SPEC)) {
+                    val v = kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                        km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                        }) ?: cont.resume("no key manager")
+                    }
+                    Log.i(TAG, "LENS key $name = $v")
+                }
+            }
+            "camera_dump" -> {
+                // Read-only: every value the camera will give for every CameraKey, and the pushed system state. Used to find
+                // out what the camera says about the lens (stowed, extended, which zoom) by diffing two dumps.
+                val tag = args["tag"] ?: "dump"
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                val keys = dji.keysdk.CameraKey::class.java.fields
+                    .filter { java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == String::class.java }
+                    .mapNotNull { f -> (f.get(null) as? String)?.let { f.name to it } }
+                var ok = 0
+                for ((fieldName, keyName) in keys) {
+                    val v = kotlinx.coroutines.withTimeoutOrNull(1500) {
+                        kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                            try {
+                                km?.getValue(dji.keysdk.CameraKey.create(keyName), object : dji.keysdk.callback.GetCallback {
+                                    override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(if (value is Array<*>) value.joinToString(",") else value.toString()) }
+                                    override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                                }) ?: cont.resume("no key manager")
+                            } catch (e: Exception) { if (cont.isActive) cont.resume("EXC ${e.message}") }
+                        }
+                    } ?: "timeout"
+                    if (!v.startsWith("FAIL") && v != "timeout" && !v.startsWith("EXC")) ok++
+                    Log.i(TAG, "CAMKEY $tag $fieldName = ${v.take(160)}")
+                }
+                Log.i(TAG, "CAMKEY $tag summary: ${keys.size} keys, $ok answered")
+                val st = DJIConnectionManager.cameraSystemState.value
+                if (st != null) {
+                    st.javaClass.methods
+                        .filter { it.parameterCount == 0 && (it.name.startsWith("is") || it.name.startsWith("get")) && it.declaringClass != Any::class.java }
+                        .sortedBy { it.name }
+                        .forEach { m -> Log.i(TAG, "CAMSTATE $tag ${m.name} = ${try { m.invoke(st) } catch (e: Exception) { "EXC" }}") }
+                } else Log.i(TAG, "CAMSTATE $tag none")
+                Log.i(TAG, "RESULT camera_dump $tag: DONE")
+            }
+            "shoot_probe" -> {
+                // args: tag=label shutter=SHUTTER_SPEED_1_60 iso=ISO_800 focus=manual|auto count=1
+                // Takes photos one at a time, logging every change in the camera's shooting state with timestamps, so a camera
+                // that hangs mid-shot (seen with a zoom at its long end) shows exactly where. Reports done / stuck per shot.
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                val tag = args["tag"] ?: "probe"
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                suspend fun key(name: String): String = kotlinx.coroutines.withTimeoutOrNull(1500) {
+                    kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                        km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                        }) ?: cont.resume("no key manager")
+                    }
+                } ?: "timeout"
+                callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+                delay(1500)
+                if (args["shutter"] != null) {
+                    callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setIso(args["iso"] ?: "ISO_800") { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"]!!) { e -> it(e) } }
+                }
+                args["aperture"]?.let { ap -> Log.i(TAG, "SHOOTPROBE $tag setAperture($ap) -> ${callback<String?> { RealCameraGateway.setAperture(ap) { e -> it(e) } }}"); delay(1000) }
+                if (args["focus"] == "manual") {
+                    callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                }
+                delay(1500)
+                Log.i(TAG, "SHOOTPROBE $tag setup ringMax=${key(dji.keysdk.CameraKey.FOCUS_RING_VALUE_UPPER_BOUND)} ring=${key(dji.keysdk.CameraKey.FOCUS_RING_VALUE)} aperture=${key(dji.keysdk.CameraKey.APERTURE)} shutter=${key(dji.keysdk.CameraKey.REAL_SHUTTER_SPEED)} iso=${key(dji.keysdk.CameraKey.ISO)} focusMode=${key(dji.keysdk.CameraKey.FOCUS_MODE)} focusStatus=${key(dji.keysdk.CameraKey.FOCUS_STATUS)} shootEnabled=${key(dji.keysdk.CameraKey.IS_SHOOTING_PHOTO_ENABLED)}")
+                repeat((args["count"] ?: "1").toInt()) { n ->
+                    val t0 = System.currentTimeMillis()
+                    val err = callback<String?> { RealCameraGateway.startShootPhoto { e -> it(e) } }
+                    Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} command at +${System.currentTimeMillis() - t0}ms -> ${err ?: "accepted"}")
+                    var last = ""
+                    var finished = false
+                    var lastKeys = 0L
+                    while (System.currentTimeMillis() - t0 < 45_000) {
+                        val st = DJIConnectionManager.cameraSystemState.value
+                        val cur = "shooting=${st?.isShootingSinglePhoto} storing=${st?.isStoringPhoto}"
+                        if (cur != last) { Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} +${System.currentTimeMillis() - t0}ms $cur"); last = cur }
+                        if (err == null && st != null && !st.isShootingSinglePhoto && !st.isStoringPhoto && System.currentTimeMillis() - t0 > 1200) { finished = true; break }
+                        if (err != null) break
+                        if (System.currentTimeMillis() - lastKeys > 5000) {
+                            lastKeys = System.currentTimeMillis()
+                            Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} +${System.currentTimeMillis() - t0}ms keys: shootEnabled=${key(dji.keysdk.CameraKey.IS_SHOOTING_PHOTO_ENABLED)} focusStatus=${key(dji.keysdk.CameraKey.FOCUS_STATUS)} sdBusy=${key(dji.keysdk.CameraKey.SDCARD_IS_BUSY)}")
+                        }
+                        delay(100)
+                    }
+                    Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} RESULT ${if (finished) "done in ${System.currentTimeMillis() - t0}ms" else if (err != null) "refused: $err" else "STUCK after 45s ($last)"}")
+                    if (!finished) return
+                    delay(2500)
+                }
+                Log.i(TAG, "RESULT shoot_probe $tag: DONE")
             }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()

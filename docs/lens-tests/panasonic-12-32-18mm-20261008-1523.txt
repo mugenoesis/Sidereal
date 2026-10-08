@@ -1,0 +1,31 @@
+# Lens test: panasonic-12-32-18mm  (2026-10-08T15:23:58+01:00)
+app version: versionName=0.2.1
+
+== 1. what the camera reports about the lens
+21934 22286 I SiderealDebug: LENS interchangeable=true adjustableAperture=true opticalZoom=false hybridZoom=false displayName=Zenmuse X5
+21934 22286 I SiderealDebug: LENS info=ok:Unknown
+21934 22286 I SiderealDebug: LENS opticalZoomFocalLength=fail:The feature is unsupported.
+21934 22286 I SiderealDebug: LENS key LensInformation = Unknown
+21934 22286 I SiderealDebug: LENS key ApertureRange = FAIL The feature is unsupported.
+21934 22286 I SiderealDebug: LENS key OpticalZoomFocalLength = FAIL The feature is unsupported.
+21934 22286 I SiderealDebug: LENS key OpticalZoomSpec = FAIL The feature is unsupported.
+== 2. aperture: which values the camera accepts (widest first)
+21934 22286 I SiderealDebug: APERTURE adjustableSupported=true
+21934 22286 I SiderealDebug: APERTURE setMode MANUAL -> null
+21934 22286 I SiderealDebug: APERTURE set F_3_DOT_5 -> Param Illegal
+21934 22286 I SiderealDebug: APERTURE set F_4 -> null
+21934 22286 I SiderealDebug: APERTURE set F_5_DOT_6 -> null
+21934 22286 I SiderealDebug: APERTURE set F_8 -> null
+21934 22286 I SiderealDebug: APERTURE set F_11 -> null
+== 3. sharpness over the whole focus ring (ground truth for autofocus)
+21934 22286 I SiderealDebug: AFCURVE panasonic-12-32-18mm 0:72 50:74 100:76 150:83 200:88 250:94 300:98 350:106 400:113 450:117 500:132 550:142 600:156 650:172 700:196 750:222 800:244 850:284 900:324 950:377 1000:440 1050:534 1100:660 1150:824 1200:1089 1250:1418 1300:1962 1350:2847 1400:4394 1450:6349 1500:8306 1550:10077 1600:11030 1650:11989 1700:12348 1750:11827 1800:10287 1850:7952 1900:5749 1950:4019 2000:2688 2050:1953 2100:1396 2150:1060 
+21934 22286 I SiderealDebug: AFNOISE panasonic-12-32-18mm meanSpread=0.016 maxSpread=0.054
+== 4. software autofocus from blurred starts (time to lock, where it locked)
+21934 21934 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_30 ISO 800)
+21934 22286 I SiderealDebug: AFTRIAL panasonic-12-32-18mm start=0 locked=true lockMs=7741 ring=1678 sharp=11464
+21934 21934 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_30 ISO 800)
+21934 22286 I SiderealDebug: AFTRIAL panasonic-12-32-18mm start=725 locked=true lockMs=7073 ring=1691 sharp=11342
+21934 21934 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_30 ISO 800)
+21934 22286 I SiderealDebug: AFTRIAL panasonic-12-32-18mm start=1450 locked=true lockMs=6826 ring=1674 sharp=12029
+21934 21934 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_30 ISO 800)
+21934 22286 I SiderealDebug: AFTRIAL panasonic-12-32-18mm start=2175 locked=true lockMs=8348 ring=1723 sharp=11831

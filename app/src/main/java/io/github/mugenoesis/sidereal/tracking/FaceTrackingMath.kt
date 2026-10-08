@@ -15,6 +15,14 @@ package io.github.mugenoesis.sidereal.tracking
  */
 object FaceTrackingMath {
 
+    /**
+     * The tracker's gains turn "how far off-centre, as a fraction of the frame" into degrees per second, and were tuned
+     * on a 60 degree wide lens. The same fraction is fewer degrees on a narrower lens, so the same gain would overshoot;
+     * scale the output by how wide the view is compared with [referenceFovDeg]. Unknown field of view: unchanged.
+     */
+    fun fovGainScale(fovDeg: Double?, referenceFovDeg: Double): Double =
+        if (fovDeg == null || fovDeg <= 0.0) 1.0 else (fovDeg / referenceFovDeg).coerceIn(0.25, 1.25)
+
     /** Errors smaller than [deadband] are treated as zero rather than fed to a PID. */
     fun isWithinDeadband(error: Double, deadband: Double): Boolean = kotlin.math.abs(error) < deadband
 

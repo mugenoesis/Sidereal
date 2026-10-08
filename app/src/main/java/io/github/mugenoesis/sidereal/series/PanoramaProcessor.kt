@@ -3,6 +3,8 @@ package io.github.mugenoesis.sidereal.series
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.ExifInterface
+import io.github.mugenoesis.sidereal.camera.FocalLength
 import android.util.Log
 import io.github.mugenoesis.sidereal.camera.MediaLibraryController
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +59,19 @@ class PanoramaProcessor(
         BitmapFactory.decodeFile(first.path, bounds)
         var hFov = layout.hFovDeg.toDouble()
         var vFov = layout.vFovDeg.toDouble()
+
+        // The pictures know what lens they were taken with. If it is not the one the panorama was planned for (the app
+        // assumed 15 mm until it could read the lens), start from the real field of view: the alignment only corrects
+        // within a few percent.
+        val taken = try {
+            FocalLength.trustedFromExif(ExifInterface(first.path).getAttribute(ExifInterface.TAG_FOCAL_LENGTH), io.github.mugenoesis.sidereal.camera.ExifLensModel.read(first))
+        } catch (e: Exception) { null }
+        val planned = FocalLength.fromHorizontalFov(layout.hFovDeg)
+        if (FocalLength.disagrees(planned, taken)) {
+            val (h, v) = io.github.mugenoesis.sidereal.sequence.PanoramaPlanner.fovFor(taken!!)
+            Log.i(TAG, "frames were shot at ${taken} mm, planned for ${"%.1f".format(planned)} mm - using the real field of view")
+            hFov = h.toDouble(); vFov = v.toDouble()
+        }
         var frameSpecs = specs
 
         // Correct the gimbal's angles and the lens' field of view from the pictures themselves.

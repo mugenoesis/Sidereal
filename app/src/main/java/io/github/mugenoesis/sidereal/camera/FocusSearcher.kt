@@ -23,10 +23,36 @@ object FocusLight {
     private const val SLOWEST_CLEAN_SHUTTER_SEC = 1.0 / 2
     private const val BRIGHT_SHUTTER_SEC = 1.0 / 60
 
+    /** How long the picture takes to show a ring move, apart from the exposure (measured on the X5: first change at 310-410 ms). */
+    private const val LATENCY_MS = 350L
+    private const val MAX_SETTLE_MS = 1500L
+
+    /**
+     * How long to wait after a ring move before a frame shows the new position: the camera's latency plus the exposure,
+     * since a frame integrates over the whole exposure and one that began before the move still shows part of the old
+     * picture. A flat 250 ms read the previous position, and locked on it, whenever the shutter was slow.
+     */
+    fun settleMs(shutterName: String?): Long {
+        val seconds = shutterName?.let { ShutterLogic.exposureSeconds(it) } ?: 0.0
+        return (LATENCY_MS + (seconds * 1000).toLong()).coerceAtMost(MAX_SETTLE_MS)
+    }
+
     fun isBright(shutterName: String?, iso: Int?): Boolean {
         val seconds = shutterName?.let { ShutterLogic.exposureSeconds(it) }
         if (iso == null) return seconds != null && seconds <= BRIGHT_SHUTTER_SEC + 1e-9
         if (iso > CLEAN_MAX_ISO) return false
         return seconds == null || seconds <= SLOWEST_CLEAN_SHUTTER_SEC + 1e-9
     }
+}
+
+/**
+ * The camera's own autofocus gives the starting hint. When it fails it parks the ring at one end (ring 0 was seen on
+ * the real camera), and a climb that starts there finds a flat floor and "locks" on nothing. Treat a seed within 2% of
+ * either end as no hint at all, so the whole ring is scanned instead.
+ */
+object FocusSeed {
+    private const val END_FRACTION = 0.02
+
+    fun isTrusted(seed: Int?, bound: Int): Boolean =
+        seed != null && bound > 0 && seed >= bound * END_FRACTION && seed <= bound * (1 - END_FRACTION)
 }

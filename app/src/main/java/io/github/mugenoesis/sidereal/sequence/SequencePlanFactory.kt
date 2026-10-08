@@ -16,7 +16,10 @@ data class ShootContext(
     /** Timed Move's captured points, used by a motion timelapse. */
     val pointA: Attitude? = null,
     val pointB: Attitude? = null,
-    val focalMm: Float = 15f,
+    /** Focal length of the lens the camera reports (a prime), or null if it did not say or it is a zoom. */
+    val lensFocalMm: Float? = null,
+    /** A zoom lens' range, if the camera reported one: where it is set is not reported, so the user has to say. */
+    val lensZoomMm: ClosedFloatingPointRange<Float>? = null,
     val ditherSeed: Long = 42L
 )
 
@@ -65,11 +68,15 @@ object SequencePlanFactory {
     private const val FALLBACK_EXPOSURE_MS = 1_000L
     private const val RAMP_SLACK_MS = 500L
     private const val MIN_RAMP_SHUTTER_SEC = 0.25
-    private const val DITHER_MIN_DEG = 0.3f
-    private const val DITHER_MAX_DEG = 0.8f
+    /** 0.3 and 0.8 degrees on the 60 degree wide 15 mm lens this was tuned on, as fractions of the field of view. */
+    private const val DITHER_MIN_FRACTION = 0.3f / 60f
+    private const val DITHER_MAX_FRACTION = 0.8f / 60f
+    private const val DEFAULT_FOCAL_MM = 15f
 
     fun build(settings: SequenceSettings, context: ShootContext): PlanResult {
         val warnings = ArrayList<String>()
+        val (focalMm, zoomWarning) = resolveFocal(settings, context)
+        zoomWarning?.let { warnings += it }
         val exposureMs = context.exposureMs ?: FALLBACK_EXPOSURE_MS.also {
             warnings += "Couldn't read the current exposure - assuming 1s (use a fixed shutter speed)"
         }
@@ -86,7 +93,11 @@ object SequencePlanFactory {
                         settleMs = settings.settleMs.toLong(),
                         exposureMs = exposureMs,
                         hold = if (settings.dither) context.attitude ?: return gimbalMissing() else null,
-                        dither = if (settings.dither) DitherConfig(DITHER_MIN_DEG, DITHER_MAX_DEG, context.ditherSeed) else null
+                        dither = if (settings.dither) {
+                            // Dither is meant to move the picture by a few dozen pixels, whatever the lens: scale it with the field of view.
+                            val hFov = PanoramaPlanner.fovFor(focalMm).first
+                            DitherConfig(hFov * DITHER_MIN_FRACTION, hFov * DITHER_MAX_FRACTION, context.ditherSeed)
+                        } else null
                     )
                     warnings += IntervalPlanner.validate(config)
                     steps = IntervalPlanner.plan(config)
@@ -113,6 +124,9 @@ object SequencePlanFactory {
                         settleMs = settings.settleMs.toLong(),
                         exposureMs = exposureMs,
                         path = path,
+                        // A still timelapse points where it was started before every frame, so a gimbal that went to sleep
+                        // and woke centred (or was knocked) is put back; with no gimbal reading it just runs.
+                        hold = if (path == null) context.attitude else null,
                         ramp = ramp
                     )
                     warnings += IntervalPlanner.validate(config)
@@ -121,7 +135,7 @@ object SequencePlanFactory {
                 }
                 SequenceMode.PANORAMA -> {
                     val center = context.attitude ?: return gimbalMissing()
-                    val (hFov, vFov) = PanoramaPlanner.fovFor(context.focalMm)
+                    val (hFov, vFov) = PanoramaPlanner.fovFor(focalMm)
                     val plan = PanoramaPlanner.plan(
                         PanoramaConfig(
                             center = center,
@@ -138,7 +152,7 @@ object SequencePlanFactory {
                         )
                     )
                     steps = plan.steps
-                    clipNote = " · ${plan.rows}×${plan.cols} grid"
+                    clipNote = " · ${plan.rows}×${plan.cols} grid · ${formatMm(focalMm)}"
                     val shots = settings.shotsPerNode
                     tags = plan.nodes.flatMap { node -> (0 until shots).map { SeriesNaming.panoTag(node.row, node.col, it, shots) } }
                     panorama = PanoramaLayout(plan.nodes.flatMap { node -> List(shots) { node } }, shots, hFov, vFov)
@@ -205,6 +219,19 @@ object SequencePlanFactory {
             else -> SeriesNaming.frameTag(it, captures)
         }
     }
+
+    /** Your setting, else what the camera reported, else 15 mm; plus a warning when a zoom has to be told where it is. */
+    private fun resolveFocal(settings: SequenceSettings, context: ShootContext): Pair<Float, String?> {
+        settings.focalMm?.let { return it to null }
+        context.lensFocalMm?.let { return it to null }
+        context.lensZoomMm?.let { range ->
+            return range.start to "Zoom lens (${formatMm(range.start)}-${formatMm(range.endInclusive)}): set the focal length it is at, " +
+                "or the panorama may have gaps. Planned for the wide end."
+        }
+        return DEFAULT_FOCAL_MM to null
+    }
+
+    private fun formatMm(mm: Float): String = if (mm % 1f == 0f) "${mm.toInt()} mm" else "$mm mm"
 
     private fun gimbalMissing() = PlanResult.Error("Gimbal attitude unavailable - is the Osmo connected?")
 }

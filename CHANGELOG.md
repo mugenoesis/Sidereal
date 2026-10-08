@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### Lens awareness
+- The app no longer assumes the 15 mm lens. It reads the lens name from the camera and takes the focal length from it
+  for panorama planning, dither size and the stitcher's starting field of view. New *Focal length* option in the
+  panorama tray (Auto, or 7.5-100 mm); a zoom lens asks you to set it.
+- Lenses from other makers: the lens line shows "Lens unknown - tap to identify", which reads the lens name from the
+  newest photo's EXIF. A zoom then asks where it is set (tap the line to change it); the answer feeds the aperture
+  limit, panorama planning and the face tracker's gains, and is forgotten if the zoom ring moves.
+- A stowed collapsible zoom is detected ("Lens not extended") and the lens line is shown from connecting.
+- The ramp and the aperture stepper never ask for an aperture the lens can't make at its zoom (the Panasonic 12-32mm
+  hangs the camera on f/4 at 32 mm).
+- The stitcher no longer trusts the EXIF focal length of a photo taken with a zoom lens (a third-party zoom writes the
+  wide end whatever the ring is at) and keeps the planned one.
+- Autofocus reads the focus ring's range again at each start (a zoom changes it) and corrects a stale first reading
+  before locking, which stopped it locking on the slope from far-blurred starts.
+- **The Osmo handle's sleep mode is handled.** When the handle sleeps (on its own, or its button) the gimbal motors stop
+  and the camera sags and stops taking pictures. A "Gimbal asleep - tap to wake" button appears and wakes it from the
+  phone, putting the camera back where it was. A running sequence wakes it by itself, waits for the camera to come back
+  (about 7 s), and re-aims before the frame. A still timelapse now re-aims at its starting pose before every frame.
+- Dither now scales with the field of view (a few dozen pixels on any lens) instead of a fixed number of degrees.
+- The stitcher reads the focal length from the photos' EXIF and corrects its starting field of view if the plan used
+  a different lens.
+- The ramp opens the lens to the widest aperture the camera accepts rather than assuming f/1.7.
+- The face tracker's gains are scaled to the lens' field of view (they were tuned on the 60 degree wide 15 mm, and
+  would overshoot on a long lens).
+
+### Autofocus
+- The sharpness measure is divided by the picture's brightness squared, so lamps and screens that flicker (which
+  brighten and darken the whole preview) no longer look like noise. Frame-to-frame noise in an LED-lit room at ISO 800
+  and 1/80 s roughly halved.
+- Before locking, the quick climb also looks a fifth of the ring either side, so a start that landed on a blurred floor
+  (which looks like a plateau locally) climbs to the real peak instead of locking on nothing.
+- A hardware-autofocus start pinned at either end of the ring (it parks there when it fails) is ignored and the whole
+  ring is scanned.
+- Known weak spot: in a dim room under flickering LED light some runs (2 of 10 measured) still lock off the peak or
+  fall back to the slower scanning search (about 10 s typical, 20 s worst).
+
 ### Changed
 - Fewer permissions: no camera, gallery-read, draw-over-apps, kill-background-processes or running-tasks permissions
   (the last three come from the DJI SDK's own manifest and are removed). First start now asks for three permissions

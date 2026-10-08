@@ -2,6 +2,8 @@ Sidereal is a full manual camera and gimbal controller for the DJI Osmo Pro with
 
 You need the camera: Sidereal controls an Osmo Pro with a Zenmuse X5 and does nothing without one. It is independent software and is not made by, endorsed by or affiliated with DJI. DJI and Osmo are trademarks of DJI.
 
+Lenses: it is tested with the DJI MFT 15mm f/1.7. Other Micro Four Thirds lenses should work; the app reads the lens from the camera for panorama planning, and zoom lenses ask you to set the focal length.
+
 CAMERA
 • Exposure modes P / A / S / M with ISO, shutter, aperture and EV
 • Focus modes, tap to focus, and a continuous autofocus the camera lacks (locks in about 5-8 seconds in good light), plus a star focus assistant for night sky

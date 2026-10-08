@@ -65,4 +65,23 @@ class FaceTrackingMathTest {
         assertFalse(FaceTrackingMath.shouldResyncTarget(target = 10f, actual = 12f, threshold = 15f))
         assertTrue(FaceTrackingMath.shouldResyncTarget(target = 10f, actual = 30f, threshold = 15f))
     }
+
+    @Test
+    fun `gain scale is one on the lens the gains were tuned on and shrinks with a narrower view`() {
+        assertEquals(1.0, FaceTrackingMath.fovGainScale(60.0, 60.0), 1e-9)
+        // 45 mm is about 21 degrees across: the same fraction of the frame is a third of the angle, so a third of the rate
+        assertEquals(0.35, FaceTrackingMath.fovGainScale(21.0, 60.0), 0.01)
+    }
+
+    @Test
+    fun `gain scale is limited so a very long or very wide lens cannot make tracking useless or wild`() {
+        assertEquals(0.25, FaceTrackingMath.fovGainScale(5.0, 60.0), 1e-9)
+        assertEquals(1.25, FaceTrackingMath.fovGainScale(120.0, 60.0), 1e-9)
+    }
+
+    @Test
+    fun `unknown field of view leaves the gains alone`() {
+        assertEquals(1.0, FaceTrackingMath.fovGainScale(null, 60.0), 1e-9)
+        assertEquals(1.0, FaceTrackingMath.fovGainScale(0.0, 60.0), 1e-9)
+    }
 }

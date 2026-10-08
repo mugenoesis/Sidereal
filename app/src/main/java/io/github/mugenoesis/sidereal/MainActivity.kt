@@ -53,6 +53,7 @@ import io.github.mugenoesis.sidereal.zoom.ZoomController
 import dji.common.camera.SettingsDefinitions
 import dji.sdk.codec.DJICodecManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -91,11 +92,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val exposureController = ExposureController()
+
+    /** Reads the name of the lens on the camera ("DJI MFT 15mm F1.7 ASPH"); panorama planning and dither size depend on its focal length. */
+    private val lensController = io.github.mugenoesis.sidereal.camera.LensController(
+        read = { callback ->
+            val camera = DJIConnectionManager.camera
+            if (camera == null) callback(null) else camera.getLensInformation(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<String> {
+                override fun onSuccess(value: String?) = callback(value)
+                override fun onFailure(error: dji.common.error.DJIError?) = callback(null)
+            })
+        },
+        readRing = { callback ->
+            val camera = DJIConnectionManager.camera
+            if (camera == null) callback(null, null) else camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                override fun onSuccess(ring: Int?) {
+                    camera.getFocusRingValueUpperBound(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                        override fun onSuccess(max: Int?) = callback(ring, max)
+                        override fun onFailure(error: dji.common.error.DJIError?) = callback(ring, null)
+                    })
+                }
+                override fun onFailure(error: dji.common.error.DJIError?) = callback(null, null)
+            })
+        }
+    )
     private val focusController = FocusController()
     private val softwareAfcController = SoftwareAfcController(focusController, brightLight = {
         exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
     }, lightDescription = {
         exposureController.readout.value?.let { "${it.shutterSpeed.name} ISO ${it.iso}" } ?: "no exposure readout"
+    }, settleMs = {
+        FocusLight.settleMs(exposureController.readout.value?.shutterSpeed?.name)
     })
     private val meteringController = MeteringController()
     private val whiteBalanceController = WhiteBalanceController()
@@ -325,6 +351,13 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         bindCameraSettingsViews()
         bindSequenceFeature()
+        // Keep the face tracker's gains right for whatever lens is on: they were tuned on the 60 degree wide 15 mm.
+        lensController.ringUpperBound
+            .onEach { it?.let(focusController::setFocusRingUpperBound) }
+            .launchIn(lifecycleScope)
+        combine(lensController.info, lensController.zoomMm) { _, _ -> lensController.effectiveFocalMm() }
+            .onEach { faceTrackingController.setLensFocalMm(it) }
+            .launchIn(lifecycleScope)
         bindCameraStatus()
         bindGamepad()
         shootingControls = io.github.mugenoesis.sidereal.camera.ShootingControls(this, mediaFormatController)
@@ -532,6 +565,8 @@ class MainActivity : AppCompatActivity() {
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
         (::gamepadInput.isInitialized && gamepadInput.handleKey(event)) || super.dispatchKeyEvent(event)
 
+    private val LENS_RING_POLL_MS = 3_000L
+
     private fun bindCameraStatus() {
         cameraStatusController = CameraStatusController(lifecycleScope)
         val text = findViewById<android.widget.TextView>(R.id.cameraStatusText)
@@ -547,6 +582,151 @@ class MainActivity : AppCompatActivity() {
         DJIConnectionManager.connectionState
             .onEach { cameraStatusController.status.value.let { _ -> text.visibility = if (it is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE } }
             .launchIn(lifecycleScope)
+        bindLensStatus()
+        bindGimbalSleep()
+    }
+
+    private val poseMemory = io.github.mugenoesis.sidereal.gimbal.PoseMemory()
+    private var poseBeforeSleep: io.github.mugenoesis.sidereal.gimbal.PoseMemory.Pose? = null
+
+    /**
+     * The handle goes to sleep on its own (and when its button is pressed): the gimbal motors stop and the camera sags.
+     * Shows that, and a tap wakes it and points the camera back where it was, since it wakes centred.
+     */
+    private fun bindGimbalSleep() {
+        val pill = findViewById<android.widget.TextView>(R.id.gimbalSleepText)
+        val power = DJIConnectionManager.handheldPower
+        // Where the camera pointed a moment ago: the handle says it has gone to sleep about a second after the camera
+        // starts to sag, so the newest readings at that point are the droop and the pose to put back is an older one.
+        DJIConnectionManager.gimbalState
+            .onEach { st -> st?.attitudeInDegrees?.let { poseMemory.record(android.os.SystemClock.elapsedRealtime(), it.pitch, it.yaw) } }
+            .launchIn(lifecycleScope)
+        power.state
+            .onEach { state ->
+                if (state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.SLEEPING && poseBeforeSleep == null) {
+                    poseBeforeSleep = poseMemory.poseBefore(android.os.SystemClock.elapsedRealtime())
+                } else if (state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.ON) {
+                    poseBeforeSleep = null // woken by hand: the next sleep takes its own
+                }
+            }
+            .launchIn(lifecycleScope)
+        combine(power.state, DJIConnectionManager.connectionState) { state, conn -> state to conn }
+            .onEach { (state, conn) ->
+                val asleep = state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.SLEEPING ||
+                    state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.OFF
+                pill.visibility = if (asleep && conn is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE
+            }
+            .launchIn(lifecycleScope)
+        pill.setOnClickListener { wakeGimbal() }
+    }
+
+    private fun wakeGimbal() {
+        val pose = poseBeforeSleep
+        lifecycleScope.launch {
+            val awake = DJIConnectionManager.handheldPower.ensureAwake()
+            if (!awake) {
+                android.widget.Toast.makeText(this@MainActivity, "The handle didn't wake - press its button", android.widget.Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            poseBeforeSleep = null
+            poseMemory.clear()
+            if (pose != null) io.github.mugenoesis.sidereal.sequence.RealSequenceHost().moveTo(pose.pitch, pose.yaw)
+        }
+    }
+
+    /** The lens line: "Checking lens..." from the moment of connecting, then the lens' focal length(s) and aperture. */
+    private fun bindLensStatus() {
+        val lensText = findViewById<android.widget.TextView>(R.id.lensStatusText)
+        combine(lensController.line, DJIConnectionManager.connectionState) { line, state -> line to state }
+            .onEach { (line, state) ->
+                lensText.visibility = if (state is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE
+                lensText.text = line.text
+                lensText.isClickable = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.UNKNOWN ||
+                    lensController.info.value?.isZoom == true && line.kind != io.github.mugenoesis.sidereal.camera.LensLine.Kind.NOT_EXTENDED
+                val warn = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.NOT_EXTENDED
+                lensText.setTextColor(if (warn) 0xFFFFB74D.toInt() else android.graphics.Color.WHITE)
+            }
+            .launchIn(lifecycleScope)
+        lensText.setOnClickListener {
+            if (lensController.info.value?.isZoom == true && lensController.line.value.kind != io.github.mugenoesis.sidereal.camera.LensLine.Kind.UNKNOWN) askZoomPosition()
+            else identifyLensFromPhoto()
+        }
+        // The ring's position is what tells a stowed zoom from an extended one, so keep an eye on it (it is a cheap call).
+        lifecycleScope.launch {
+            while (true) {
+                if (DJIConnectionManager.connectionState.value is DJIConnectionManager.ConnectionState.ProductConnected &&
+                    DJIConnectionManager.camera != null) {
+                    lensController.refreshRing()
+                }
+                delay(LENS_RING_POLL_MS)
+            }
+        }
+    }
+
+    /**
+     * The camera cannot say where a zoom is set (its EXIF reads the wide end whatever the ring is at), so ask. The answer
+     * limits the aperture to what the lens can make at that zoom and sets the field of view the plans are made for.
+     */
+    private fun askZoomPosition() {
+        val lens = lensController.info.value?.takeIf { it.isZoom } ?: return
+        val lo = lens.focalMinMm!!
+        val hi = lens.focalMaxMm!!
+        fun mm(v: Float) = if (v % 1f == 0f) v.toInt().toString() else v.toString()
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            hint = "${mm(lo)}-${mm(hi)}"
+            lensController.zoomMm.value?.let { setText(mm(it)) }
+            setSelectAllOnFocus(true)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Where is the zoom set?")
+            .setMessage("Read it off the marks on the lens (${mm(lo)}-${mm(hi)} mm). The camera can't tell, and the app uses it to keep the aperture within what the lens can do and to plan panoramas.")
+            .setView(input)
+            .setPositiveButton("Set") { _, _ ->
+                val chosen = io.github.mugenoesis.sidereal.camera.ZoomEntry.parse(input.text.toString(), lens)
+                if (chosen == null) android.widget.Toast.makeText(this, "Enter a number from ${mm(lo)} to ${mm(hi)}", android.widget.Toast.LENGTH_SHORT).show()
+                else lensController.setZoomMm(chosen)
+            }
+            .setNeutralButton("Not sure") { _, _ -> lensController.setZoomMm(null) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private var identifyingLens = false
+
+    /**
+     * The camera calls any non-DJI lens "Unknown", but the newest photo on the card names it in its EXIF. Switches the
+     * camera to playback to fetch that one photo, then back; refused while a sequence is running or recording.
+     */
+    private fun identifyLensFromPhoto() {
+        if (identifyingLens) return
+        val busy = when {
+            sequenceFeature.controller.isRunning.value -> "A sequence is running"
+            DJIConnectionManager.cameraSystemState.value?.isRecording == true -> "Stop recording first"
+            else -> null
+        }
+        if (busy != null) { android.widget.Toast.makeText(this, busy, android.widget.Toast.LENGTH_SHORT).show(); return }
+        identifyingLens = true
+        android.widget.Toast.makeText(this, "Reading the newest photo on the camera...", android.widget.Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val identifier = io.github.mugenoesis.sidereal.camera.LensIdentifier(
+                io.github.mugenoesis.sidereal.series.RealCardSource(applicationContext)
+            ) { file -> io.github.mugenoesis.sidereal.camera.ExifLensModel.read(file) }
+            val result = try { identifier.identify() } finally { identifyingLens = false }
+            android.util.Log.i("LensId", "identify -> $result")
+            val message = when (result) {
+                is io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.Identified -> {
+                    lensController.identifyFromPhoto(result.lensModel)
+                    if (lensController.info.value?.isZoom == true) askZoomPosition()
+                    "Lens: ${result.lensModel}"
+                }
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.NoPhotos -> "No photos on the card - take one with this lens, then tap again"
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.CardUnreadable -> "Couldn't read the camera's card"
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.DownloadFailed -> "Couldn't download the newest photo"
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.NoLensInPhoto -> "The newest photo doesn't name its lens"
+            }
+            android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun bindSequenceFeature() {
@@ -560,6 +740,7 @@ class MainActivity : AppCompatActivity() {
                 refreshRanges = { exposureController.refreshKeyBasedEvTelemetry() },
                 currentAperture = { exposureController.readout.value?.getAperture()?.name },
                 apertureNames = { SettingsDefinitions.Aperture.values().map { it.name } },
+                apertureLimitF = { lensApertureLimitF() },
                 setAperture = { name, done -> exposureController.setApertureByNameForRamp(name, done) },
                 shutterOptions = {
                     exposureController.shutterRange.value.orEmpty().mapNotNull { s ->
@@ -578,6 +759,8 @@ class MainActivity : AppCompatActivity() {
                     else if (findViewById<HistogramView>(R.id.histogramView).visibility != android.view.View.VISIBLE) histogramController.deactivate()
                 }
             ),
+            lensProvider = { lensController.info.value },
+            zoomMmProvider = { lensController.zoomMm.value },
             pointsProvider = {
                 fun TimedMoveController.Point?.toAttitude() = this?.let { Attitude(it.pitch.toFloat(), it.yaw.toFloat()) }
                 timedMoveController.capturedA.toAttitude() to timedMoveController.capturedB.toAttitude()
@@ -1148,8 +1331,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The widest aperture the lens can make at its current zoom, if the lens is identified (see RampIo.apertureLimitF).
+     * With a zoom's position not entered this is the narrowest end, so nothing the lens cannot do is ever offered.
+     */
+    private fun lensApertureLimitF(): Float? = lensController.info.value?.widestApertureAt(lensController.zoomMm.value)
+
     private fun stepAperture(delta: Int) {
-        val values = apertureStepValues
+        // The camera accepts an aperture the lens cannot make (f/4 at 32 mm on a 12-32 f/3.5-5.6), and then the next shot
+        // never finishes: offer only what the lens can really do.
+        val limit = lensApertureLimitF()
+        val values = if (limit == null) apertureStepValues else {
+            val allowed = io.github.mugenoesis.sidereal.sequence.ApertureMath.atOrNarrowerThan(apertureStepValues.map { it.name }, limit).toSet()
+            apertureStepValues.filter { it.name in allowed }.toTypedArray().ifEmpty { apertureStepValues }
+        }
         val current = selectedAperture ?: exposureController.readout.value?.getAperture() ?: values[0]
         val next = step(current, delta, values)
         selectedAperture = next
@@ -2106,6 +2301,9 @@ class MainActivity : AppCompatActivity() {
                 shootingControls.onCameraRebound()
                 exposureController.startObserving()
                 exposureController.refreshCapability()
+                // Which lens is on, for panorama planning; the camera is sometimes slow to answer straight after a bind.
+                lensController.refresh()
+                lifecycleScope.launch { delay(3000); lensController.refresh() }
                 // Litchi showed aperture as genuinely adjustable (f/1.7
                 // changed to f/1.8 and back) on hardware where this app's
                 // own aperture row stays hidden - originally suspected as a

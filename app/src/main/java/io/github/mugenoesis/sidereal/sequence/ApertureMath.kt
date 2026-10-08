@@ -23,4 +23,8 @@ object ApertureMath {
     /** The real apertures among [names], widest (smallest f-number) first. */
     fun widestFirst(names: List<String>): List<String> =
         names.mapNotNull { n -> fNumber(n)?.let { n to it } }.sortedBy { it.second }.map { it.first }
+
+    /** The real apertures among [names] no wider than [limitF] (a lens' widest f-number), widest first. */
+    fun atOrNarrowerThan(names: List<String>, limitF: Float): List<String> =
+        widestFirst(names).filter { (fNumber(it) ?: 0.0) >= limitF - 0.05 }
 }

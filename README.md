@@ -46,9 +46,10 @@
 - Day-to-night ("holy grail") timelapse ramp: meters the live histogram
   before each frame and follows the light with shutter first, then ISO, in
   smooth third-stop steps. *Keep darkness* sets how much of the fading light
-  stays in the frames, and *Max ISO* caps the noise. It opens the lens to f/1.7
-  when it starts (and shortens the shutter to match) so the night end of the
-  ramp has the full range, and it works however the app was opened
+  stays in the frames, and *Max ISO* caps the noise. It opens the lens to its
+  widest aperture when it starts (and shortens the shutter to match) so the
+  night end of the ramp has the full range, and it works however the app was
+  opened
 - After a run, the photos can come off the camera by themselves into a
   folder that says what they are: `Pictures/Sidereal/Panorama_2026-10-08_0131/`
   holds `Panorama_2026-10-08_0131_r2c3_DJI_0398.JPG` and so on, with the
@@ -125,7 +126,8 @@ first). It works with Wear OS 2 and newer.
 
 - A DJI Osmo Pro with a Zenmuse X5. Only the DJI MFT 15mm f/1.7 lens has
   been tested so far, and other MSDK v4 Osmo models may work but haven't
-  been tried.
+  been tried. Other Micro Four Thirds lenses should work (see *Lenses*
+  below).
 - An Android phone running Android 6.0 (API 23) or newer. The app needs real
   hardware, so it won't work in an emulator.
 - A DJI developer App Key (free)
@@ -170,10 +172,49 @@ scenarios against a connected Osmo and logs `RESULT … PASS/FAIL` lines.
    live view appears.
 3. Choose a gimbal mode (Manual, A→B, or Face Track) from the control bar.
 
+## Lenses
+
+Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume that lens everywhere:
+
+- **Focal length.** The camera reports the lens name ("DJI MFT 15mm F1.7 ASPH"); the app reads the focal length out of
+  it and uses it to plan panoramas (how many frames, how much they overlap), to size dither, and as the stitcher's
+  starting field of view. *Focal length* in the panorama options is *Auto* (what the camera reports, else 15 mm) or a
+  value you choose. The stitcher also reads the focal length stored in the photos and corrects itself if the plan used a
+  different one.
+- **Other makers' lenses.** The camera calls any lens that is not DJI's "Unknown". The lens line on screen then reads
+  *Lens unknown - tap to identify*: tapping it reads the lens name from the newest photo on the card (take one first
+  if the card is empty).
+- **Zoom lenses.** Neither the camera nor the photos say where a zoom is set (the photos claim the wide end whatever
+  the ring is at), so the app asks: tap the lens line and enter the mm from the marks on the lens. If you move the zoom
+  ring afterwards the app notices (the focus ring's range changes with the zoom) and asks again. Until it knows, it
+  plans panoramas for the wide end (extra overlap, never gaps) and assumes the narrowest aperture the zoom can reach.
+- **Aperture.** The day-to-night ramp opens the lens to the widest aperture it can make at its current zoom, and the
+  aperture stepper hides apertures the lens can't make. This matters: on the Panasonic 12-32mm the camera accepts f/4
+  at 32 mm, which the lens can't make, and the camera then locks up until it is power-cycled. A lens the app can't
+  identify is left alone.
+- **Handle sleep.** The Osmo handle goes to sleep on its own or when its button is pressed: the gimbal motors stop, the
+  camera sags and stops taking pictures, but the WiFi link stays up. Sidereal shows *Gimbal asleep - tap to wake* and wakes
+  it from the phone, then points the camera back where it was (the gimbal wakes centred). A running sequence does this by
+  itself, and a still timelapse re-aims before every frame.
+- **Autofocus.** The software autofocus reads the focus ring's range from the camera, but its settings were tuned on
+  the 15 mm lens, so another lens may lock slower or less precisely.
+
+| Lens | Status |
+|---|---|
+| DJI MFT 15mm f/1.7 | Tested; everything in this README was checked on it |
+| Panasonic Lumix G Vario 12-32mm f/3.5-5.6 | Tested at 12, 18 and 32 mm; see the [findings](docs/lens-tests/panasonic-12-32-findings.md) |
+| Olympus M.Zuiko 45mm f/1.8 | Planned |
+| Olympus M.Zuiko 14-42mm f/3.5-5.6 EZ (power zoom) | Planned |
+| Panasonic Lumix G Vario 35-100mm f/4-5.6 | Planned, later (the X5's longest practical reach) |
+| Anything else (Micro Four Thirds) | Untried; should work as above, tell me how it goes |
+
+The [lens test plan](docs/lens-test-plan.md) lists exactly what will be checked on the two Olympus lenses, and
+`tools/lens_test.sh` runs the parts that can be automated.
+
 ## Feature status
 
 Everything below was tested on an Osmo Pro with a Zenmuse X5 and the DJI
-MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
+MFT 15mm f/1.7 lens. Other lenses haven't been tried yet (see *Lenses* above).
 
 ### ✅ Working
 
@@ -221,7 +262,7 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   smooth and accurate.
 - **Day-to-night ramp:** checked on the camera in daylight by panning from a
   window to a dim room and back, which it followed in smooth steps, and from a
-  lens left at f/8 (it opened to f/1.7 and kept the picture's brightness). It
+  lens left at f/8 (it opened to its widest, f/1.7 on the test lens, and kept the picture's brightness). It
   hasn't seen a real sunset yet.
 - **Long-running sequences:** a one-minute run kept shooting with the screen
   off, and the notification, wake lock and WiFi lock were released at the end.
@@ -232,8 +273,9 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   autofocus, finds the sharpness peak (a quick climb in clean light, a scan in
   noisy low light), locks, and then leaves the ring alone until the scene
   changes. It hasn't been tested while recording video. At ISO 12800 and above
-  it can still lock off the peak, and in very noisy light a seed that landed
-  on a featureless patch can lock on nothing.
+  it can still lock off the peak, and in a dim room under flickering LED light
+  some runs (2 of 10 measured) lock off the peak or fall back to the slower
+  scan.
 - **Phone audio recording and sync:** records from the phone's mic or a
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
   and exports a merged MP4. The automatic starting offset is only as good

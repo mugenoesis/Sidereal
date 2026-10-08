@@ -44,6 +44,21 @@ object DJIConnectionManager {
     var gimbal: Gimbal? = null
         private set
 
+    private var handheldController: dji.sdk.handheldcontroller.HandheldController? = null
+
+    /**
+     * The Osmo handle's power mode, pushed by the handle. SLEEPING means the gimbal motors are off; `ensureAwake()` wakes
+     * it from the phone (it then comes up centred, not where it was).
+     */
+    val handheldPower = io.github.mugenoesis.sidereal.gimbal.HandheldPower(send = { state, done ->
+        val controller = handheldController
+        if (controller == null) done("no handheld controller") else try {
+            controller.setPowerMode(dji.common.handheld.PowerMode.valueOf(state.name)) { error -> done(error?.description) }
+        } catch (e: Exception) {
+            done(e.message ?: "setPowerMode failed")
+        }
+    })
+
     // Gimbal has no synchronous state getter - GimbalState only arrives via
     // setStateCallback, so this is the latest one we've been pushed.
     private val _gimbalState = MutableStateFlow<GimbalState?>(null)
@@ -106,6 +121,8 @@ object DJIConnectionManager {
                     Log.i(TAG, "Product disconnected")
                     camera = null
                     gimbal = null
+                    handheldController = null
+                    handheldPower.onPush(null)
                     _gimbalState.value = null
                     _cameraSystemState.value = null
                     _connectionState.value = ConnectionState.Registered
@@ -153,6 +170,9 @@ object DJIConnectionManager {
 
         cachedPitchRange = null
         cachedYawRange = null
+
+        handheldController = (product as? dji.sdk.products.HandHeld)?.handHeldController
+        handheldController?.setPowerModeCallback { mode -> handheldPower.onPush(mode.name) }
 
         _gimbalState.value = null
         gimbal?.setStateCallback { state -> _gimbalState.value = state }
