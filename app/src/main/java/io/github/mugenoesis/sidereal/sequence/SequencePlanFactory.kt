@@ -163,7 +163,7 @@ object SequencePlanFactory {
                     steps = steps,
                     captures = captures,
                     estimatedMs = estimated,
-                    summary = "$captures frames · ${TimelapseMath.format(estimated)}$clipNote",
+                    summary = "$captures frames · ${TimelapseMath.format(estimated)}$clipNote${afterNote(series)}",
                     warnings = warnings,
                     series = series
                 )
@@ -171,6 +171,20 @@ object SequencePlanFactory {
         } catch (e: IllegalArgumentException) {
             PlanResult.Error(e.message ?: "Invalid settings")
         }
+    }
+
+    /** Roughly how long one photo takes to come across the camera's WiFi, from real downloads of the X5's ~7 MB JPEGs. */
+    private const val DOWNLOAD_MS_PER_PHOTO = 3_500L
+
+    /** " · then save, stitch (+4m download)": what happens to the photos after the run, and what it costs in time. */
+    private fun afterNote(series: SeriesPlan): String {
+        if (!series.needsDownload) return ""
+        val steps = ArrayList<String>()
+        if (series.keepFrames) steps += "save"
+        if (series.stitch) steps += "stitch"
+        if (series.makeVideo) steps += "video"
+        val download = TimelapseMath.format(series.tags.size * DOWNLOAD_MS_PER_PHOTO)
+        return " · then ${steps.joinToString(", ")} (+$download download)"
     }
 
     private fun defaultTags(mode: SequenceMode, captures: Int): List<String> = (1..captures).map {

@@ -49,6 +49,8 @@ private class RecordingProcessor(val retains: Boolean = false, val result: Strin
     var finishedFolder: String? = null
     var existedAtFinish = 0
     override val retainsFiles = retains
+    var attached = false
+    override fun attach(report: (AfterRunProgress) -> Unit) { attached = true; report(AfterRunProgress("Stitching", 1, 2)) }
     override suspend fun onFrame(index: Int, tag: String, jpeg: File) { frames += Triple(index, tag, jpeg.name) }
     override suspend fun finish(folder: String, frameFiles: List<File>): String? {
         finishedFolder = folder
@@ -181,6 +183,7 @@ class SeriesPostRunnerTest {
         assertEquals(listOf(0 to "f0001", 1 to "f0002"), processor.frames.map { it.first to it.second })
         assertTrue(processor.frames.all { it.third.endsWith(".JPG") })
         assertEquals("Timelapse_2026-10-08_0115", processor.finishedFolder)
+        assertTrue(processor.attached)
         assertTrue(msg!!.contains("Made it"))
     }
 

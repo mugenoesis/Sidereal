@@ -14,6 +14,7 @@ import io.github.mugenoesis.sidereal.series.RealCardSource
 import io.github.mugenoesis.sidereal.series.RunSummary
 import io.github.mugenoesis.sidereal.series.SeriesPlan
 import io.github.mugenoesis.sidereal.series.SeriesPostRunner
+import io.github.mugenoesis.sidereal.series.PanoramaProcessor
 import io.github.mugenoesis.sidereal.series.TimelapseVideoProcessor
 import io.github.mugenoesis.sidereal.dji.DJIConnectionManager
 import io.github.mugenoesis.sidereal.dji.RealCameraGateway
@@ -94,6 +95,7 @@ class SequenceFeature(
     @Suppress("UNUSED_PARAMETER")
     private fun frameProcessorFor(plan: SeriesPlan, run: RunSummary, folder: String): FrameProcessor? = when {
         plan.makeVideo -> TimelapseVideoProcessor(activity.applicationContext, folder, plan.fps)
+        plan.stitch && plan.panorama != null -> PanoramaProcessor(activity.applicationContext, folder, plan.panorama)
         else -> null
     }
 

@@ -26,6 +26,9 @@ interface FrameProcessor {
     /** True if it needs every frame file to still exist at [finish] (a stitch); false if it has used [onFrame]'s file by the time that returns (a video). */
     val retainsFiles: Boolean
 
+    /** Called once, before [finish], with a way to report progress of long work (e.g. "Stitching 3/9"). */
+    fun attach(report: (AfterRunProgress) -> Unit) {}
+
     suspend fun onFrame(index: Int, tag: String, jpeg: File)
 
     /** Produces the result into [folder]; returns a short description for the user, or null. [frameFiles] are the retained files, in shooting order. */
@@ -93,6 +96,7 @@ class SeriesPostRunner(
                     parts += "No JPEG frames to make it from (only RAW was saved) - turn JPEG on in the camera's photo format"
                 } else {
                     report(AfterRunProgress("Finishing", 0, 0))
+                    processor.attach(report)
                     processor.finish(folder, retained)?.let { parts += it }
                 }
             }

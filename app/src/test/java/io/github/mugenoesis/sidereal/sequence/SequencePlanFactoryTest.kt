@@ -232,4 +232,24 @@ class SequencePlanFactoryTest {
         assertFalse(ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, makeVideo = true, stitch = true)).series.stitch)
         assertFalse(ok(SequenceSettings(mode = SequenceMode.PANORAMA, makeVideo = true)).series.makeVideo)
     }
+
+    @Test
+    fun `the summary says what will happen to the photos afterwards`() {
+        val pano = ok(SequenceSettings(mode = SequenceMode.PANORAMA, yawSpanDeg = 120, pitchSpanDeg = 80))
+        assertTrue(pano.summary, pano.summary.contains("save"))
+        assertTrue(pano.summary, pano.summary.contains("stitch"))
+        val lapse = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 5, intervalSec = 10, makeVideo = true))
+        assertTrue(lapse.summary, lapse.summary.contains("video"))
+        assertFalse(lapse.summary, lapse.summary.contains("save"))
+        val plain = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 5, intervalSec = 10))
+        assertFalse(plain.summary, plain.summary.contains("download"))
+        assertFalse(plain.summary, plain.summary.contains("save"))
+    }
+
+    @Test
+    fun `the summary warns how long bringing the photos in will take`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, frames = 100))
+        assertTrue(plan.summary, plan.summary.contains("download"))
+        assertTrue(plan.summary, plan.summary.contains("5m 50s download")) // 100 photos at ~3.5s each
+    }
 }

@@ -140,6 +140,24 @@ object DebugScenarios {
                 }
                 Log.i(TAG, "SERIES finished state=${c.progress.value.state} message=${c.message.value}")
             }
+            "restitch" -> {
+                // args: folder=Panorama_x pitches=-15.3,1.3,17.9 yaws=-63.2,-33.2,-3.2 [fov=60.4,46.2]
+                val dir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES), "Sidereal/${args["folder"]}")
+                val pitches = args["pitches"]!!.split(',').map { it.toFloat() }
+                val yaws = args["yaws"]!!.split(',').map { it.toFloat() }
+                val fov = (args["fov"] ?: "60.4,46.2").split(',').map { it.toFloat() }
+                val nodes = ArrayList<io.github.mugenoesis.sidereal.sequence.Node>()
+                pitches.forEachIndexed { r, p -> (if (r % 2 == 0) yaws.indices else yaws.indices.reversed()).forEach { c -> nodes += io.github.mugenoesis.sidereal.sequence.Node(r, c, p, yaws[c]) } }
+                val processor = io.github.mugenoesis.sidereal.series.PanoramaProcessor(
+                    appContext!!, "${args["folder"]}_restitch", io.github.mugenoesis.sidereal.series.PanoramaLayout(nodes, 1, fov[0], fov[1])
+                )
+                nodes.forEachIndexed { i, n ->
+                    val f = dir.listFiles()!!.first { it.name.contains("_r${n.row + 1}c${n.col + 1}_") }
+                    val copy = java.io.File(appContext!!.cacheDir, "re_${f.name}").also { f.copyTo(it, overwrite = true) }
+                    processor.onFrame(i, "r${n.row + 1}c${n.col + 1}", copy)
+                }
+                Log.i(TAG, "RESTITCH " + processor.finish("x", emptyList()))
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {
