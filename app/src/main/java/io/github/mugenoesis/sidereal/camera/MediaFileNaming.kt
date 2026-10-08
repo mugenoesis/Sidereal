@@ -76,3 +76,13 @@ object MediaTypeFilter {
         else -> "image/jpeg"
     }
 }
+
+/**
+ * Order of the media browser's list: newest capture first. The camera hands files back oldest first. Files with the
+ * same time (or a camera clock that was never set, so every time is 0) fall back to the highest file name first -
+ * DJI numbers its files upward (DJI_0011 after DJI_0010), so that is still newest first.
+ */
+object MediaOrdering {
+    fun <T> newestFirst(items: List<T>, timeOf: (T) -> Long, nameOf: (T) -> String): List<T> =
+        items.sortedWith(compareByDescending<T> { timeOf(it) }.thenByDescending { nameOf(it) })
+}
