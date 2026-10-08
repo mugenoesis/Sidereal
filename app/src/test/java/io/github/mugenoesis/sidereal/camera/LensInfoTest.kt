@@ -71,4 +71,33 @@ class LensInfoTest {
         assertNull(LensInfo.parse("Serial 99999mm").focalMinMm)
         assertNull(LensInfo.parse("Adapter 0mm").focalMinMm)
     }
+
+    @Test
+    fun `the Panasonic zoom as its own photos name it - no mm, a slash before the aperture`() {
+        // the exact LensModel string in the EXIF of a photo from the real Panasonic 12-32 on the Zenmuse X5
+        val lens = LensInfo.parse("LUMIX G VARIO 12-32/F3.5-5.6  ")
+        assertEquals(12f, lens.focalMinMm!!, 1e-6f)
+        assertEquals(32f, lens.focalMaxMm!!, 1e-6f)
+        assertEquals(3.5f, lens.maxApertureF!!, 1e-6f)
+        assertEquals(5.6f, lens.apertureAtLongEndF!!, 1e-6f)
+        assertTrue(lens.isZoom)
+    }
+
+    @Test
+    fun `a prime in the same style`() {
+        val lens = LensInfo.parse("LUMIX G 20/F1.7 II ASPH")
+        assertEquals(20f, lens.primeFocalMm!!, 1e-6f)
+        assertEquals(1.7f, lens.maxApertureF!!, 1e-6f)
+        assertNull(lens.apertureAtLongEndF)
+    }
+
+    @Test
+    fun `the camera's own word for a lens it cannot identify`() {
+        assertNull(LensInfo.parse("Unknown").focalMinMm)
+        assertTrue(LensInfo.parse("Unknown").isUnidentified)
+        assertTrue(LensInfo.parse("  unknown ").isUnidentified)
+        assertTrue(LensInfo.parse(null).isUnidentified)
+        assertFalse(LensInfo.parse("DJI MFT 15mm F1.7 ASPH").isUnidentified)
+        assertFalse(LensInfo.parse("Some adapter").isUnidentified)
+    }
 }

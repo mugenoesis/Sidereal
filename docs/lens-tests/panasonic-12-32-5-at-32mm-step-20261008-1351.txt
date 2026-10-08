@@ -1,0 +1,28 @@
+# panasonic-12-32-5-at-32mm (2026-10-08T13:51:43+01:00)
+== what the camera says
+31908 32377 I SiderealDebug: LENS interchangeable=true adjustableAperture=true opticalZoom=false hybridZoom=false displayName=Zenmuse X5
+31908 32377 I SiderealDebug: LENS info=ok:Unknown
+31908 32377 I SiderealDebug: LENS opticalZoomFocalLength=fail:The feature is unsupported.
+31908 32377 I SiderealDebug: LENS key LensInformation = Unknown
+31908 32377 I SiderealDebug: LENS key ApertureRange = FAIL The feature is unsupported.
+31908 32377 I SiderealDebug: LENS key OpticalZoomFocalLength = FAIL The feature is unsupported.
+31908 32377 I SiderealDebug: LENS key OpticalZoomSpec = FAIL The feature is unsupported.
+keys answered: 335 keys, 139 answered
+31908 32377 I SiderealDebug: APERTURE = F_4
+31908 32377 I SiderealDebug: FOCUS_MODE = AUTO
+31908 32377 I SiderealDebug: FOCUS_RING_VALUE_UPPER_BOUND = 3830
+31908 32377 I SiderealDebug: FOCUS_STATUS = SUCCESSFUL
+31908 32377 I SiderealDebug: HAS_ERROR = false
+31908 32377 I SiderealDebug: IS_ADJUSTABLE_APERTURE_SUPPORTED = true
+31908 32377 I SiderealDebug: LENS_INFORMATION = Unknown
+31908 32377 I SiderealDebug: LENS_IS_AF_SWITCH_ON = true
+31908 32377 I SiderealDebug: LENS_IS_FOCUS_ASSISTANT_WORKING = false
+31908 32377 I SiderealDebug: LENS_IS_INSTALLED = true
+== one photo, and what its EXIF says about the lens
+Capture failed 3 times in a row
+EXIF lens_make = Panasonic
+EXIF lens_model = LUMIX G VARIO 12-32/F3.5-5.6  
+EXIF focal_length_mm = 12.0
+EXIF focal_length_35mm_equiv = 24
+EXIF f_number = 5.0
+EXIF iso = 107

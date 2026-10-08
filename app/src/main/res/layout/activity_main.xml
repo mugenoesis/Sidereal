@@ -188,6 +188,22 @@
 
     </LinearLayout>
 
+    <!-- The lens on the camera: "15 mm f/1.7", "12-32 mm f/3.5-5.6", "Checking lens...", or a warning (stowed zoom). -->
+    <TextView
+        android:id="@+id/lensStatusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="68dp"
+        android:layout_marginTop="58dp"
+        android:background="@drawable/bg_pill_container"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <!-- Battery / card status, top-left of the video. Filled by CameraStatusController. -->
     <TextView
         android:id="@+id/cameraStatusText"

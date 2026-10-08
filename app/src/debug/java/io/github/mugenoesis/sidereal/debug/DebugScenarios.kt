@@ -294,6 +294,58 @@ object DebugScenarios {
                 } else Log.i(TAG, "CAMSTATE $tag none")
                 Log.i(TAG, "RESULT camera_dump $tag: DONE")
             }
+            "shoot_probe" -> {
+                // args: tag=label shutter=SHUTTER_SPEED_1_60 iso=ISO_800 focus=manual|auto count=1
+                // Takes photos one at a time, logging every change in the camera's shooting state with timestamps, so a camera
+                // that hangs mid-shot (seen with a zoom at its long end) shows exactly where. Reports done / stuck per shot.
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                val tag = args["tag"] ?: "probe"
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                suspend fun key(name: String): String = kotlinx.coroutines.withTimeoutOrNull(1500) {
+                    kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                        km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                        }) ?: cont.resume("no key manager")
+                    }
+                } ?: "timeout"
+                callback<String?> { RealCameraGateway.setCameraMode("SHOOT_PHOTO") { e -> it(e) } }
+                delay(1500)
+                if (args["shutter"] != null) {
+                    callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setIso(args["iso"] ?: "ISO_800") { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"]!!) { e -> it(e) } }
+                }
+                if (args["focus"] == "manual") {
+                    callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                }
+                delay(1500)
+                Log.i(TAG, "SHOOTPROBE $tag setup ringMax=${key(dji.keysdk.CameraKey.FOCUS_RING_VALUE_UPPER_BOUND)} ring=${key(dji.keysdk.CameraKey.FOCUS_RING_VALUE)} aperture=${key(dji.keysdk.CameraKey.APERTURE)} shutter=${key(dji.keysdk.CameraKey.REAL_SHUTTER_SPEED)} iso=${key(dji.keysdk.CameraKey.ISO)} focusMode=${key(dji.keysdk.CameraKey.FOCUS_MODE)} focusStatus=${key(dji.keysdk.CameraKey.FOCUS_STATUS)} shootEnabled=${key(dji.keysdk.CameraKey.IS_SHOOTING_PHOTO_ENABLED)}")
+                repeat((args["count"] ?: "1").toInt()) { n ->
+                    val t0 = System.currentTimeMillis()
+                    val err = callback<String?> { RealCameraGateway.startShootPhoto { e -> it(e) } }
+                    Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} command at +${System.currentTimeMillis() - t0}ms -> ${err ?: "accepted"}")
+                    var last = ""
+                    var finished = false
+                    var lastKeys = 0L
+                    while (System.currentTimeMillis() - t0 < 45_000) {
+                        val st = DJIConnectionManager.cameraSystemState.value
+                        val cur = "shooting=${st?.isShootingSinglePhoto} storing=${st?.isStoringPhoto}"
+                        if (cur != last) { Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} +${System.currentTimeMillis() - t0}ms $cur"); last = cur }
+                        if (err == null && st != null && !st.isShootingSinglePhoto && !st.isStoringPhoto && System.currentTimeMillis() - t0 > 1200) { finished = true; break }
+                        if (err != null) break
+                        if (System.currentTimeMillis() - lastKeys > 5000) {
+                            lastKeys = System.currentTimeMillis()
+                            Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} +${System.currentTimeMillis() - t0}ms keys: shootEnabled=${key(dji.keysdk.CameraKey.IS_SHOOTING_PHOTO_ENABLED)} focusStatus=${key(dji.keysdk.CameraKey.FOCUS_STATUS)} sdBusy=${key(dji.keysdk.CameraKey.SDCARD_IS_BUSY)}")
+                        }
+                        delay(100)
+                    }
+                    Log.i(TAG, "SHOOTPROBE $tag shot${n + 1} RESULT ${if (finished) "done in ${System.currentTimeMillis() - t0}ms" else if (err != null) "refused: $err" else "STUCK after 45s ($last)"}")
+                    if (!finished) return
+                    delay(2500)
+                }
+                Log.i(TAG, "RESULT shoot_probe $tag: DONE")
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {

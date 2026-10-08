@@ -10,15 +10,45 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * @param read asks the camera for its lens name and calls back with it, or with null if it could not say
  */
-class LensController(private val read: ((String?) -> Unit) -> Unit) {
+class LensController(
+    private val read: ((String?) -> Unit) -> Unit,
+    /** Asks the camera for the focus ring's position and its upper limit; either may come back null. */
+    private val readRing: ((Int?, Int?) -> Unit) -> Unit = { callback -> callback(null, null) }
+) {
 
     private val _info = MutableStateFlow<LensInfo?>(null)
     val info: StateFlow<LensInfo?> = _info
+
+    private var answered = false
+    private var ring: Int? = null
+    private var ringMax: Int? = null
+
+    private val _line = MutableStateFlow(LensDisplay.describe(LensReading(null, false, null, null)))
+
+    /** The one-line description for the screen: checking, the lens, unknown, or "not extended". */
+    val line: StateFlow<LensLine> = _line
 
     /** Asks again; an empty answer keeps whatever was known, since the camera is sometimes slow to answer after a bind. */
     fun refresh() {
         read { name ->
             if (!name.isNullOrBlank()) _info.value = LensInfo.parse(name)
+            answered = true
+            publish()
         }
+    }
+
+    /** Re-reads the ring: its position is the only thing that tells a stowed collapsible zoom from an extended one. */
+    fun refreshRing() {
+        readRing { value, max ->
+            ring = value
+            if (max != null) ringMax = max
+            publish()
+        }
+    }
+
+    private fun publish() {
+        // A stowed lens is shown as soon as the ring says so, even if the camera has not been asked its name yet.
+        val showAnswered = answered || LensDisplay.isStowed(ring, ringMax)
+        _line.value = LensDisplay.describe(LensReading(_info.value, showAnswered, ring, ringMax))
     }
 }

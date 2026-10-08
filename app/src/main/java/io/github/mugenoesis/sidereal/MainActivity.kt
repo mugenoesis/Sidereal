@@ -53,6 +53,7 @@ import io.github.mugenoesis.sidereal.zoom.ZoomController
 import dji.common.camera.SettingsDefinitions
 import dji.sdk.codec.DJICodecManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -93,13 +94,27 @@ class MainActivity : AppCompatActivity() {
     private val exposureController = ExposureController()
 
     /** Reads the name of the lens on the camera ("DJI MFT 15mm F1.7 ASPH"); panorama planning and dither size depend on its focal length. */
-    private val lensController = io.github.mugenoesis.sidereal.camera.LensController { callback ->
-        val camera = DJIConnectionManager.camera
-        if (camera == null) callback(null) else camera.getLensInformation(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<String> {
-            override fun onSuccess(value: String?) = callback(value)
-            override fun onFailure(error: dji.common.error.DJIError?) = callback(null)
-        })
-    }
+    private val lensController = io.github.mugenoesis.sidereal.camera.LensController(
+        read = { callback ->
+            val camera = DJIConnectionManager.camera
+            if (camera == null) callback(null) else camera.getLensInformation(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<String> {
+                override fun onSuccess(value: String?) = callback(value)
+                override fun onFailure(error: dji.common.error.DJIError?) = callback(null)
+            })
+        },
+        readRing = { callback ->
+            val camera = DJIConnectionManager.camera
+            if (camera == null) callback(null, null) else camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                override fun onSuccess(ring: Int?) {
+                    camera.getFocusRingValueUpperBound(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                        override fun onSuccess(max: Int?) = callback(ring, max)
+                        override fun onFailure(error: dji.common.error.DJIError?) = callback(ring, null)
+                    })
+                }
+                override fun onFailure(error: dji.common.error.DJIError?) = callback(null, null)
+            })
+        }
+    )
     private val focusController = FocusController()
     private val softwareAfcController = SoftwareAfcController(focusController, brightLight = {
         exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
@@ -545,6 +560,8 @@ class MainActivity : AppCompatActivity() {
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
         (::gamepadInput.isInitialized && gamepadInput.handleKey(event)) || super.dispatchKeyEvent(event)
 
+    private val LENS_RING_POLL_MS = 3_000L
+
     private fun bindCameraStatus() {
         cameraStatusController = CameraStatusController(lifecycleScope)
         val text = findViewById<android.widget.TextView>(R.id.cameraStatusText)
@@ -560,6 +577,30 @@ class MainActivity : AppCompatActivity() {
         DJIConnectionManager.connectionState
             .onEach { cameraStatusController.status.value.let { _ -> text.visibility = if (it is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE } }
             .launchIn(lifecycleScope)
+        bindLensStatus()
+    }
+
+    /** The lens line: "Checking lens..." from the moment of connecting, then the lens' focal length(s) and aperture. */
+    private fun bindLensStatus() {
+        val lensText = findViewById<android.widget.TextView>(R.id.lensStatusText)
+        combine(lensController.line, DJIConnectionManager.connectionState) { line, state -> line to state }
+            .onEach { (line, state) ->
+                lensText.visibility = if (state is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE
+                lensText.text = line.text
+                val warn = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.NOT_EXTENDED
+                lensText.setTextColor(if (warn) 0xFFFFB74D.toInt() else android.graphics.Color.WHITE)
+            }
+            .launchIn(lifecycleScope)
+        // The ring's position is what tells a stowed zoom from an extended one, so keep an eye on it (it is a cheap call).
+        lifecycleScope.launch {
+            while (true) {
+                if (DJIConnectionManager.connectionState.value is DJIConnectionManager.ConnectionState.ProductConnected &&
+                    DJIConnectionManager.camera != null) {
+                    lensController.refreshRing()
+                }
+                delay(LENS_RING_POLL_MS)
+            }
+        }
     }
 
     private fun bindSequenceFeature() {

@@ -25,7 +25,7 @@ opens to whatever widest aperture the camera accepts. This plan checks those on 
 ## Session 1: the Panasonic 12-32mm (do this first)
 
 The lens is on the camera from the start and the zoom ring is moved one step at a time, in this order. The ring is marked
-**stowed, 12, 14, 18, 24, 32** (there is no 20 mark). One person moves the ring, the other runs the commands; wait for
+**stowed, 12, 14, 18, 25, 32** (there is no 20 mark). One person moves the ring, the other runs the commands; wait for
 the "move it now" before each move.
 
 | Step | Ring at | Why |
@@ -34,7 +34,7 @@ the "move it now" before each move.
 | 1 | **12** | Widest; f/3.5. First full run. |
 | 2 | **14** | A mark close to 12: do the numbers actually move? |
 | 3 | **18** | Mid. |
-| 4 | **24** | Mid-long. |
+| 4 | **25** | Mid-long. |
 | 5 | **32** | Longest; the widest aperture has dropped to about f/5.6; face tracking check. |
 
 At **every** step run `tools/lens_step.sh panasonic-12-32-<step>` (about a minute). It writes down every value the camera

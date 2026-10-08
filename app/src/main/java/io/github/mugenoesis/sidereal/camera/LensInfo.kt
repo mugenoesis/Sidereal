@@ -11,8 +11,13 @@ data class LensInfo(
     val name: String?,
     val focalMinMm: Float?,
     val focalMaxMm: Float?,
-    val maxApertureF: Float?
+    val maxApertureF: Float?,
+    /** For a variable-aperture zoom ("F3.5-5.6"): the aperture at the long end. */
+    val apertureAtLongEndF: Float? = null
 ) {
+    /** True when the camera gave no usable name ("Unknown" is what it says for any non-DJI lens). */
+    val isUnidentified: Boolean get() = name == null || name.equals("unknown", ignoreCase = true)
+
     val isZoom: Boolean get() = focalMinMm != null && focalMaxMm != null && abs(focalMaxMm - focalMinMm) > 0.01f
 
     /** The focal length if the lens has just one. */
@@ -22,8 +27,9 @@ data class LensInfo(
         private const val MIN_FOCAL = 2f
         private const val MAX_FOCAL = 1500f
 
-        private val FOCAL = Regex("""(\d+(?:\.\d+)?)\s*(?:[-–—]\s*(\d+(?:\.\d+)?))?\s*mm""", RegexOption.IGNORE_CASE)
-        private val APERTURE = Regex("""[Ff]/?\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*\d+(?:\.\d+)?)?""")
+        // "15mm", "12-40mm" - and the Panasonic EXIF style with no "mm", where the aperture follows a slash: "12-32/F3.5-5.6"
+        private val FOCAL = Regex("""(\d+(?:\.\d+)?)\s*(?:[-–—]\s*(\d+(?:\.\d+)?))?\s*(?:mm|(?=/\s*[Ff]\s*\d))""", RegexOption.IGNORE_CASE)
+        private val APERTURE = Regex("""[Ff]/?\s*(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?""")
 
         fun parse(raw: String?): LensInfo {
             val name = raw?.trim()?.takeIf { it.isNotEmpty() }
@@ -37,8 +43,10 @@ data class LensInfo(
             }.firstOrNull()
             // The aperture comes after the focal length ("15mm F1.7"); look only there so "F" inside a name is not read as one.
             val after = focal?.let { name.substring(FOCAL.find(name)!!.range.last + 1) } ?: name
-            val aperture = APERTURE.find(after)?.groupValues?.get(1)?.toFloatOrNull()?.takeIf { it in 0.7f..64f }
-            return LensInfo(name, focal?.first, focal?.second, aperture)
+            val apertureMatch = APERTURE.find(after)
+            val aperture = apertureMatch?.groupValues?.get(1)?.toFloatOrNull()?.takeIf { it in 0.7f..64f }
+            val atLongEnd = apertureMatch?.groupValues?.get(2)?.toFloatOrNull()?.takeIf { aperture != null && it in aperture..64f && it > aperture }
+            return LensInfo(name, focal?.first, focal?.second, aperture, atLongEnd)
         }
     }
 }
