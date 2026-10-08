@@ -13,16 +13,19 @@ interface FocusSearcher {
 }
 
 /**
- * Decides which focus search suits the light. The quick climb needs the preview's sharpness to be a smooth hill,
- * which it is when the camera is using a fast shutter at a low ISO; in dim light it is noise and the scanning search
- * has to be used instead.
+ * Decides which focus search suits the light. The quick climb needs the preview's sharpness to be a clean, smooth
+ * hill. Measured on the real X5, that holds whenever the ISO is low - even indoors at 1/10 s - and breaks down only
+ * when the camera is working at very high ISO, where noise swamps the picture's detail.
  */
 object FocusLight {
+    private const val CLEAN_MAX_ISO = 800
+    private const val SLOWEST_CLEAN_SHUTTER_SEC = 1.0 / 2
     private const val BRIGHT_SHUTTER_SEC = 1.0 / 60
-    private const val BRIGHT_MAX_ISO = 800
 
     fun isBright(shutterName: String?, iso: Int?): Boolean {
-        val seconds = shutterName?.let { ShutterLogic.exposureSeconds(it) } ?: return false
-        return seconds <= BRIGHT_SHUTTER_SEC + 1e-9 && (iso == null || iso <= BRIGHT_MAX_ISO)
+        val seconds = shutterName?.let { ShutterLogic.exposureSeconds(it) }
+        if (iso == null) return seconds != null && seconds <= BRIGHT_SHUTTER_SEC + 1e-9
+        if (iso > CLEAN_MAX_ISO) return false
+        return seconds == null || seconds <= SLOWEST_CLEAN_SHUTTER_SEC + 1e-9
     }
 }

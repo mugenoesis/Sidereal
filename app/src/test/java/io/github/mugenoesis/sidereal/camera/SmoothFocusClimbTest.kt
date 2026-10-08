@@ -31,6 +31,15 @@ class SmoothFocusClimbTest {
         1700 to 6826, 1750 to 6775, 1800 to 6680, 1850 to 6591, 1900 to 6424, 1950 to 6229, 2000 to 6027
     )
 
+    // Dim room (1/10 s, ISO 100): a broad hill peaking near ring 1500, falling away gently on the far side.
+    private val room = mapOf(
+        0 to 647, 50 to 712, 100 to 782, 150 to 848, 200 to 911, 250 to 980, 300 to 1092, 350 to 1213, 400 to 1307, 450 to 1407,
+        500 to 1518, 550 to 1654, 600 to 1810, 650 to 2035, 700 to 2241, 750 to 2505, 800 to 2800, 850 to 3131, 900 to 3433,
+        950 to 3836, 1000 to 4246, 1050 to 4643, 1100 to 5050, 1150 to 5457, 1200 to 5751, 1250 to 5974, 1300 to 6083,
+        1350 to 6117, 1400 to 6317, 1450 to 6482, 1500 to 6513, 1550 to 6317, 1600 to 6318, 1650 to 6316, 1700 to 6006,
+        1750 to 5837, 1800 to 5703, 1850 to 5454, 1900 to 5025, 1950 to 4756, 2000 to 4515
+    )
+
     private fun sharpness(curve: Map<Int, Int>, ring: Int): Double {
         val lo = (ring / 50 * 50).coerceAtMost(2000)
         val hi = (lo + 50).coerceAtMost(2000)
@@ -52,7 +61,7 @@ class SmoothFocusClimbTest {
             when (command) {
                 is FocusSearch.Command.MoveTo -> { ring = command.ring; moves++ }
                 is FocusSearch.Command.Locked -> return Result(command.ring, now, moves)
-                null -> {}
+                null, is FocusSearch.Command.Unreliable -> {}
             }
         }
         throw AssertionError("never locked")
@@ -117,7 +126,7 @@ class SmoothFocusClimbTest {
             when (val c = search.onFrame(now, sharpness(near, ring), true)) {
                 is FocusSearch.Command.MoveTo -> ring = c.ring
                 is FocusSearch.Command.Locked -> locked = c
-                null -> {}
+                null, is FocusSearch.Command.Unreliable -> {}
             }
         }
         assertTrue(search.locked)
@@ -143,7 +152,7 @@ class SmoothFocusClimbTest {
             when (val c = search.onFrame(now, sharpness(near, ring), true)) {
                 is FocusSearch.Command.MoveTo -> ring = c.ring
                 is FocusSearch.Command.Locked -> locked = c
-                null -> {}
+                null, is FocusSearch.Command.Unreliable -> {}
             }
         }
         repeat(20) {
@@ -165,6 +174,57 @@ class SmoothFocusClimbTest {
                 val c = search.onFrame(now, sharpness(curve, ring), true)
                 if (c is FocusSearch.Command.MoveTo) { ring = c.ring; assertTrue("ring $ring", ring in 0..bound) }
             }
+        }
+    }
+
+    @Test
+    fun `a noisy picture is handed to the scanning search instead of being climbed`() {
+        val rnd = java.util.Random(3)
+        val search = SmoothFocusClimb(bound)
+        var now = 0L
+        var ring = search.begin(1250, now).ring
+        var result: FocusSearch.Command? = null
+        var guard = 0
+        while (result == null && guard++ < 200) {
+            now += 150
+            // the true value wobbled by +-35% from frame to frame, like ISO 25600
+            val noisy = sharpness(near, ring) * (1 + (rnd.nextDouble() - 0.5) * 0.7)
+            when (val c = search.onFrame(now, noisy, true)) {
+                is FocusSearch.Command.MoveTo -> ring = c.ring
+                null -> {}
+                else -> result = c
+            }
+        }
+        assertTrue("got $result", result is FocusSearch.Command.Unreliable)
+        assertEquals(1250, (result as FocusSearch.Command.Unreliable).seed)
+    }
+
+    @Test
+    fun `a clean picture with a little noise still climbs`() {
+        val rnd = java.util.Random(5)
+        val search = SmoothFocusClimb(bound)
+        var now = 0L
+        var ring = search.begin(1250, now).ring
+        var result: FocusSearch.Command? = null
+        var guard = 0
+        while (result == null && guard++ < 200) {
+            now += 150
+            val noisy = sharpness(near, ring) * (1 + (rnd.nextDouble() - 0.5) * 0.06)
+            when (val c = search.onFrame(now, noisy, true)) {
+                is FocusSearch.Command.MoveTo -> ring = c.ring
+                null -> {}
+                else -> result = c
+            }
+        }
+        assertTrue("got $result", result is FocusSearch.Command.Locked)
+    }
+
+    @Test
+    fun `in the dim room it ends close to the top from any seed the camera's autofocus might give`() {
+        for (seed in (800..2035 step 37).toList()) {
+            val r = run(room, seed)
+            assertTrue("seed $seed -> ${r.ring} (${share(room, r.ring)})", share(room, r.ring) >= 0.94)
+            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 6_500)
         }
     }
 }

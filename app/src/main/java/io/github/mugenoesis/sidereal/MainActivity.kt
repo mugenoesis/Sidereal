@@ -94,6 +94,8 @@ class MainActivity : AppCompatActivity() {
     private val focusController = FocusController()
     private val softwareAfcController = SoftwareAfcController(focusController, brightLight = {
         exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
+    }, lightDescription = {
+        exposureController.readout.value?.let { "${it.shutterSpeed.name} ISO ${it.iso}" } ?: "no exposure readout"
     })
     private val meteringController = MeteringController()
     private val whiteBalanceController = WhiteBalanceController()

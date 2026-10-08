@@ -50,6 +50,9 @@ class FocusSearch(private val bound: Int, private val config: Config = Config())
 
         /** Settled at [ring]; [confident] is false if no clear peak was found and the ring was parked at the hint instead. */
         data class Locked(val ring: Int, val score: Double, val confident: Boolean) : Command()
+
+        /** The picture is too noisy for the quick climb to mean anything: use the scanning search, starting from [seed]. */
+        data class Unreliable(val seed: Int) : Command()
     }
 
     enum class Phase { IDLE, COARSE, REFINE, LOCKING, LOCKED }

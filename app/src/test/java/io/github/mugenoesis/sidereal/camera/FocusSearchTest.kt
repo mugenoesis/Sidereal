@@ -71,7 +71,7 @@ private fun run(
         when (val c = search.onFrame(now, lens.score(now))) {
             is FocusSearch.Command.MoveTo -> { lens.command(c.ring, now); rings += c.ring }
             is FocusSearch.Command.Locked -> return Outcome(c, lens.moves, now, rings)
-            null -> Unit
+            null, is FocusSearch.Command.Unreliable -> Unit
         }
     }
     return Outcome(null, lens.moves, now, rings)
@@ -240,7 +240,7 @@ class FocusSearchTest {
             when (val c = s.onFrame(now, lens.score(now))) {
                 is FocusSearch.Command.MoveTo -> lens.command(c.ring, now)
                 is FocusSearch.Command.Locked -> relocked = c
-                null -> Unit
+                null, is FocusSearch.Command.Unreliable -> Unit
             }
         }
         assertNotNull("never relocked", relocked)
@@ -261,7 +261,7 @@ class FocusSearchTest {
             when (val c = s.onFrame(now, lens.score(now))) {
                 is FocusSearch.Command.MoveTo -> lens.command(c.ring, now)
                 is FocusSearch.Command.Locked -> relocked = c
-                null -> Unit
+                null, is FocusSearch.Command.Unreliable -> Unit
             }
         }
         assertEquals(1800f, relocked!!.ring.toFloat(), 55f)
