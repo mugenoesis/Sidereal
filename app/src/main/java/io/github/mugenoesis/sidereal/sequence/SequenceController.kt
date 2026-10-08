@@ -30,7 +30,9 @@ class SequenceController(
     private val prepare: suspend () -> Unit = {},
     private val precondition: () -> String? = { null },
     private val postRun: PostRun? = null,
-    private val wallClock: () -> Long = System::currentTimeMillis
+    private val wallClock: () -> Long = System::currentTimeMillis,
+    /** Focal length of the lens the camera reports, so the focal-length stepper starts from it rather than from a guess. */
+    private val detectedFocalMm: () -> Float? = { null }
 ) {
     private val _settings = MutableStateFlow(SequenceSettings())
     val settings: StateFlow<SequenceSettings> = _settings
@@ -65,7 +67,7 @@ class SequenceController(
 
     fun adjust(fieldId: String, direction: Int) {
         if (_isRunning.value) return
-        _settings.value = _settings.value.adjust(fieldId, direction)
+        _settings.value = _settings.value.adjust(fieldId, direction, detectedFocalMm() ?: 15f)
     }
 
     /** What Start would do right now - used for the summary line under the fields. */

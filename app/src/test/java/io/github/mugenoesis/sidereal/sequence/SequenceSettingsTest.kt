@@ -47,7 +47,7 @@ class SequenceSettingsTest {
         fun ids(mode: SequenceMode) = base.copy(mode = mode).fields().map { it.id }
         assertEquals(listOf("frames", "intervalSec", "settleMs", "dither", "saveFrames"), ids(SequenceMode.INTERVALOMETER))
         assertEquals(listOf("durationMin", "intervalSec", "fps", "makeVideo", "saveTimelapseFrames", "settleMs", "motion", "ramp"), ids(SequenceMode.TIMELAPSE))
-        assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "stitch", "saveFrames", "shotsPerNode", "settleMs"), ids(SequenceMode.PANORAMA))
+        assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "focalMm", "stitch", "saveFrames", "shotsPerNode", "settleMs"), ids(SequenceMode.PANORAMA))
         assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.DARKS))
         assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.BIAS))
         assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.FLATS))
@@ -160,5 +160,41 @@ class SequenceSettingsTest {
         assertFalse(base.copy(mode = SequenceMode.PANORAMA, saveFrames = false).keepsFrames())
         assertFalse(base.copy(mode = SequenceMode.TIMELAPSE).keepsFrames())
         assertTrue(base.copy(mode = SequenceMode.TIMELAPSE, saveTimelapseFrames = true).keepsFrames())
+    }
+
+    @Test
+    fun `the focal length starts on auto and shows that`() {
+        val p = base.copy(mode = SequenceMode.PANORAMA)
+        assertEquals(null, p.focalMm)
+        assertEquals("Auto", p.fields().first { it.id == "focalMm" }.display)
+    }
+
+    @Test
+    fun `a chosen focal length is shown in millimetres`() {
+        val p = base.copy(mode = SequenceMode.PANORAMA, focalMm = 25f)
+        assertEquals("25 mm", p.fields().first { it.id == "focalMm" }.display)
+        assertEquals("7.5 mm", p.copy(focalMm = 7.5f).fields().first { it.id == "focalMm" }.display)
+    }
+
+    @Test
+    fun `stepping from auto starts from the lens the camera reported`() {
+        val p = base.copy(mode = SequenceMode.PANORAMA)
+        assertEquals(16f, p.adjust("focalMm", +1, baseFocalMm = 15f).focalMm)
+        assertEquals(14f, p.adjust("focalMm", -1, baseFocalMm = 15f).focalMm)
+        assertEquals(30f, p.adjust("focalMm", +1, baseFocalMm = 25f).focalMm)
+    }
+
+    @Test
+    fun `stepping down past the shortest lens goes back to auto`() {
+        var p = base.copy(mode = SequenceMode.PANORAMA, focalMm = 7.5f)
+        p = p.adjust("focalMm", -1)
+        assertEquals(null, p.focalMm)
+    }
+
+    @Test
+    fun `stepping up stops at the longest lens`() {
+        var p = base.copy(mode = SequenceMode.PANORAMA, focalMm = 100f)
+        p = p.adjust("focalMm", +1)
+        assertEquals(100f, p.focalMm)
     }
 }

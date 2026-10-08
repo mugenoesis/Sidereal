@@ -239,6 +239,28 @@ object DebugScenarios {
                     delay(1500)
                 }
             }
+            "lens_probe" -> {
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                Log.i(TAG, "LENS interchangeable=${camera.isInterchangeableLensSupported} adjustableAperture=${camera.isAdjustableApertureSupported} opticalZoom=${camera.isOpticalZoomSupported} hybridZoom=${camera.isHybridZoomSupported} displayName=${camera.displayName}")
+                Log.i(TAG, "LENS info=" + callback<String> { cb -> camera.getLensInformation(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<String> {
+                    override fun onSuccess(v: String?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                Log.i(TAG, "LENS opticalZoomFocalLength=" + callback<String> { cb -> camera.getOpticalZoomFocalLength(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                    override fun onSuccess(v: Int?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                for (name in listOf(dji.keysdk.CameraKey.LENS_INFORMATION, dji.keysdk.CameraKey.APERTURE_RANGE, dji.keysdk.CameraKey.OPTICAL_ZOOM_FOCAL_LENGTH, dji.keysdk.CameraKey.OPTICAL_ZOOM_SPEC)) {
+                    val v = kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                        km?.getValue(dji.keysdk.CameraKey.create(name), object : dji.keysdk.callback.GetCallback {
+                            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                        }) ?: cont.resume("no key manager")
+                    }
+                    Log.i(TAG, "LENS key $name = $v")
+                }
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {

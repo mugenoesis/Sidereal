@@ -46,9 +46,10 @@
 - Day-to-night ("holy grail") timelapse ramp: meters the live histogram
   before each frame and follows the light with shutter first, then ISO, in
   smooth third-stop steps. *Keep darkness* sets how much of the fading light
-  stays in the frames, and *Max ISO* caps the noise. It opens the lens to f/1.7
-  when it starts (and shortens the shutter to match) so the night end of the
-  ramp has the full range, and it works however the app was opened
+  stays in the frames, and *Max ISO* caps the noise. It opens the lens to its
+  widest aperture when it starts (and shortens the shutter to match) so the
+  night end of the ramp has the full range, and it works however the app was
+  opened
 - After a run, the photos can come off the camera by themselves into a
   folder that says what they are: `Pictures/Sidereal/Panorama_2026-10-08_0131/`
   holds `Panorama_2026-10-08_0131_r2c3_DJI_0398.JPG` and so on, with the
@@ -125,7 +126,8 @@ first). It works with Wear OS 2 and newer.
 
 - A DJI Osmo Pro with a Zenmuse X5. Only the DJI MFT 15mm f/1.7 lens has
   been tested so far, and other MSDK v4 Osmo models may work but haven't
-  been tried.
+  been tried. Other Micro Four Thirds lenses should work (see *Lenses*
+  below).
 - An Android phone running Android 6.0 (API 23) or newer. The app needs real
   hardware, so it won't work in an emulator.
 - A DJI developer App Key (free)
@@ -170,10 +172,28 @@ scenarios against a connected Osmo and logs `RESULT … PASS/FAIL` lines.
    live view appears.
 3. Choose a gimbal mode (Manual, A→B, or Face Track) from the control bar.
 
+## Lenses
+
+Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume that lens everywhere:
+
+- **Focal length.** The camera reports the lens name ("DJI MFT 15mm F1.7 ASPH"); the app reads the focal length out of
+  it and uses it to plan panoramas (how many frames, how much they overlap), to size dither, and as the stitcher's
+  starting field of view. *Focal length* in the panorama options is *Auto* (what the camera reports, else 15 mm) or a
+  value you choose. The stitcher also reads the focal length stored in the photos and corrects itself if the plan used a
+  different one.
+- **Zoom lenses.** A zoom reports its range but not where it is set, so the panorama options ask you to set the focal
+  length; until you do, it plans for the wide end (extra overlap, never gaps).
+- **Aperture.** The day-to-night ramp opens the lens to the widest aperture the camera accepts, so it works with
+  whatever the lens offers; a lens without aperture control is left alone.
+- **Autofocus.** The software autofocus reads the focus ring's range from the camera, but its settings were tuned on
+  the 15 mm lens, so another lens may lock slower or less precisely.
+
+None of this has been tried with another lens yet, so tell me how it goes.
+
 ## Feature status
 
 Everything below was tested on an Osmo Pro with a Zenmuse X5 and the DJI
-MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
+MFT 15mm f/1.7 lens. Other lenses haven't been tried yet (see *Lenses* above).
 
 ### ✅ Working
 
@@ -221,7 +241,7 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
   smooth and accurate.
 - **Day-to-night ramp:** checked on the camera in daylight by panning from a
   window to a dim room and back, which it followed in smooth steps, and from a
-  lens left at f/8 (it opened to f/1.7 and kept the picture's brightness). It
+  lens left at f/8 (it opened to its widest, f/1.7 on the test lens, and kept the picture's brightness). It
   hasn't seen a real sunset yet.
 - **Long-running sequences:** a one-minute run kept shooting with the screen
   off, and the notification, wake lock and WiFi lock were released at the end.

@@ -330,4 +330,13 @@ class SequenceControllerTest {
         c.start()
         assertNull(c.message.value)
     }
+
+    @Test
+    fun `stepping the focal length from auto starts from the detected lens`() {
+        val scope = CoroutineScope(Job() + Dispatchers.Unconfined)
+        val c = SequenceController(scope, { prompt -> ControllerFakeHost(prompt) }, { context }, {}, { null }, detectedFocalMm = { 25f })
+        c.setMode(SequenceMode.PANORAMA)
+        c.adjust("focalMm", +1)
+        assertEquals(30f, c.settings.value.focalMm)
+    }
 }

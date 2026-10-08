@@ -41,6 +41,7 @@ class SequenceFeature(
     private val shutterButton: View,
     private val shutterNameProvider: () -> String?,
     private val pointsProvider: () -> Pair<Attitude?, Attitude?>,
+    private val lensProvider: () -> io.github.mugenoesis.sidereal.camera.LensInfo? = { null },
     private val rampIo: RampIo? = null
 ) {
     companion object {
@@ -54,6 +55,7 @@ class SequenceFeature(
         contextProvider = ::shootContext,
         prepare = ::ensurePhotoMode,
         precondition = ::blockedReason,
+        detectedFocalMm = { lensProvider()?.primeFocalMm },
         postRun = PostRun { plan, run, report ->
             // A fresh source each time: it owns the camera's playback mode for the length of the download.
             SeriesPostRunner(RealCardSource(activity.applicationContext), MediaStoreGallery(activity.applicationContext), ::frameProcessorFor)
@@ -169,6 +171,8 @@ class SequenceFeature(
             yawLimits = DJIConnectionManager.yawRangeDegrees(),
             pointA = a,
             pointB = b,
+            lensFocalMm = lensProvider()?.primeFocalMm,
+            lensZoomMm = lensProvider()?.takeIf { it.isZoom }?.let { it.focalMinMm!!..it.focalMaxMm!! },
             ditherSeed = System.nanoTime()
         )
     }

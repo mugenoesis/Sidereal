@@ -91,6 +91,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val exposureController = ExposureController()
+
+    /** Reads the name of the lens on the camera ("DJI MFT 15mm F1.7 ASPH"); panorama planning and dither size depend on its focal length. */
+    private val lensController = io.github.mugenoesis.sidereal.camera.LensController { callback ->
+        val camera = DJIConnectionManager.camera
+        if (camera == null) callback(null) else camera.getLensInformation(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<String> {
+            override fun onSuccess(value: String?) = callback(value)
+            override fun onFailure(error: dji.common.error.DJIError?) = callback(null)
+        })
+    }
     private val focusController = FocusController()
     private val softwareAfcController = SoftwareAfcController(focusController, brightLight = {
         exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
@@ -578,6 +587,7 @@ class MainActivity : AppCompatActivity() {
                     else if (findViewById<HistogramView>(R.id.histogramView).visibility != android.view.View.VISIBLE) histogramController.deactivate()
                 }
             ),
+            lensProvider = { lensController.info.value },
             pointsProvider = {
                 fun TimedMoveController.Point?.toAttitude() = this?.let { Attitude(it.pitch.toFloat(), it.yaw.toFloat()) }
                 timedMoveController.capturedA.toAttitude() to timedMoveController.capturedB.toAttitude()
@@ -2106,6 +2116,9 @@ class MainActivity : AppCompatActivity() {
                 shootingControls.onCameraRebound()
                 exposureController.startObserving()
                 exposureController.refreshCapability()
+                // Which lens is on, for panorama planning; the camera is sometimes slow to answer straight after a bind.
+                lensController.refresh()
+                lifecycleScope.launch { delay(3000); lensController.refresh() }
                 // Litchi showed aperture as genuinely adjustable (f/1.7
                 // changed to f/1.8 and back) on hardware where this app's
                 // own aperture row stays hidden - originally suspected as a

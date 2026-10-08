@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Lens awareness
+- The app no longer assumes the 15 mm lens. It reads the lens name from the camera and takes the focal length from it
+  for panorama planning, dither size and the stitcher's starting field of view. New *Focal length* option in the
+  panorama tray (Auto, or 7.5-100 mm); a zoom lens asks you to set it.
+- Dither now scales with the field of view (a few dozen pixels on any lens) instead of a fixed number of degrees.
+- The stitcher reads the focal length from the photos' EXIF and corrects its starting field of view if the plan used
+  a different lens.
+- The ramp opens the lens to the widest aperture the camera accepts rather than assuming f/1.7.
+
 ### Changed
 - Fewer permissions: no camera, gallery-read, draw-over-apps, kill-background-processes or running-tasks permissions
   (the last three come from the DJI SDK's own manifest and are removed). First start now asks for three permissions
