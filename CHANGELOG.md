@@ -14,8 +14,6 @@
 - The plan summary says what will happen afterwards and roughly how long the download adds.
 - Progress for the download, stitching and encoding shows in the tray, the banner and the notification.
 
-## Unreleased
-
 ### Fixed
 - The on-camera media browser lists the newest files first instead of oldest first.
 
