@@ -252,4 +252,26 @@ class SequencePlanFactoryTest {
         assertTrue(plan.summary, plan.summary.contains("download"))
         assertTrue(plan.summary, plan.summary.contains("5m 50s download")) // 100 photos at ~3.5s each
     }
+
+    @Test
+    fun `a download that would take over half an hour is warned about`() {
+        // 600 frames at ~3.5s each is 35 minutes
+        val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 600, intervalSec = 60, makeVideo = true))
+        val warning = plan.warnings.firstOrNull { it.contains("download", ignoreCase = true) }
+        assertTrue(plan.warnings.toString(), warning != null)
+        assertTrue(warning!!, warning.contains("35m"))
+        assertTrue(warning, warning.contains("Make video"))
+    }
+
+    @Test
+    fun `a short download carries no warning`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, frames = 100))
+        assertTrue(plan.warnings.toString(), plan.warnings.none { it.contains("download", ignoreCase = true) })
+    }
+
+    @Test
+    fun `no download means no download warning however long the run`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 600, intervalSec = 60))
+        assertTrue(plan.warnings.toString(), plan.warnings.none { it.contains("download", ignoreCase = true) })
+    }
 }

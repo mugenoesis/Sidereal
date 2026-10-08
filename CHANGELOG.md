@@ -13,6 +13,7 @@
   `Movies/Sidereal/<series>/`.
 - The plan summary says what will happen afterwards and roughly how long the download adds.
 - Progress for the download, stitching and encoding shows in the tray, the banner and the notification.
+- A warning appears in the tray when the download afterwards would take over half an hour, naming the options to turn off.
 
 ### Fixed
 - The on-camera media browser lists the newest files first instead of oldest first.

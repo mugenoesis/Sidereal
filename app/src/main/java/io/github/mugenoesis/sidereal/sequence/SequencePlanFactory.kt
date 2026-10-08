@@ -158,6 +158,7 @@ object SequencePlanFactory {
                 panorama = panorama
             )
             val estimated = SequenceEstimate.durationMs(steps)
+            downloadWarning(series)?.let { warnings += it }
             PlanResult.Ok(
                 BuiltPlan(
                     steps = steps,
@@ -185,6 +186,17 @@ object SequencePlanFactory {
         if (series.makeVideo) steps += "video"
         val download = TimelapseMath.format(series.tags.size * DOWNLOAD_MS_PER_PHOTO)
         return " · then ${steps.joinToString(", ")} (+$download download)"
+    }
+
+    private const val LONG_DOWNLOAD_MS = 30 * 60_000L
+
+    /** A heads-up when bringing the photos in will take a long time, with the options that cause it. */
+    private fun downloadWarning(series: SeriesPlan): String? {
+        if (!series.needsDownload) return null
+        val ms = series.tags.size * DOWNLOAD_MS_PER_PHOTO
+        if (ms < LONG_DOWNLOAD_MS) return null
+        val options = if (series.mode == SequenceMode.TIMELAPSE) "Make video and Save frames" else "Save photos and Stitch"
+        return "Downloading the photos afterwards will take about ${TimelapseMath.format(ms)} - turn off $options to leave them on the camera's card"
     }
 
     private fun defaultTags(mode: SequenceMode, captures: Int): List<String> = (1..captures).map {
