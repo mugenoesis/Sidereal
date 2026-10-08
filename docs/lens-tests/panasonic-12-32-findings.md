@@ -39,3 +39,18 @@ Conclusion: the camera asks the lens for an aperture it cannot make at that zoom
 - The app asks where the zoom is set; entering 32 gives "12-32 mm f/3.5-5.6 - at 32 mm".
 - Stowing the lens: the line changes to "Lens not extended - rotate the zoom ring" within a few seconds and stays.
 - Extending to 12 mm: the warning clears and the line says "zoom moved, tap to set" (the 32 mm entry is dropped because the focus ring's range changed). Entering 12 gives "at 12 mm".
+
+## Autofocus at 12 mm (Panasonic)
+
+- The sharpness curve peaks around ring 900-1000 of 1570 (`panasonic-12-32-12mm-*.txt`), and the camera's own autofocus is
+  unreliable on this lens from far-blurred starts (seeds at 1127-1541).
+- **Bug found:** the app read the focus ring's range once per session. On a zoom it changes with the zoom (1570 at 12 mm,
+  3837 at 32 mm), so the search ran with the 32 mm range at 12 mm. It is now read again at each autofocus start and every
+  few seconds with the lens poll.
+- **Bug found:** after the camera's autofocus the lens can still be moving when the climb starts, so the first reading
+  shows the old sharp picture, not the position the climb believes it is at (the ring readback just echoes the
+  commanded value; the picture lags a ring move by about 300 ms). The stale reading was then chosen as the lock, while the
+  real peak sat elsewhere. The climb now compares the reading on arrival at its chosen position with what it had recorded
+  there and, if far lower, corrects the record and chooses again.
+- After both fixes, starts at 1400 and 2000 lock on the peak (ring 880-1070, 7-12 s) in 9 of 10 trials; one lock at a
+  dim-scene shoulder (55% of the peak) remains under investigation.

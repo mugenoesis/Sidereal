@@ -1,0 +1,36 @@
+# Lens test: panasonic-12-32-12mm  (2026-10-08T14:50:25+01:00)
+app version: versionName=0.2.1
+
+== 1. what the camera reports about the lens
+14121 16584 I SiderealDebug: LENS interchangeable=true adjustableAperture=true opticalZoom=false hybridZoom=false displayName=Zenmuse X5
+14121 16584 I SiderealDebug: LENS info=ok:Unknown
+14121 16584 I SiderealDebug: LENS opticalZoomFocalLength=fail:The feature is unsupported.
+14121 16584 I SiderealDebug: LENS key LensInformation = Unknown
+14121 16584 I SiderealDebug: LENS key ApertureRange = FAIL The feature is unsupported.
+14121 16584 I SiderealDebug: LENS key OpticalZoomFocalLength = FAIL The feature is unsupported.
+14121 16584 I SiderealDebug: LENS key OpticalZoomSpec = FAIL The feature is unsupported.
+== 2. aperture: which values the camera accepts (widest first)
+14121 16584 I SiderealDebug: APERTURE adjustableSupported=true
+14121 16584 I SiderealDebug: APERTURE setMode MANUAL -> null
+14121 16584 I SiderealDebug: APERTURE set F_1_DOT_4 -> Param Illegal
+14121 16584 I SiderealDebug: APERTURE set F_1_DOT_7 -> Param Illegal
+14121 16584 I SiderealDebug: APERTURE set F_1_DOT_8 -> Param Illegal
+14121 16584 I SiderealDebug: APERTURE set F_2 -> Param Illegal
+14121 16584 I SiderealDebug: APERTURE set F_2_DOT_8 -> Param Illegal
+14121 16584 I SiderealDebug: APERTURE set F_3_DOT_5 -> null
+14121 16584 I SiderealDebug: APERTURE set F_4 -> null
+14121 16584 I SiderealDebug: APERTURE set F_5_DOT_6 -> null
+14121 16584 I SiderealDebug: APERTURE set F_8 -> null
+14121 16584 I SiderealDebug: APERTURE set F_11 -> null
+== 3. sharpness over the whole focus ring (ground truth for autofocus)
+14121 16584 I SiderealDebug: AFCURVE panasonic-12-32-12mm 0:67 50:73 100:81 150:92 200:104 250:119 300:140 350:166 400:197 450:249 500:322 550:433 600:564 650:826 700:1287 750:1763 800:2511 850:3075 900:3264 950:3233 1000:2974 1050:2325 1100:2033 1150:974 1200:621 1250:525 1300:383 1350:292 1400:238 1450:198 1500:164 1550:136 1600:137 1650:139 1700:138 1750:123 1800:116 1850:118 1900:116 1950:120 2000:118 
+14121 16584 I SiderealDebug: AFNOISE panasonic-12-32-12mm meanSpread=0.034 maxSpread=0.236
+== 4. software autofocus from blurred starts (time to lock, where it locked)
+14121 14121 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_15 ISO 800)
+14121 16584 I SiderealDebug: AFTRIAL panasonic-12-32-12mm start=0 locked=true lockMs=7061 ring=935 sharp=3886
+14121 14121 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_20 ISO 800)
+14121 16584 I SiderealDebug: AFTRIAL panasonic-12-32-12mm start=700 locked=true lockMs=6338 ring=930 sharp=3106
+14121 14121 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_20 ISO 800)
+14121 16584 I SiderealDebug: AFTRIAL panasonic-12-32-12mm start=1400 locked=true lockMs=10993 ring=1304 sharp=344
+14121 14121 I SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_20 ISO 800)
+14121 16584 I SiderealDebug: AFTRIAL panasonic-12-32-12mm start=2000 locked=true lockMs=8814 ring=940 sharp=3131

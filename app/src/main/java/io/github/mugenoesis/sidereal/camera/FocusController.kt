@@ -149,16 +149,17 @@ class FocusController(private val gateway: CameraGateway = RealCameraGateway) {
         }
     }
 
+    /** Takes the range from a reading made elsewhere (the lens poll reads it every few seconds). */
+    fun setFocusRingUpperBound(value: Int) {
+        if (value > 0) _focusRingUpperBound.value = value
+    }
+
     /**
-     * No-op once the bound is already known - mirrors
-     * DJIConnectionManager.pitchRangeDegrees()'s query-once-and-cache
-     * idiom. Note this cache lives on the controller instance itself and,
-     * unlike DJIConnectionManager's gimbal-range caches, isn't cleared on a
-     * mid-session lens swap - if that turns out to change the ring range,
-     * a fresh FocusController (or an explicit reset) would be needed.
+     * Asks the camera for the ring's range again every time: it is not fixed for a session, because on a zoom lens it
+     * grows with the zoom (1570 at 12 mm, 3837 at 32 mm on the Panasonic 12-32), and a search planned on the old range
+     * mis-sizes its steps and mistakes the real end stop for a good seed.
      */
     fun refreshFocusRingRange() {
-        if (_focusRingUpperBound.value != null) return
         val camera = DJIConnectionManager.camera ?: return
         camera.getFocusRingValueUpperBound(object : CommonCallbacks.CompletionCallbackWith<Int> {
             override fun onSuccess(value: Int) {

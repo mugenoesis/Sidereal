@@ -215,7 +215,7 @@ object DebugScenarios {
                 val out = StringBuilder()
                 val spreads = ArrayList<Double>()
                 var ringPos = 0
-                while (ringPos <= 2035) {
+                while (ringPos <= (args["max"]?.toInt() ?: 2035)) {
                     callback<String?> { RealCameraGateway.setFocusRingValue(ringPos) { e -> it(e) } }
                     delay(700)
                     val samples = ArrayList<Double>()
@@ -228,6 +228,34 @@ object DebugScenarios {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.endSharpnessProbe() }
                 Log.i(TAG, "AFCURVE $tag $out")
                 Log.i(TAG, "AFNOISE $tag meanSpread=${"%.3f".format(spreads.average())} maxSpread=${"%.3f".format(spreads.max())}")
+            }
+            "ring_lag" -> {
+                // args: from, to, tag - jump the ring and log, every 100 ms, what the camera says the ring is and how sharp the
+                // picture is, to see how long the picture takes to catch up with a ring move.
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                val ctrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { io.github.mugenoesis.sidereal.camera.SoftwareAfcController.latest } ?: error("no afc controller")
+                val from = args["from"]?.toInt() ?: 930
+                val to = args["to"]?.toInt() ?: 1312
+                val tag = args["tag"] ?: "lag"
+                callback<String?> { RealCameraGateway.setFocusAssistantEnabled(false, false) { e -> it(e) } }
+                callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.beginSharpnessProbe() }
+                callback<String?> { RealCameraGateway.setFocusRingValue(from) { e -> it(e) } }
+                delay(3000)
+                Log.i(TAG, "RINGLAG $tag settled at $from: sharp=${ctrl.lastSharpness.value.toInt()}")
+                val t0 = System.currentTimeMillis()
+                camera.setFocusRingValue(to, null)
+                val out = StringBuilder()
+                repeat(36) {
+                    val ring = callback<String> { cb -> camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                        override fun onSuccess(v: Int?) = cb("$v")
+                        override fun onFailure(e: dji.common.error.DJIError) = cb("?")
+                    }) }
+                    out.append("${System.currentTimeMillis() - t0}ms ring=$ring sharp=${ctrl.lastSharpness.value.toInt()}\n")
+                    delay(100)
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.endSharpnessProbe() }
+                Log.i(TAG, "RINGLAG $tag $from->$to\n$out")
             }
             "aperture_probe" -> {
                 val camera = DJIConnectionManager.camera ?: error("no camera")

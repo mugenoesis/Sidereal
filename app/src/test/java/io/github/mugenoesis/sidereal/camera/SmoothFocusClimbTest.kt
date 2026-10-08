@@ -343,4 +343,46 @@ class SmoothFocusClimbTest {
         val r = run(near, 1050)
         assertTrue("${r.ring}", r.ring in 950..1150)
     }
+
+    // Panasonic 12-32 at 12 mm (real, step 50, ring range 0-1570): a sharp peak near 900-950 over a long blurry slope.
+    private val panasonic12 = mapOf(
+        0 to 67, 50 to 73, 100 to 81, 150 to 92, 200 to 104, 250 to 119, 300 to 140, 350 to 166, 400 to 197, 450 to 249,
+        500 to 322, 550 to 433, 600 to 564, 650 to 826, 700 to 1287, 750 to 1763, 800 to 2511, 850 to 3075, 900 to 3264,
+        950 to 3233, 1000 to 2974, 1050 to 2325, 1100 to 2033, 1150 to 974, 1200 to 621, 1250 to 525, 1300 to 383,
+        1350 to 292, 1400 to 238, 1450 to 198, 1500 to 164, 1550 to 136, 1600 to 137, 1650 to 139, 1700 to 138,
+        1750 to 123, 1800 to 116, 1850 to 118, 1900 to 116, 1950 to 120, 2000 to 118
+    )
+
+    /**
+     * After the camera's own autofocus the lens may still be moving when the climb starts, so for [staleMs] every frame
+     * shows the picture as it was at [staleRing] (sharp), whatever ring the climb believes it is at.
+     */
+    private fun runWithStaleStart(curve: Map<Int, Int>, bound: Int, seed: Int, staleRing: Int, staleMs: Long): Int {
+        val search = SmoothFocusClimb(bound)
+        var now = 0L
+        var ring = search.begin(seed, now).ring
+        while (now < 30_000) {
+            now += 150
+            val seen = if (now < staleMs) sharpness(curve, staleRing) else sharpness(curve, ring)
+            when (val command = search.onFrame(now, seen, steady = true)) {
+                is FocusSearch.Command.MoveTo -> ring = command.ring
+                is FocusSearch.Command.Locked -> return command.ring
+                null, is FocusSearch.Command.Unreliable -> {}
+            }
+        }
+        throw AssertionError("never locked")
+    }
+
+    @Test fun `a first reading made while the lens was still moving does not become the lock`() {
+        // Seed at 1312 (blurry, 383) but the picture stays sharp (as at 930) for the first 1.6 s.
+        val locked = runWithStaleStart(panasonic12, 1570, seed = 1312, staleRing = 930, staleMs = 1600)
+        assertTrue("locked at $locked", share(panasonic12, locked) > 0.8)
+    }
+
+    @Test fun `the same curve with a settled start still finds the peak from anywhere`() {
+        for (seed in listOf(0, 400, 930, 1312, 1541)) {
+            val locked = runWithStaleStart(panasonic12, 1570, seed = seed, staleRing = seed, staleMs = 0)
+            assertTrue("seed $seed locked at $locked", share(panasonic12, locked) > 0.8)
+        }
+    }
 }

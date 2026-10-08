@@ -350,6 +350,9 @@ class MainActivity : AppCompatActivity() {
         bindCameraSettingsViews()
         bindSequenceFeature()
         // Keep the face tracker's gains right for whatever lens is on: they were tuned on the 60 degree wide 15 mm.
+        lensController.ringUpperBound
+            .onEach { it?.let(focusController::setFocusRingUpperBound) }
+            .launchIn(lifecycleScope)
         combine(lensController.info, lensController.zoomMm) { _, _ -> lensController.effectiveFocalMm() }
             .onEach { faceTrackingController.setLensFocalMm(it) }
             .launchIn(lifecycleScope)

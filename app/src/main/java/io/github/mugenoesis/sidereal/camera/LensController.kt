@@ -25,6 +25,10 @@ class LensController(
     private var zoomMoved = false
 
     private val _zoomMm = MutableStateFlow<Float?>(null)
+    private val _ringUpperBound = MutableStateFlow<Int?>(null)
+
+    /** The focus ring's upper limit as last read. It changes with a zoom's position, so it is read again, not kept for the session. */
+    val ringUpperBound: StateFlow<Int?> = _ringUpperBound
 
     /** Where the user says the zoom is set. The camera cannot tell (EXIF says 12 mm whatever the zoom), so it is asked. */
     val zoomMm: StateFlow<Float?> = _zoomMm
@@ -87,7 +91,7 @@ class LensController(
     fun refreshRing() {
         readRing { value, max ->
             ring = value
-            if (max != null) ringMax = max
+            if (max != null) { ringMax = max; _ringUpperBound.value = max }
             checkZoomMoved()
             publish()
         }

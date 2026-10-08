@@ -38,6 +38,13 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         val maxMeasurements: Int = 20,
         val minStep: Int = 8,
         val dropFraction: Double = 0.5,
+        /**
+         * On arriving at the position chosen to lock, a reading below this fraction of what was recorded there means the
+         * record was wrong - typically taken while the lens was still travelling after the camera's own autofocus, when
+         * the picture shows where the lens was and not where it is. The record is corrected and the best position chosen again.
+         */
+        val staleRecordFraction: Double = 0.5,
+        val maxLockRechecks: Int = 4,
         val dropConfirmFrames: Int = 4,
         /** Averaging stops being worth the time once the noise of the mean is this small (fraction of the reading). */
         val targetNoise: Double = 0.03,
@@ -98,6 +105,10 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     private var lockedRing = 0
     private var lockedScore = 0.0
     private var belowStreak = 0
+    private var lockRechecks = 0
+
+    /** What was recorded at the current position before the latest reading replaced it. */
+    private var replacedRecord: Double? = null
 
     override fun begin(seedRing: Int?, nowMs: Long): FocusSearch.Command.MoveTo {
         measured.clear()
@@ -110,6 +121,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         framesNeeded = config.framesPerPosition
         extendedCentre = false
         wideChecked = false
+        lockRechecks = 0
         confident = true
         belowStreak = 0
         stage = Stage.CENTRE
@@ -137,6 +149,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         val mean = frames.average()
         recordNoise(mean)
         frames.clear()
+        replacedRecord = measured[current]
         measured[current] = mean
         count++
         return decide(mean, nowMs)
@@ -186,11 +199,17 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
             if (queue.isNotEmpty()) move(queue.removeFirst(), nowMs) else finishWideCheck(nowMs)
         }
         Stage.LOCKING -> {
+            val recorded = replacedRecord
+            if (recorded != null && value < recorded * config.staleRecordFraction && lockRechecks < config.maxLockRechecks) {
+                lockRechecks++
+                lock(measured.maxByOrNull { it.value }!!.key, nowMs, confident)
+            } else {
             lockedRing = current
             lockedScore = value
             belowStreak = 0
             stage = Stage.LOCKED
             FocusSearch.Command.Locked(current, value, confident)
+            }
         }
         else -> null
     }

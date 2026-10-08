@@ -168,4 +168,15 @@ class LensControllerTest {
         c.refresh()
         assertNull(c.effectiveFocalMm())
     }
+
+    @Test fun `the focus ring's upper limit follows the zoom and is published for the autofocus`() {
+        var max = 1570
+        val c = LensController({ cb -> cb(panasonic) }, { cb -> cb(900, max) })
+        assertNull(c.ringUpperBound.value)
+        c.refreshRing()
+        assertEquals(1570, c.ringUpperBound.value)
+        max = 3837
+        c.refreshRing()
+        assertEquals(3837, c.ringUpperBound.value)
+    }
 }
