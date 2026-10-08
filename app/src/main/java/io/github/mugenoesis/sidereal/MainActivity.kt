@@ -583,6 +583,55 @@ class MainActivity : AppCompatActivity() {
             .onEach { cameraStatusController.status.value.let { _ -> text.visibility = if (it is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE } }
             .launchIn(lifecycleScope)
         bindLensStatus()
+        bindGimbalSleep()
+    }
+
+    private val poseMemory = io.github.mugenoesis.sidereal.gimbal.PoseMemory()
+    private var poseBeforeSleep: io.github.mugenoesis.sidereal.gimbal.PoseMemory.Pose? = null
+
+    /**
+     * The handle goes to sleep on its own (and when its button is pressed): the gimbal motors stop and the camera sags.
+     * Shows that, and a tap wakes it and points the camera back where it was, since it wakes centred.
+     */
+    private fun bindGimbalSleep() {
+        val pill = findViewById<android.widget.TextView>(R.id.gimbalSleepText)
+        val power = DJIConnectionManager.handheldPower
+        // Where the camera pointed a moment ago: the handle says it has gone to sleep about a second after the camera
+        // starts to sag, so the newest readings at that point are the droop and the pose to put back is an older one.
+        DJIConnectionManager.gimbalState
+            .onEach { st -> st?.attitudeInDegrees?.let { poseMemory.record(android.os.SystemClock.elapsedRealtime(), it.pitch, it.yaw) } }
+            .launchIn(lifecycleScope)
+        power.state
+            .onEach { state ->
+                if (state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.SLEEPING && poseBeforeSleep == null) {
+                    poseBeforeSleep = poseMemory.poseBefore(android.os.SystemClock.elapsedRealtime())
+                } else if (state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.ON) {
+                    poseBeforeSleep = null // woken by hand: the next sleep takes its own
+                }
+            }
+            .launchIn(lifecycleScope)
+        combine(power.state, DJIConnectionManager.connectionState) { state, conn -> state to conn }
+            .onEach { (state, conn) ->
+                val asleep = state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.SLEEPING ||
+                    state == io.github.mugenoesis.sidereal.gimbal.HandheldPowerState.OFF
+                pill.visibility = if (asleep && conn is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE
+            }
+            .launchIn(lifecycleScope)
+        pill.setOnClickListener { wakeGimbal() }
+    }
+
+    private fun wakeGimbal() {
+        val pose = poseBeforeSleep
+        lifecycleScope.launch {
+            val awake = DJIConnectionManager.handheldPower.ensureAwake()
+            if (!awake) {
+                android.widget.Toast.makeText(this@MainActivity, "The handle didn't wake - press its button", android.widget.Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            poseBeforeSleep = null
+            poseMemory.clear()
+            if (pose != null) io.github.mugenoesis.sidereal.sequence.RealSequenceHost().moveTo(pose.pitch, pose.yaw)
+        }
     }
 
     /** The lens line: "Checking lens..." from the moment of connecting, then the lens' focal length(s) and aperture. */

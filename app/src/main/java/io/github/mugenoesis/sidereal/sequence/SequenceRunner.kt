@@ -18,6 +18,12 @@ interface SequenceHost {
     /** False while the link to the camera is down (WiFi dropped, camera asleep), so a failed shot can wait instead of aborting. */
     fun isCameraReachable(): Boolean = true
 
+    /**
+     * Called each time the runner finds the camera link down, before it waits again: the host can try to bring it back
+     * (wake a handle that went to sleep). Must be quick and safe to call repeatedly.
+     */
+    suspend fun recoverLink() {}
+
     /** Day-to-night ramping starts: read the camera's current settings as the baseline. */
     suspend fun beginRamp(config: RampConfig) {}
 
@@ -145,6 +151,7 @@ class SequenceRunner(
         try {
             while (!host.isCameraReachable()) {
                 if (host.nowMs() - started >= linkPatienceMs) return false
+                host.recoverLink()
                 host.sleep(linkPollMs)
             }
             return true

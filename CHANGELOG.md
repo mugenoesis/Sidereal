@@ -16,6 +16,10 @@
   wide end whatever the ring is at) and keeps the planned one.
 - Autofocus reads the focus ring's range again at each start (a zoom changes it) and corrects a stale first reading
   before locking, which stopped it locking on the slope from far-blurred starts.
+- **The Osmo handle's sleep mode is handled.** When the handle sleeps (on its own, or its button) the gimbal motors stop
+  and the camera sags and stops taking pictures. A "Gimbal asleep - tap to wake" button appears and wakes it from the
+  phone, putting the camera back where it was. A running sequence wakes it by itself, waits for the camera to come back
+  (about 7 s), and re-aims before the frame. A still timelapse now re-aims at its starting pose before every frame.
 - Dither now scales with the field of view (a few dozen pixels on any lens) instead of a fixed number of degrees.
 - The stitcher reads the focal length from the photos' EXIF and corrects its starting field of view if the plan used
   a different lens.

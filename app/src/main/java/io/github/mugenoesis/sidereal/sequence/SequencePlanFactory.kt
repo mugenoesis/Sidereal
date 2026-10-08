@@ -124,6 +124,9 @@ object SequencePlanFactory {
                         settleMs = settings.settleMs.toLong(),
                         exposureMs = exposureMs,
                         path = path,
+                        // A still timelapse points where it was started before every frame, so a gimbal that went to sleep
+                        // and woke centred (or was knocked) is put back; with no gimbal reading it just runs.
+                        hold = if (path == null) context.attitude else null,
                         ramp = ramp
                     )
                     warnings += IntervalPlanner.validate(config)

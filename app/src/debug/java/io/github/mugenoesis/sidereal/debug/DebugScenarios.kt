@@ -229,6 +229,80 @@ object DebugScenarios {
                 Log.i(TAG, "AFCURVE $tag $out")
                 Log.i(TAG, "AFNOISE $tag meanSpread=${"%.3f".format(spreads.average())} maxSpread=${"%.3f".format(spreads.max())}")
             }
+            "gimbal_probe" -> {
+                // Read-only unless enable=true: what the gimbal says about its own health, and whether it can be told to restart.
+                val gimbal = DJIConnectionManager.gimbal ?: error("no gimbal")
+                val st = DJIConnectionManager.gimbalState.value
+                Log.i(TAG, "GIMBAL state: ${if (st == null) "none" else "mode=${st.mode} overloaded=${st.isMotorOverloaded} pitchAtStop=${st.isPitchAtStop} yawAtStop=${st.isYawAtStop} rollAtStop=${st.isRollAtStop} attitudeReset=${st.isAttitudeReset} calibrating=${st.isCalibrating} balance=${st.balanceState} att=${st.attitudeInDegrees}"}")
+                Log.i(TAG, "GIMBAL display=${gimbal.displayName}")
+                Log.i(TAG, "GIMBAL capabilities=${gimbal.capabilities?.keys}")
+                Log.i(TAG, "GIMBAL getMotorEnabled=" + callback<String> { cb -> gimbal.getMotorEnabled(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Boolean> {
+                    override fun onSuccess(v: Boolean?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                Log.i(TAG, "GIMBAL getControllerMode=" + callback<String> { cb -> gimbal.getControllerMode(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<dji.common.handheldcontroller.ControllerMode> {
+                    override fun onSuccess(v: dji.common.handheldcontroller.ControllerMode?) = cb("ok:$v")
+                    override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                }) })
+                val product = dji.sdk.sdkmanager.DJISDKManager.getInstance().product
+                Log.i(TAG, "GIMBAL product=${product?.javaClass?.simpleName} model=${product?.model}")
+                val hh = (product as? dji.sdk.products.HandHeld)?.handHeldController
+                Log.i(TAG, "GIMBAL handheldController=${hh?.javaClass?.simpleName} connected=${(hh as? dji.sdk.handheldcontroller.OSMOHandheldController)?.isConnected}")
+                if (hh != null) {
+                    hh.setPowerModeCallback { m -> Log.i(TAG, "GIMBAL powerMode push=$m"); DJIConnectionManager.handheldPower.onPush(m.name) }
+                    delay(1500)
+                }
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                for (name in listOf(dji.keysdk.HandheldControllerKey.POWER_MODE, dji.keysdk.HandheldControllerKey.STICK_GIMBAL_CONTROL_ENABLED, dji.keysdk.HandheldControllerKey.HANDHELD_NAME)) {
+                    val v = kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                        km?.getValue(dji.keysdk.HandheldControllerKey.create(name), object : dji.keysdk.callback.GetCallback {
+                            override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(value.toString()) }
+                            override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                        }) ?: cont.resume("no key manager")
+                    }
+                    Log.i(TAG, "GIMBAL handheldKey $name = $v")
+                }
+                if (args["enable"] == "true") {
+                    Log.i(TAG, "GIMBAL setMotorEnabled(true)=" + callback<String> { cb -> gimbal.setMotorEnabled(true) { e -> cb(e?.description ?: "ok") } })
+                    delay(1000)
+                    Log.i(TAG, "GIMBAL getMotorEnabled after=" + callback<String> { cb -> gimbal.getMotorEnabled(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Boolean> {
+                        override fun onSuccess(v: Boolean?) = cb("ok:$v")
+                        override fun onFailure(e: dji.common.error.DJIError) = cb("fail:${e.description}")
+                    }) })
+                }
+            }
+            "handheld_power" -> {
+                // args: mode=ON|SLEEPING|OFF - set the handle's power mode and log what it reports for 12 s after.
+                val product = dji.sdk.sdkmanager.DJISDKManager.getInstance().product
+                val hh = (product as? dji.sdk.products.HandHeld)?.handHeldController ?: error("no handheld controller")
+                hh.setPowerModeCallback { m -> Log.i(TAG, "HANDHELD powerMode push=$m"); DJIConnectionManager.handheldPower.onPush(m.name) }
+                val mode = dji.common.handheld.PowerMode.valueOf(args["mode"] ?: "ON")
+                Log.i(TAG, "HANDHELD setPowerMode($mode) -> " + callback<String> { cb -> hh.setPowerMode(mode) { e -> cb(e?.description ?: "ok") } })
+                repeat(12) {
+                    delay(1000)
+                    val st = DJIConnectionManager.gimbalState.value
+                    Log.i(TAG, "HANDHELD +${it + 1}s gimbal mode=${st?.mode} att=${st?.attitudeInDegrees} cameraConnected=${DJIConnectionManager.camera != null} state=${DJIConnectionManager.connectionState.value}")
+                }
+            }
+            "wake_then_shoot" -> {
+                // Sleeps the handle, wakes it, then tries a shot every 2 s and logs how long until the camera takes one.
+                // Run it with the camera in MANUAL at an aperture the lens can make (never program mode at 32 mm on the Panasonic).
+                val power = DJIConnectionManager.handheldPower
+                val hh = (dji.sdk.sdkmanager.DJISDKManager.getInstance().product as? dji.sdk.products.HandHeld)?.handHeldController ?: error("no handheld controller")
+                hh.setPowerModeCallback { m -> power.onPush(m.name) }
+                Log.i(TAG, "WAKESHOOT sleeping: " + callback<String> { cb -> hh.setPowerMode(dji.common.handheld.PowerMode.SLEEPING) { e -> cb(e?.description ?: "ok") } })
+                delay((args["sleepSec"]?.toLong() ?: 5L) * 1000)
+                val t0 = System.currentTimeMillis()
+                Log.i(TAG, "WAKESHOOT ensureAwake=" + power.ensureAwake() + " after ${System.currentTimeMillis() - t0} ms")
+                val t1 = System.currentTimeMillis()
+                var ok = false
+                while (!ok && System.currentTimeMillis() - t1 < 60_000) {
+                    val r = callback<String?> { RealCameraGateway.startShootPhoto { e -> it(e) } }
+                    Log.i(TAG, "WAKESHOOT +${System.currentTimeMillis() - t1} ms startShootPhoto -> ${r ?: "accepted"}")
+                    if (r == null) ok = true else delay(2000)
+                }
+                delay(4000)
+            }
             "ring_lag" -> {
                 // args: from, to, tag - jump the ring and log, every 100 ms, what the camera says the ring is and how sharp the
                 // picture is, to see how long the picture takes to catch up with a ring move.

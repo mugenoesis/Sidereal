@@ -193,14 +193,33 @@
         android:id="@+id/lensStatusText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="68dp"
-        android:layout_marginTop="58dp"
+        android:layout_marginTop="6dp"
+        app:layout_constraintStart_toStartOf="@id/cameraStatusText"
+        app:layout_constraintTop_toBottomOf="@id/cameraStatusText"
         android:background="@drawable/bg_pill_container"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
         android:paddingTop="5dp"
         android:paddingBottom="5dp"
         android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <!-- Shown only while the handle sleeps (gimbal motors off): tap to wake it and put the camera back where it was. -->
+    <TextView
+        android:id="@+id/gimbalSleepText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        app:layout_constraintStart_toStartOf="@id/lensStatusText"
+        app:layout_constraintTop_toBottomOf="@id/lensStatusText"
+        android:background="@drawable/bg_pill_container"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:text="Gimbal asleep - tap to wake"
+        android:textColor="#FFB74D"
         android:textSize="12sp"
         android:visibility="gone" />
 

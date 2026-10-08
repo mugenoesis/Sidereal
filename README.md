@@ -192,6 +192,10 @@ Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume th
   aperture stepper hides apertures the lens can't make. This matters: on the Panasonic 12-32mm the camera accepts f/4
   at 32 mm, which the lens can't make, and the camera then locks up until it is power-cycled. A lens the app can't
   identify is left alone.
+- **Handle sleep.** The Osmo handle goes to sleep on its own or when its button is pressed: the gimbal motors stop, the
+  camera sags and stops taking pictures, but the WiFi link stays up. Sidereal shows *Gimbal asleep - tap to wake* and wakes
+  it from the phone, then points the camera back where it was (the gimbal wakes centred). A running sequence does this by
+  itself, and a still timelapse re-aims before every frame.
 - **Autofocus.** The software autofocus reads the focus ring's range from the camera, but its settings were tuned on
   the 15 mm lens, so another lens may lock slower or less precisely.
 

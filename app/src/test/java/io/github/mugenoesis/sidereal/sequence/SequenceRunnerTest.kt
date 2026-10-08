@@ -26,6 +26,9 @@ private class FakeHost : SequenceHost {
 
     override fun nowMs() = clock
 
+    var recoveries = 0
+    override suspend fun recoverLink() { recoveries++ }
+
     override suspend fun sleep(ms: Long) {
         events += "sleep($ms)"
         blockSleepOn?.let { blockSleepOn = null; it.await() }
@@ -261,5 +264,20 @@ class SequenceRunnerTest {
         ))
         assertEquals(listOf("beginRamp(0.25)", "adapt", "capture(light,ok)"), host.events.filter { !it.startsWith("sleep") })
         assertEquals("adapted", runner.progress.value.exposureSummary)
+    }
+
+    @Test
+    fun `while the camera link is down the runner asks the host to recover it`() = runBlocking {
+        val host = FakeHost()
+        host.outages += 500L..20_000L
+        SequenceRunner(host).run(plan(frames = 1))
+        assertTrue("recoveries ${host.recoveries}", host.recoveries >= 2)
+    }
+
+    @Test
+    fun `a link that is fine is never poked`() = runBlocking {
+        val host = FakeHost()
+        SequenceRunner(host).run(plan(frames = 3))
+        assertEquals(0, host.recoveries)
     }
 }

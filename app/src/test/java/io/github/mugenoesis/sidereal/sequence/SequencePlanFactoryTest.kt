@@ -64,6 +64,20 @@ class SequencePlanFactoryTest {
     }
 
     @Test
+    fun `a still timelapse re-aims at the starting pose before every frame so a gimbal that went to sleep is put back`() {
+        val moves = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 1, intervalSec = 10)).steps.filterIsInstance<SequenceStep.MoveTo>()
+        assertEquals(6, moves.size)
+        assertTrue(moves.all { it.pitch == -10f && it.yaw == 20f })
+    }
+
+    @Test
+    fun `a still timelapse without a gimbal reading just runs`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 1, intervalSec = 10), ctx.copy(attitude = null))
+        assertTrue(plan.steps.none { it is SequenceStep.MoveTo })
+        assertEquals(6, plan.captures)
+    }
+
+    @Test
     fun `motion timelapse sweeps from A to B`() {
         val c = ctx.copy(pointA = Attitude(-20f, -30f), pointB = Attitude(0f, 30f))
         val moves = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 1, intervalSec = 10, motion = true), c)

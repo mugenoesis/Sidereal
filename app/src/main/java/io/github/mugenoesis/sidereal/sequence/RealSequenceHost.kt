@@ -39,6 +39,9 @@ class RealSequenceHost(
         const val POLL_MS = 50L
         const val MOVE_ATTEMPTS = 2
 
+        /** The camera refuses shots for a few seconds after its handle wakes (about 7 s measured); give it ten. */
+        const val CAMERA_WAKE_MS = 10_000L
+
         /** The enum starts at f/1 though the lens stops at f/1.7: the camera refuses the impossible ones, so walk down the list. */
         const val APERTURE_ATTEMPTS = 12
     }
@@ -52,12 +55,31 @@ class RealSequenceHost(
 
     override fun nowMs(): Long = SystemClock.elapsedRealtime()
 
-    override fun isCameraReachable(): Boolean = DJIConnectionManager.isReadyToShoot()
+    // A handle that went to sleep is as good as a dropped link: the camera takes no pictures until it is woken.
+    override fun isCameraReachable(): Boolean = DJIConnectionManager.isReadyToShoot() && DJIConnectionManager.handheldPower.isAwake &&
+        !DJIConnectionManager.handheldPower.recentlyWoken(CAMERA_WAKE_MS)
+
+    override suspend fun recoverLink() {
+        if (DJIConnectionManager.handheldPower.isAwake) return
+        // It wakes centred: put the camera back where this sequence last aimed it, so the frame is not shot at the wrong spot.
+        if (wakeHandle()) lastTarget?.let { moveTo(it.pitch, it.yaw) }
+    }
+
+    private var lastTarget: Attitude? = null
+
+    private suspend fun wakeHandle(): Boolean {
+        Log.w(TAG, "the handle is asleep (gimbal motors off) - waking it")
+        val awake = DJIConnectionManager.handheldPower.ensureAwake()
+        Log.i(TAG, if (awake) "the handle is awake again" else "the handle did not wake")
+        freeModeRequested = false // it comes up in follow mode, centred
+        return awake
+    }
 
     override suspend fun sleep(ms: Long) = delay(ms)
 
     private suspend fun ensureFreeMode() {
-        if (freeModeRequested) return
+        val reported = DJIConnectionManager.gimbalState.value?.mode
+        if (freeModeRequested && (reported == null || reported == GimbalMode.FREE)) return
         freeModeRequested = true
         DJIConnectionManager.gimbal?.setMode(GimbalMode.FREE) { error ->
             if (error != null) Log.w(TAG, "setMode(FREE) failed: ${error.description}")
@@ -70,6 +92,7 @@ class RealSequenceHost(
 
     override suspend fun moveTo(pitch: Float, yaw: Float) {
         val gimbal = DJIConnectionManager.gimbal ?: run { Log.w(TAG, "moveTo: no gimbal"); return }
+        if (!DJIConnectionManager.handheldPower.isAwake) wakeHandle()
         ensureFreeMode()
         val pitchRange = DJIConnectionManager.pitchRangeDegrees()
         val yawRange = DJIConnectionManager.yawRangeDegrees()
@@ -77,6 +100,7 @@ class RealSequenceHost(
             GimbalArrival.quantize(pitchRange?.let { pitch.coerceIn(it.start, it.endInclusive) } ?: pitch),
             GimbalArrival.quantize(yawRange?.let { yaw.coerceIn(it.start, it.endInclusive) } ?: yaw)
         )
+        lastTarget = target
         // One retry: the first move after switching to FREE mode has been seen stalling a fraction of a
         // degree short and sitting out the whole timeout; re-sending the same target finishes it.
         repeat(MOVE_ATTEMPTS) { attempt ->
@@ -216,6 +240,11 @@ class RealSequenceHost(
     }
 
     override suspend fun capture(exposureMs: Long, label: String): Boolean {
+        if (!isCameraReachable()) {
+            // Handle asleep, or only just woken (the camera needs several seconds): not a refusal, the runner waits for it.
+            Log.w(TAG, "capture($label): the camera is not ready (handle asleep or just woken)")
+            return false
+        }
         val exposureMs = rampShutterMs ?: exposureMs
         val sent = nowMs()
         val error = suspendCancellableCoroutine<String?> { cont ->
