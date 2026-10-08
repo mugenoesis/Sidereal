@@ -7,6 +7,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import io.github.mugenoesis.sidereal.camera.ShutterLogic
 import io.github.mugenoesis.sidereal.display.NightMode
+import io.github.mugenoesis.sidereal.series.FrameProcessor
+import io.github.mugenoesis.sidereal.series.MediaStoreGallery
+import io.github.mugenoesis.sidereal.series.PostRun
+import io.github.mugenoesis.sidereal.series.RealCardSource
+import io.github.mugenoesis.sidereal.series.RunSummary
+import io.github.mugenoesis.sidereal.series.SeriesPlan
+import io.github.mugenoesis.sidereal.series.SeriesPostRunner
 import io.github.mugenoesis.sidereal.dji.DJIConnectionManager
 import io.github.mugenoesis.sidereal.dji.RealCameraGateway
 import kotlinx.coroutines.delay
@@ -44,7 +51,12 @@ class SequenceFeature(
         hostFactory = { onPrompt -> RealSequenceHost(onPrompt, rampIo = rampIo) },
         contextProvider = ::shootContext,
         prepare = ::ensurePhotoMode,
-        precondition = ::blockedReason
+        precondition = ::blockedReason,
+        postRun = PostRun { plan, run, report ->
+            // A fresh source each time: it owns the camera's playback mode for the length of the download.
+            SeriesPostRunner(RealCardSource(activity.applicationContext), MediaStoreGallery(activity.applicationContext), ::frameProcessorFor)
+                .run(plan, run, report)
+        }
     )
 
     private var promptDialog: AlertDialog? = null
@@ -53,14 +65,20 @@ class SequenceFeature(
         latest = this
         tray.bind(controller, activity.lifecycleScope)
 
-        combine(controller.isRunning, controller.progress, controller.settings) { running, progress, settings ->
-            Triple(running, progress, settings)
-        }.onEach { (running, progress, settings) ->
-            keepAlive(running, progress, settings.mode.label)
+        combine(controller.isRunning, controller.progress, controller.settings, controller.afterRun) { running, progress, settings, after ->
+            arrayOf(running, progress, settings, after)
+        }.onEach { values ->
+            val running = values[0] as Boolean
+            val progress = values[1] as SequenceProgress
+            val settings = values[2] as SequenceSettings
+            val after = values[3] as io.github.mugenoesis.sidereal.series.AfterRunProgress?
+            keepAlive(running, progress, settings.mode.label, after)
             shutterButton.isEnabled = !running
             shutterButton.alpha = if (running) 0.4f else 1f
             banner.visibility = if (running) View.VISIBLE else View.GONE
-            banner.text = "${settings.mode.label} · ${progress.capturesDone}/${progress.capturesTotal}" +
+            banner.text = if (after != null) {
+                "${settings.mode.label} · ${after.stage}" + if (after.total > 0) " ${after.done}/${after.total}" else "..."
+            } else "${settings.mode.label} · ${progress.capturesDone}/${progress.capturesTotal}" +
                 (if (progress.state is SequenceState.AwaitingUser) " · waiting for you" else "") +
                 (if (progress.waitingForCamera) " · waiting for the camera" else "") +
                 (if (progress.exposureSummary.isNotEmpty()) "\n${progress.exposureSummary}" else "")
@@ -70,6 +88,10 @@ class SequenceFeature(
     }
 
     fun refreshPreview() = tray.refreshPreview()
+
+    /** The panorama stitcher / timelapse encoder, once those exist; until then frames are only saved. */
+    @Suppress("UNUSED_PARAMETER")
+    private fun frameProcessorFor(plan: SeriesPlan, run: RunSummary, folder: String): FrameProcessor? = null
 
     private var keepAliveRunning = false
     private var lastNotification: SequenceNotificationContent? = null
@@ -81,10 +103,11 @@ class SequenceFeature(
      * While a sequence runs the foreground service keeps the process, CPU and WiFi awake and shows progress; when it
      * ends the notification stays behind saying how it went.
      */
-    private fun keepAlive(running: Boolean, progress: SequenceProgress, modeLabel: String) {
+    private fun keepAlive(running: Boolean, progress: SequenceProgress, modeLabel: String, after: io.github.mugenoesis.sidereal.series.AfterRunProgress?) {
         // The combined flow can deliver "stopped running" a beat before the final Done/Failed state; at the end read
         // the controller's own final progress, which is already set by then.
-        val content = SequenceNotificationText.of(modeLabel, if (running) progress else controller.progress.value)
+        val content = if (after != null) SequenceNotificationText.afterRun(modeLabel, after)
+        else SequenceNotificationText.of(modeLabel, if (running) progress else controller.progress.value, if (running) null else controller.message.value)
         if (running) {
             if (!keepAliveRunning) {
                 keepAliveRunning = true

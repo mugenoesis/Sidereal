@@ -86,7 +86,7 @@ class SequenceTrayView @JvmOverloads constructor(
         startStop.setOnClickListener {
             if (controller.isRunning.value) controller.stop() else controller.start()
         }
-        combine(controller.settings, controller.isRunning, controller.progress, controller.message) { _, _, _, _ -> }
+        combine(controller.settings, controller.isRunning, controller.progress, controller.message, controller.afterRun) { _, _, _, _, _ -> }
             .onEach { render() }
             .launchIn(scope)
     }
@@ -131,12 +131,20 @@ class SequenceTrayView @JvmOverloads constructor(
         val showProgress = running || progress.state is SequenceState.Done || progress.state is SequenceState.Failed || progress.state is SequenceState.Cancelled
         progressBar.visibility = if (showProgress) VISIBLE else GONE
         progressText.visibility = if (showProgress) VISIBLE else GONE
-        progressBar.progress = if (progress.capturesTotal == 0) 0 else progress.capturesDone * 100 / progress.capturesTotal
-        progressText.text = progressLabel(progress)
+        val after = c.afterRun.value
+        progressBar.progress = when {
+            after != null -> if (after.total == 0) 0 else after.done * 100 / after.total
+            progress.capturesTotal == 0 -> 0
+            else -> progress.capturesDone * 100 / progress.capturesTotal
+        }
+        progressText.text = after?.let { afterLabel(it) } ?: progressLabel(progress)
 
         startStop.text = if (running) "Stop" else "Start"
         startStop.setBackgroundResource(if (running) R.drawable.bg_shutter_stopping else R.drawable.bg_segment_selected)
     }
+
+    private fun afterLabel(a: io.github.mugenoesis.sidereal.series.AfterRunProgress): String =
+        if (a.total > 0) "${a.stage} ${a.done}/${a.total}" else "${a.stage}..."
 
     private fun progressLabel(p: SequenceProgress): String {
         val frames = "${p.capturesDone}/${p.capturesTotal}"
