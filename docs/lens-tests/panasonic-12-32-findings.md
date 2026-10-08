@@ -52,5 +52,7 @@ Conclusion: the camera asks the lens for an aperture it cannot make at that zoom
   commanded value; the picture lags a ring move by about 300 ms). The stale reading was then chosen as the lock, while the
   real peak sat elsewhere. The climb now compares the reading on arrival at its chosen position with what it had recorded
   there and, if far lower, corrects the record and chooses again.
-- After both fixes, starts at 1400 and 2000 lock on the peak (ring 880-1070, 7-12 s) in 9 of 10 trials; one lock at a
-  dim-scene shoulder (55% of the peak) remains under investigation.
+- After both fixes, hard starts (1400 and 2000, far from the peak) lock on the peak in 13 of 14 valid trials (7-12 s,
+  ring 880-1100). The one miss locked at 55% of the peak on the shoulder in a dimmer scene; it did not repeat in the next
+  five. Before the fixes the same starts locked on the slope (sharpness 340-390 against a peak of about 3300) in about
+  one trial in four.
