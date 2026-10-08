@@ -22,8 +22,14 @@
 - **Face tracking**: tap a detected face to lock onto it (on-device ML Kit).
   Choose a *Locked* or a smoother *Trail* follow style, and nudge where the
   subject sits in the frame.
+- **Handle sleep**: if the Osmo handle goes to sleep (gimbal motors off, camera
+  sagging), a *Gimbal asleep - tap to wake* button wakes it from the phone and
+  points the camera back where it was. A running sequence does this itself.
 
 **Camera**
+- **Lens line**: shows the lens ("15 mm f/1.7", "12-32 mm f/3.5-5.6 - at 32 mm"),
+  works out third-party lenses from the newest photo, asks where a zoom is set,
+  and warns when a collapsible zoom is not extended (see *Lenses*)
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
 - Focus modes, tap-to-focus, and a software continuous-autofocus mode
   (contrast detection on the live view) for lenses that don't support AFC: a
@@ -49,7 +55,10 @@
   stays in the frames, and *Max ISO* caps the noise. It opens the lens to its
   widest aperture when it starts (and shortens the shutter to match) so the
   night end of the ramp has the full range, and it works however the app was
-  opened
+  opened. The ramp judges everything against the first two frames, so start
+  from a properly exposed picture (not clipped, not very dark)
+- A still timelapse re-aims at the pose it started from before every frame,
+  and a running sequence wakes the handle by itself if it goes to sleep
 - After a run, the photos can come off the camera by themselves into a
   folder that says what they are: `Pictures/Sidereal/Panorama_2026-10-08_0131/`
   holds `Panorama_2026-10-08_0131_r2c3_DJI_0398.JPG` and so on, with the
@@ -174,7 +183,7 @@ scenarios against a connected Osmo and logs `RESULT … PASS/FAIL` lines.
 
 ## Lenses
 
-Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume that lens everywhere:
+Sidereal was built with the DJI MFT 15mm f/1.7 and has since been tested on a Panasonic Lumix G Vario 12-32mm f/3.5-5.6 at 12, 18 and 32 mm. It does not assume the 15 mm lens everywhere:
 
 - **Focal length.** The camera reports the lens name ("DJI MFT 15mm F1.7 ASPH"); the app reads the focal length out of
   it and uses it to plan panoramas (how many frames, how much they overlap), to size dither, and as the stitcher's
@@ -196,8 +205,14 @@ Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume th
   camera sags and stops taking pictures, but the WiFi link stays up. Sidereal shows *Gimbal asleep - tap to wake* and wakes
   it from the phone, then points the camera back where it was (the gimbal wakes centred). A running sequence does this by
   itself, and a still timelapse re-aims before every frame.
-- **Autofocus.** The software autofocus reads the focus ring's range from the camera, but its settings were tuned on
-  the 15 mm lens, so another lens may lock slower or less precisely.
+- **Autofocus.** The software autofocus reads the focus ring's range from the camera each time (on a zoom it changes
+  with the zoom) and waits long enough after each ring move for the picture to catch up (the camera's latency plus the
+  exposure time). On the 12-32 it locks on the peak in 7-12 s at 12 and 18 mm; at 32 mm the focus peak is narrow and it
+  is less reliable (most locks within 85% of the sharpest, an occasional miss), and starts far from the subject often end
+  in the slower scanning search. Expect the same or worse on long lenses.
+- **A trap at the long end of a variable-aperture zoom.** Shooting in program mode at 32 mm on the 12-32 hangs the camera
+  until it is power-cycled, because the camera picks f/4 and the lens can only make f/5.6 there. Until the app has the
+  lens identified and the zoom entered, take long-end shots in manual mode at an aperture the lens can make.
 
 | Lens | Status |
 |---|---|
@@ -208,13 +223,14 @@ Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume th
 | Panasonic Lumix G Vario 35-100mm f/4-5.6 | Planned, later (the X5's longest practical reach) |
 | Anything else (Micro Four Thirds) | Untried; should work as above, tell me how it goes |
 
-The [lens test plan](docs/lens-test-plan.md) lists exactly what will be checked on the two Olympus lenses, and
-`tools/lens_test.sh` runs the parts that can be automated.
+The [lens test plan](docs/lens-test-plan.md) lists what will be checked on the Olympus lenses and the 35-100, with what
+to expect from them based on the Panasonic results; `tools/lens_test.sh` runs the parts that can be automated.
 
 ## Feature status
 
 Everything below was tested on an Osmo Pro with a Zenmuse X5 and the DJI
-MFT 15mm f/1.7 lens. Other lenses haven't been tried yet (see *Lenses* above).
+MFT 15mm f/1.7 lens. The lens features were also tested on a Panasonic 12-32mm;
+no other lens has been tried yet (see *Lenses* above).
 
 ### ✅ Working
 
@@ -252,12 +268,21 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet (see *Lenses* above).
   the peak instead and takes about 6–14 s. It searches again after you pan to
   a new scene. Checked on the camera in bright sun, a dim room and a dark scene
   at ISO 3200–12800
+- Lens line: lens name and range, tap-to-identify for lenses the camera calls "Unknown", entering a zoom's position
+  (noticed if the zoom ring moves), and the "Lens not extended" warning (checked on the Panasonic 12-32)
+- Aperture limits: the ramp and the aperture stepper never ask for an aperture the lens can't make at its zoom
+  (checked on the 12-32: the camera hung on f/4 at 32 mm before this)
+- Waking a sleeping handle from the phone, restoring the pose, and a timelapse carrying on through a sleep (checked
+  by putting the handle to sleep in the middle of a run)
+- A 138-frame, one-a-minute timelapse through sunset with no failed shots
 - ISO and shutter readouts follow what the camera is set to
 - Camera sounds: shutter click, self-timer beeps, focus-lock beep and the
   on/off options (checked on the phone)
 
 ### 🧪 Beta
 
+- **Autofocus on long lenses:** at 32 mm on the Panasonic 12-32 it works but is less reliable than at the wide end
+  (see *Lenses*). Face tracking at that focal length is untested.
 - **Face tracking:** follows a locked face, but it still needs tuning to be
   smooth and accurate.
 - **Day-to-night ramp:** checked on the camera in daylight by panning from a

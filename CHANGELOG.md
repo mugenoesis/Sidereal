@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - other lenses: lens line, zoom position, aperture limits, handle sleep, autofocus fixes
+
+Includes everything in 0.2.1, which was not published separately.
 
 ### Lens awareness
 - The app no longer assumes the 15 mm lens. It reads the lens name from the camera and takes the focal length from it
