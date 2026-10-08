@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 - faster autofocus in daylight
+
+### Improved
+- Software continuous autofocus is about 2.5x faster in good light (fast shutter, low ISO): it now locks in roughly
+  5-8 seconds instead of 14. In daylight the preview's sharpness is a smooth hill, so after the camera's own autofocus
+  has landed near the subject the app climbs straight to the top (a few measurements) instead of scanning a whole
+  window of the focus ring. Dim light still uses the scanning search, which is what low light needs. Measured on the
+  real camera on a near subject (locked within 3-4% of the sharpest possible focus) and a far outdoor scene.
+
 ## 0.2.0 - photos on the phone: download, stitch, timelapse video
 
 ### New

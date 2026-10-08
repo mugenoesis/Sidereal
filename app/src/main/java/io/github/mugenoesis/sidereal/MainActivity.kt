@@ -30,6 +30,7 @@ import io.github.mugenoesis.sidereal.camera.ImageTuningController
 import io.github.mugenoesis.sidereal.camera.LearnedStepBounds
 import io.github.mugenoesis.sidereal.camera.MediaFormatController
 import io.github.mugenoesis.sidereal.camera.MeteringController
+import io.github.mugenoesis.sidereal.camera.FocusLight
 import io.github.mugenoesis.sidereal.camera.SoftwareAfcController
 import io.github.mugenoesis.sidereal.camera.WhiteBalanceController
 import io.github.mugenoesis.sidereal.dji.DJIConnectionManager
@@ -91,7 +92,9 @@ class MainActivity : AppCompatActivity() {
 
     private val exposureController = ExposureController()
     private val focusController = FocusController()
-    private val softwareAfcController = SoftwareAfcController(focusController)
+    private val softwareAfcController = SoftwareAfcController(focusController, brightLight = {
+        exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
+    })
     private val meteringController = MeteringController()
     private val whiteBalanceController = WhiteBalanceController()
     private val histogramController = HistogramController()

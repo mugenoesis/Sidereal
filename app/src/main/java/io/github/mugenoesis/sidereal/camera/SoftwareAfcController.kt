@@ -30,7 +30,11 @@ import kotlinx.coroutines.flow.StateFlow
  * ring move) is switched off for the run and restored after, since it would feed a different picture into the
  * metric on every nudge.
  */
-class SoftwareAfcController(private val focusController: FocusController) {
+class SoftwareAfcController(
+    private val focusController: FocusController,
+    /** True in good light (fast shutter, low ISO): the preview's sharpness is then a smooth hill and the quick climb can be used. */
+    private val brightLight: () -> Boolean = { false }
+) {
 
     companion object {
         private const val TAG = "SoftwareAfc"
@@ -78,7 +82,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
     val isLocked: StateFlow<Boolean> = _isLocked
 
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    private var search: FocusSearch? = null
+    private var search: FocusSearcher? = null
     private var sceneWatcher: SceneChangeDetector? = null
     private var previousSignature: FloatArray? = null
     private var lastLockedRing: Int? = null
@@ -109,6 +113,24 @@ class SoftwareAfcController(private val focusController: FocusController) {
         seeding = true // hold off sampling until the first search starts
         // The camera drops commands that arrive on top of each other: let the assistant switch-off land first.
         later(ASSIST_SETTLE_MS, token) { seedFromHardwareAf(0.5f, 0.5f) }
+    }
+
+    private var probing = false
+
+    /**
+     * Test hook for the debug harness: turns the preview-frame feed on and publishes each frame's sharpness in
+     * [lastSharpness] without moving the ring, so a sweep can measure the real sharpness curve of a scene.
+     */
+    fun beginSharpnessProbe() {
+        probing = true
+        seeding = false
+        search = null
+        _isRunning.value = true
+    }
+
+    fun endSharpnessProbe() {
+        probing = false
+        _isRunning.value = false
     }
 
     fun stop() {
@@ -237,7 +259,9 @@ class SoftwareAfcController(private val focusController: FocusController) {
                     seeding = false
                     return@post
                 }
-                val fresh = FocusSearch(bound)
+                val bright = brightLight()
+                val fresh: FocusSearcher = if (bright) SmoothFocusClimb(bound) else FocusSearch(bound)
+                Log.i(TAG, "AFC using the ${if (bright) "quick climb (good light)" else "scanning search"}")
                 search = fresh
                 val first = fresh.begin(seed, System.currentTimeMillis())
                 Log.i(TAG, "AFC search begins: seed=$seed bound=$bound first move=${first.ring}")
@@ -249,6 +273,10 @@ class SoftwareAfcController(private val focusController: FocusController) {
 
     /** Call from the same periodic TextureView.getBitmap() loop VideoFrameProvider uses. */
     fun onBitmapFrame(bitmap: Bitmap) {
+        if (probing) {
+            _lastSharpness.value = analyse(bitmap).first
+            return
+        }
         if (!_isRunning.value || seeding) return
         val now = System.currentTimeMillis()
         if (now - lastSampleTime < SAMPLE_INTERVAL_MS) return
@@ -267,7 +295,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
         // around where focus was (a new subject is usually at a similar distance); the search itself falls back to
         // the whole ring if there is nothing there. Not the camera's own AF again: it picked a badly blurred ring
         // for a perfectly ordinary scene in testing, so it is trusted only for the first hint.
-        if (current.phase == FocusSearch.Phase.LOCKED) {
+        if (current.locked) {
             val watcher = sceneWatcher
             if (watcher != null && watcher.onFrame(signature)) {
                 val from = lastLockedRing ?: bound()
@@ -283,7 +311,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
             is FocusSearch.Command.MoveTo -> {
                 _isLocked.value = false
                 sceneWatcher = null
-                Log.d(TAG, "t=$now score=${score.toInt()} phase=${current.phase} -> ring ${command.ring}")
+                Log.d(TAG, "t=$now score=${score.toInt()} -> ring ${command.ring}")
                 focusController.setFocusRingValue(command.ring)
             }
             is FocusSearch.Command.Locked -> {
@@ -292,7 +320,7 @@ class SoftwareAfcController(private val focusController: FocusController) {
                 sceneWatcher = SceneChangeDetector(signature)
                 Log.i(TAG, "t=$now LOCKED ring=${command.ring} score=${command.score.toInt()} confident=${command.confident}")
             }
-            null -> Log.v(TAG, "t=$now score=${score.toInt()} phase=${current.phase}")
+            null -> Log.v(TAG, "t=$now score=${score.toInt()}")
         }
     }
 

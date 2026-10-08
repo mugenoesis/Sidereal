@@ -200,8 +200,9 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - Sharpness, contrast and saturation range of −3 to +3
 - Live histogram: the camera's 64 luma buckets (video range) are checked
   against screenshots of the preview, and the display follows the exposure
-- Software autofocus: found and locked within about 6–8 s from most starting
-  focus, and again after you pan to a new scene
+- Software autofocus: in good light it climbs straight to the sharpest focus
+  and locks in about 5–8 s; in dim light it scans for the peak and takes about
+  6–14 s. It searches again after you pan to a new scene
 - ISO and shutter readouts follow what the camera is set to
 - Camera sounds: shutter click, self-timer beeps, focus-lock beep and the
   on/off options (checked on the phone)
