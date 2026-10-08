@@ -587,10 +587,12 @@ class MainActivity : AppCompatActivity() {
             .onEach { (line, state) ->
                 lensText.visibility = if (state is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE
                 lensText.text = line.text
+                lensText.isClickable = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.UNKNOWN
                 val warn = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.NOT_EXTENDED
                 lensText.setTextColor(if (warn) 0xFFFFB74D.toInt() else android.graphics.Color.WHITE)
             }
             .launchIn(lifecycleScope)
+        lensText.setOnClickListener { identifyLensFromPhoto() }
         // The ring's position is what tells a stowed zoom from an extended one, so keep an eye on it (it is a cheap call).
         lifecycleScope.launch {
             while (true) {
@@ -600,6 +602,42 @@ class MainActivity : AppCompatActivity() {
                 }
                 delay(LENS_RING_POLL_MS)
             }
+        }
+    }
+
+    private var identifyingLens = false
+
+    /**
+     * The camera calls any non-DJI lens "Unknown", but the newest photo on the card names it in its EXIF. Switches the
+     * camera to playback to fetch that one photo, then back; refused while a sequence is running or recording.
+     */
+    private fun identifyLensFromPhoto() {
+        if (identifyingLens) return
+        val busy = when {
+            sequenceFeature.controller.isRunning.value -> "A sequence is running"
+            DJIConnectionManager.cameraSystemState.value?.isRecording == true -> "Stop recording first"
+            else -> null
+        }
+        if (busy != null) { android.widget.Toast.makeText(this, busy, android.widget.Toast.LENGTH_SHORT).show(); return }
+        identifyingLens = true
+        android.widget.Toast.makeText(this, "Reading the newest photo on the camera...", android.widget.Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val identifier = io.github.mugenoesis.sidereal.camera.LensIdentifier(
+                io.github.mugenoesis.sidereal.series.RealCardSource(applicationContext)
+            ) { file -> io.github.mugenoesis.sidereal.camera.ExifLensModel.read(file) }
+            val result = try { identifier.identify() } finally { identifyingLens = false }
+            android.util.Log.i("LensId", "identify -> $result")
+            val message = when (result) {
+                is io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.Identified -> {
+                    lensController.identifyFromPhoto(result.lensModel)
+                    "Lens: ${result.lensModel}"
+                }
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.NoPhotos -> "No photos on the card - take one with this lens, then tap again"
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.CardUnreadable -> "Couldn't read the camera's card"
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.DownloadFailed -> "Couldn't download the newest photo"
+                io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.NoLensInPhoto -> "The newest photo doesn't name its lens"
+            }
+            android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 

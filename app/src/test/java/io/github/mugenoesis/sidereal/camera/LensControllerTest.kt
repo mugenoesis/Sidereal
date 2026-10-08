@@ -71,4 +71,30 @@ class LensControllerTest {
         c.refreshRing()
         assertEquals(LensLine.Kind.NOT_EXTENDED, c.line.value.kind)
     }
+
+    @Test fun `a lens named from a photo shows on the line and survives the camera still saying unknown`() {
+        val c = controller { cb -> cb("Unknown") }
+        c.refresh()
+        c.identifyFromPhoto("LUMIX G VARIO 12-32/F3.5-5.6")
+        assertEquals("12-32 mm f/3.5-5.6", c.line.value.text)
+        c.refresh()
+        assertEquals(32f, c.info.value!!.focalMaxMm)
+        assertEquals("12-32 mm f/3.5-5.6", c.line.value.text)
+    }
+
+    @Test fun `a lens the camera does name replaces one identified from a photo`() {
+        var answer: String? = "Unknown"
+        val c = controller { cb -> cb(answer) }
+        c.refresh()
+        c.identifyFromPhoto("LUMIX G VARIO 12-32/F3.5-5.6")
+        answer = "DJI MFT 15mm F1.7 ASPH"
+        c.refresh()
+        assertEquals(15f, c.info.value!!.primeFocalMm)
+    }
+
+    @Test fun `identifying from a photo ends the checking state`() {
+        val c = controller { _ -> }
+        c.identifyFromPhoto("LUMIX G VARIO 12-32/F3.5-5.6")
+        assertEquals(LensLine.Kind.KNOWN, c.line.value.kind)
+    }
 }

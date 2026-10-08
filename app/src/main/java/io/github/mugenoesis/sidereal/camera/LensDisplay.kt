@@ -28,7 +28,7 @@ object LensDisplay {
         if (!r.answered) return LensLine("Checking lens...", LensLine.Kind.CHECKING)
         if (isStowed(r.ring, r.ringMax)) return LensLine("Lens not extended - rotate the zoom ring", LensLine.Kind.NOT_EXTENDED)
         val info = r.info
-        if (info == null || info.isUnidentified) return LensLine("Lens unknown", LensLine.Kind.UNKNOWN)
+        if (info == null || info.isUnidentified) return LensLine("Lens unknown - tap to identify", LensLine.Kind.UNKNOWN)
         val focal = focalText(info) ?: return LensLine(info.name!!, LensLine.Kind.KNOWN)
         val aperture = apertureText(info)
         return LensLine(if (aperture == null) focal else "$focal $aperture", LensLine.Kind.KNOWN)

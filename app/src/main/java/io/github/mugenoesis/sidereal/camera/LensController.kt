@@ -20,6 +20,7 @@ class LensController(
     val info: StateFlow<LensInfo?> = _info
 
     private var answered = false
+    private var fromPhoto: LensInfo? = null
     private var ring: Int? = null
     private var ringMax: Int? = null
 
@@ -31,10 +32,24 @@ class LensController(
     /** Asks again; an empty answer keeps whatever was known, since the camera is sometimes slow to answer after a bind. */
     fun refresh() {
         read { name ->
-            if (!name.isNullOrBlank()) _info.value = LensInfo.parse(name)
+            if (!name.isNullOrBlank()) {
+                val parsed = LensInfo.parse(name)
+                // The camera says "Unknown" for every third-party lens, so it must not undo a name read from a photo.
+                if (parsed.isUnidentified && fromPhoto != null) _info.value = fromPhoto
+                else { _info.value = parsed; fromPhoto = null }
+            }
             answered = true
             publish()
         }
+    }
+
+    /** The camera cannot name this lens but a photo taken with it does (its EXIF lens model); trusted until the camera names one. */
+    fun identifyFromPhoto(lensModel: String) {
+        val parsed = LensInfo.parse(lensModel)
+        fromPhoto = parsed
+        _info.value = parsed
+        answered = true
+        publish()
     }
 
     /** Re-reads the ring: its position is the only thing that tells a stowed collapsible zoom from an extended one. */
