@@ -14,6 +14,7 @@ import io.github.mugenoesis.sidereal.series.RealCardSource
 import io.github.mugenoesis.sidereal.series.RunSummary
 import io.github.mugenoesis.sidereal.series.SeriesPlan
 import io.github.mugenoesis.sidereal.series.SeriesPostRunner
+import io.github.mugenoesis.sidereal.series.TimelapseVideoProcessor
 import io.github.mugenoesis.sidereal.dji.DJIConnectionManager
 import io.github.mugenoesis.sidereal.dji.RealCameraGateway
 import kotlinx.coroutines.delay
@@ -89,9 +90,12 @@ class SequenceFeature(
 
     fun refreshPreview() = tray.refreshPreview()
 
-    /** The panorama stitcher / timelapse encoder, once those exist; until then frames are only saved. */
+    /** The timelapse encoder or panorama stitcher for this run, if one was asked for. */
     @Suppress("UNUSED_PARAMETER")
-    private fun frameProcessorFor(plan: SeriesPlan, run: RunSummary, folder: String): FrameProcessor? = null
+    private fun frameProcessorFor(plan: SeriesPlan, run: RunSummary, folder: String): FrameProcessor? = when {
+        plan.makeVideo -> TimelapseVideoProcessor(activity.applicationContext, folder, plan.fps)
+        else -> null
+    }
 
     private var keepAliveRunning = false
     private var lastNotification: SequenceNotificationContent? = null

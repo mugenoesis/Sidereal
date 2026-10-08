@@ -100,6 +100,46 @@ object DebugScenarios {
                 c.start()
                 Log.i(TAG, "RAMP started msg=${c.message.value} running=${c.isRunning.value}")
             }
+            "series_run" -> {
+                // args: mode=PANORAMA ints=frames:3,intervalSec:5 flips=stitch,saveFrames
+                val c = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    io.github.mugenoesis.sidereal.sequence.SequenceFeature.latest?.controller
+                } ?: run { Log.w(TAG, "no sequence feature"); return }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    c.setMode(io.github.mugenoesis.sidereal.sequence.SequenceMode.valueOf(args["mode"] ?: "INTERVALOMETER"))
+                    (args["ints"] ?: "").split(',').filter { it.contains(':') }.forEach { kv ->
+                        val (field, v) = kv.split(':')
+                        val target = v.toInt()
+                        fun current(): Int = when (field) {
+                            "frames" -> c.settings.value.frames
+                            "intervalSec" -> c.settings.value.intervalSec
+                            "settleMs" -> c.settings.value.settleMs
+                            "durationMin" -> c.settings.value.durationMin
+                            "fps" -> c.settings.value.fps
+                            "yawSpanDeg" -> c.settings.value.yawSpanDeg
+                            "pitchSpanDeg" -> c.settings.value.pitchSpanDeg
+                            "overlapPct" -> c.settings.value.overlapPct
+                            "shotsPerNode" -> c.settings.value.shotsPerNode
+                            "calFrames" -> c.settings.value.calFrames
+                            else -> target
+                        }
+                        repeat(30) { if (current() < target) c.adjust(field, +1) else if (current() > target) c.adjust(field, -1) }
+                    }
+                    (args["flips"] ?: "").split(',').filter { it.isNotBlank() }.forEach { c.adjust(it, +1) }
+                    Log.i(TAG, "SERIES settings ${c.settings.value}")
+                    Log.i(TAG, "SERIES plan ${(c.preview() as? io.github.mugenoesis.sidereal.sequence.PlanResult.Ok)?.plan?.summary}")
+                    c.start()
+                }
+                var lastAfter: Any? = null
+                val deadline = System.currentTimeMillis() + 25 * 60_000
+                delay(1000)
+                while (c.isRunning.value && System.currentTimeMillis() < deadline) {
+                    val a = c.afterRun.value
+                    if (a != lastAfter) { Log.i(TAG, "SERIES after=$a progress=${c.progress.value.capturesDone}/${c.progress.value.capturesTotal}"); lastAfter = a }
+                    delay(500)
+                }
+                Log.i(TAG, "SERIES finished state=${c.progress.value.state} message=${c.message.value}")
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {
