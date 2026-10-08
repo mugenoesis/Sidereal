@@ -158,6 +158,73 @@ object DebugScenarios {
                 }
                 Log.i(TAG, "RESTITCH " + processor.finish("x", emptyList()))
             }
+            "afc_trials" -> {
+                // args: starts=0,1000,2000 tag=scene  - time the software AFC from each blurred start, and what the camera's own AF would pick
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                suspend fun ring(): Int = callback { cb -> camera.getFocusRingValue(object : dji.common.util.CommonCallbacks.CompletionCallbackWith<Int> {
+                    override fun onSuccess(v: Int) = cb(v)
+                    override fun onFailure(e: dji.common.error.DJIError) = cb(-1)
+                }) }
+                val tag = args["tag"] ?: "scene"
+                for (start in (args["starts"] ?: "0,1000,2000").split(',').map { it.toInt() }) {
+                    callback<String?> { RealCameraGateway.setFocusAssistantEnabled(false, false) { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setFocusRingValue(start) { e -> it(e) } }
+                    delay(2500)
+                    val ctrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { io.github.mugenoesis.sidereal.camera.SoftwareAfcController.latest } ?: error("no afc controller")
+                    val t0 = System.currentTimeMillis()
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.start() }
+                    var locked = false
+                    while (System.currentTimeMillis() - t0 < 45_000) { if (ctrl.isLocked.value) { locked = true; break }; delay(50) }
+                    val lockMs = System.currentTimeMillis() - t0
+                    val lockedRing = ring()
+                    val sharp = ctrl.lastSharpness.value.toInt()
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.stop() }
+                    Log.i(TAG, "AFTRIAL $tag start=$start locked=$locked lockMs=$lockMs ring=$lockedRing sharp=$sharp")
+                    delay(1500)
+                }
+                // what the camera's own AF does on its own, from the same blurred starts
+                for (start in (args["starts"] ?: "0,1000,2000").split(',').map { it.toInt() }) {
+                    callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                    callback<String?> { RealCameraGateway.setFocusRingValue(start) { e -> it(e) } }
+                    delay(2500)
+                    callback<String?> { RealCameraGateway.setFocusMode("AUTO") { e -> it(e) } }
+                    delay(350)
+                    val t0 = System.currentTimeMillis()
+                    callback<String?> { RealCameraGateway.setFocusTarget(0.5f, 0.5f) { e -> it(e) } }
+                    var last = ring(); var stableSince = System.currentTimeMillis()
+                    while (System.currentTimeMillis() - t0 < 12_000) {
+                        delay(100)
+                        val r = ring()
+                        if (r != last) { last = r; stableSince = System.currentTimeMillis() }
+                        else if (System.currentTimeMillis() - stableSince >= 700 && last != start) break
+                    }
+                    Log.i(TAG, "AFTRIAL_HW $tag start=$start settledMs=${stableSince - t0} ring=$last")
+                    delay(1000)
+                }
+                Log.i(TAG, "RESULT afc_trials $tag: DONE")
+            }
+            "af_curve" -> {
+                // args: step=50 tag=scene - the scene's real sharpness at every ring position (ground truth for AF tests)
+                val ctrl = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { io.github.mugenoesis.sidereal.camera.SoftwareAfcController.latest } ?: error("no afc controller")
+                val step = args["step"]?.toInt() ?: 50
+                val tag = args["tag"] ?: "scene"
+                callback<String?> { RealCameraGateway.setFocusAssistantEnabled(false, false) { e -> it(e) } }
+                callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.beginSharpnessProbe() }
+                val out = StringBuilder()
+                var ringPos = 0
+                while (ringPos <= 2035) {
+                    callback<String?> { RealCameraGateway.setFocusRingValue(ringPos) { e -> it(e) } }
+                    delay(700)
+                    val samples = ArrayList<Double>()
+                    repeat(4) { samples += ctrl.lastSharpness.value; delay(160) }
+                    out.append("$ringPos:${samples.sorted()[samples.size / 2].toInt()} ")
+                    ringPos += step
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.endSharpnessProbe() }
+                Log.i(TAG, "AFCURVE $tag $out")
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {

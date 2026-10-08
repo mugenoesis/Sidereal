@@ -24,7 +24,7 @@ import kotlin.math.roundToInt
  *
  * Pure logic with no Android or SDK types: drive it with [begin] and [onFrame], and obey the commands it returns.
  */
-class FocusSearch(private val bound: Int, private val config: Config = Config()) {
+class FocusSearch(private val bound: Int, private val config: Config = Config()) : FocusSearcher {
 
     data class Config(
         /** The picture follows a ring move in ~50-150 ms; frames sooner than this after a command are ignored. */
@@ -57,6 +57,8 @@ class FocusSearch(private val bound: Int, private val config: Config = Config())
     var phase: Phase = Phase.IDLE
         private set
 
+    override val locked: Boolean get() = phase == Phase.LOCKED
+
     private val measured = LinkedHashMap<Int, Double>()
     private val queue = ArrayDeque<Int>()
     private val frames = ArrayList<Double>()
@@ -74,7 +76,7 @@ class FocusSearch(private val bound: Int, private val config: Config = Config())
     private var belowStreak = 0
 
     /** Starts (or restarts) a search. [seedRing] is a position believed to be near focus; null scans the whole ring. */
-    fun begin(seedRing: Int?, nowMs: Long): Command.MoveTo {
+    override fun begin(seedRing: Int?, nowMs: Long): Command.MoveTo {
         measured.clear()
         queue.clear()
         frames.clear()
@@ -96,7 +98,7 @@ class FocusSearch(private val bound: Int, private val config: Config = Config())
      * [steady] is false while the picture itself is changing (a pan in progress): a sharpness collapse then says
      * nothing about focus, so it is not allowed to restart a search.
      */
-    fun onFrame(nowMs: Long, score: Double, steady: Boolean = true): Command? {
+    override fun onFrame(nowMs: Long, score: Double, steady: Boolean): Command? {
         if (phase == Phase.IDLE) return null
         if (nowMs - commandedAt < config.settleMs) return null
         if (phase == Phase.LOCKED) return monitor(nowMs, score, steady)
