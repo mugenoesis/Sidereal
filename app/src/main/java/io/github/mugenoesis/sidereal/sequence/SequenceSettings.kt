@@ -86,7 +86,7 @@ data class SequenceSettings(
     }
 
     fun fields(): List<FieldSpec> = when (mode) {
-        SequenceMode.INTERVALOMETER -> listOf(framesField(), intervalField(), settleField(), toggle("dither", "Dither", dither), toggle("saveFrames", "Save to phone", saveFrames))
+        SequenceMode.INTERVALOMETER -> listOf(framesField(), intervalField(), settleField(), toggle("dither", "Dither", dither), toggle("saveFrames", "Save photos", saveFrames))
         SequenceMode.TIMELAPSE -> listOf(
             FieldSpec("durationMin", "Duration", formatMinutes(durationMin)),
             intervalField(),
@@ -111,7 +111,7 @@ data class SequenceSettings(
             toggle("stitch", "Stitch", stitch)
         )
         SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS ->
-            listOf(FieldSpec("calFrames", "Frames", "$calFrames"), toggle("saveFrames", "Save to phone", saveFrames))
+            listOf(FieldSpec("calFrames", "Frames", "$calFrames"), toggle("saveFrames", "Save photos", saveFrames))
     }
 
     private fun framesField() = FieldSpec("frames", "Frames", "$frames")

@@ -45,6 +45,22 @@
   before each frame and follows the light with shutter first, then ISO, in
   smooth third-stop steps. *Keep darkness* sets how much of the fading light
   stays in the frames, and *Max ISO* caps the noise
+- After a run, the photos can come off the camera by themselves into a
+  folder that says what they are: `Pictures/Sidereal/Panorama_2026-10-08_0131/`
+  holds `Panorama_2026-10-08_0131_r2c3_DJI_0398.JPG` and so on, with the
+  position in the series (`r2c3` = row 2, column 3; `f0042` = frame 42; `dark007`)
+  ahead of the camera's own file name, so a RAW and its JPEG stay paired.
+  Each mode has its own on/off option (*Save photos*; on by default except for
+  timelapse, which is a lot of data)
+- **Panorama stitching:** the frames are joined into one picture on the phone,
+  placed by where the gimbal pointed and then refined from the pictures
+  themselves (it finds matching details in neighbouring frames and corrects
+  small aiming errors and the lens' true field of view). The result is cropped
+  to a clean rectangle and saved beside the frames. On by default
+- **Timelapse video:** the frames are downloaded and encoded to an MP4 as they
+  arrive (up to 2304×1728, H.264, at the chosen fps), so a long timelapse
+  doesn't need space for every frame at once. Off by default - bringing
+  hundreds of photos across the camera's WiFi takes a while (about 3.5 s each)
 - Long sequences keep running with the screen off or the app in the
   background (a foreground service with a progress notification and a Stop
   button), and they wait out a dropped camera link instead of giving up
@@ -171,6 +187,9 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - Browsing and downloading photos and videos from the SD card
 - Intervalometer, dithering, timelapse, panorama and calibration frames
   (checked against the real number of files on the card)
+- Bringing a run's photos onto the phone into a labelled folder, stitching a
+  panorama, and encoding a timelapse video (checked on the camera with real
+  runs; the stitch was checked on an indoor scene)
 - Drive modes single / burst 3, 5, 7 / AEB 3, 5, self-timer, exposure lock
   and composition grid
 - Star focus assistant (a manual focus sweep over a point light gives a
@@ -262,6 +281,7 @@ app/src/main/java/io/github/mugenoesis/sidereal/
 ├── tracking/   face detection, tracking and overlay
 ├── camera/     exposure, focus, WB, metering, histogram, formats, media
 ├── sequence/   intervalometer, timelapse, panorama, calibration frames
+├── series/     after a run: file naming, download, panorama stitching, timelapse video
 ├── focus/      star finder, FWHM metrics and the focus assistant
 ├── display/    red night mode
 ├── zoom/       digital zoom and size-locked auto-zoom
