@@ -14,11 +14,12 @@ interface FocusSearcher {
 
 /**
  * Decides which focus search suits the light. The quick climb needs the preview's sharpness to be a clean, smooth
- * hill. Measured on the real X5, that holds whenever the ISO is low - even indoors at 1/10 s - and breaks down only
- * when the camera is working at very high ISO, where noise swamps the picture's detail.
+ * hill. Measured on the real X5, that holds whenever the ISO is low - even indoors at 1/10 s - and, with more frames
+ * averaged per position, up to ISO 6400 (about 5% frame-to-frame noise). At ISO 12800 and above the noise is too heavy
+ * to average away quickly and the scanning search is used.
  */
 object FocusLight {
-    private const val CLEAN_MAX_ISO = 800
+    private const val CLEAN_MAX_ISO = 6400
     private const val SLOWEST_CLEAN_SHUTTER_SEC = 1.0 / 2
     private const val BRIGHT_SHUTTER_SEC = 1.0 / 60
 

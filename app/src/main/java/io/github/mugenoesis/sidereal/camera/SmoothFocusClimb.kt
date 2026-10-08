@@ -39,11 +39,23 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         val minStep: Int = 8,
         val dropFraction: Double = 0.5,
         val dropConfirmFrames: Int = 4,
+        /** Averaging stops being worth the time once the noise of the mean is this small (fraction of the reading). */
+        val targetNoise: Double = 0.03,
+        /** More frames than this per position would make the climb slower than scanning: hand over instead. */
+        val maxFramesPerPosition: Int = 5,
+        /** Above this per-frame noise (fraction of the reading) the picture counts as noisy and a lock must be earned (see [minHillContrast]). */
+        val noisySigma: Double = 0.025,
+        /** Per-frame noise beyond this (measured: ~0.27 at ISO 25600, ~0.05 at ISO 6400) is too much to average away quickly. */
+        val maxSigma: Double = 0.1,
         /**
-         * Two frames of a still picture at the same ring differing by more than this (as a fraction of their mean,
-         * averaged over the first positions) means noise, not a hill: measured 1-6% in clean light, 20-30% at ISO 25600.
+         * In a noisy picture a real hill shows as the best reading standing well above the lowest one measured on the
+         * way; if everything measured looks alike, the search was lost in the noise floor (or never found anything),
+         * so the scanning search takes over rather than locking on nothing.
          */
-        val maxNoise: Double = 0.15
+        val minHillContrast: Double = 1.25,
+        /** Two frames of a still picture disagreeing by more than this (fraction of the reading) make the noise worth measuring properly. */
+        val suspectSpread: Double = 0.02,
+        val noiseProbeFrames: Int = 6
     )
 
     private enum class Stage { IDLE, CENTRE, PROBE, CLIMB, VERIFY, LOCKING, LOCKED }
@@ -63,8 +75,10 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     private var bestValue = 0.0
     private var count = 0
     private var gentleStreak = 0
-    private var noiseSum = 0.0
-    private var noiseCount = 0
+    private var sigmaSum = 0.0
+    private var sigmaCount = 0
+    private var framesNeeded = 2
+    private var extendedCentre = false
     private var confident = true
 
     private var lockedRing = 0
@@ -77,8 +91,10 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         frames.clear()
         count = 0
         gentleStreak = 0
-        noiseSum = 0.0
-        noiseCount = 0
+        sigmaSum = 0.0
+        sigmaCount = 0
+        framesNeeded = config.framesPerPosition
+        extendedCentre = false
         confident = true
         belowStreak = 0
         stage = Stage.CENTRE
@@ -93,16 +109,44 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         if (stage == Stage.LOCKED) return monitor(nowMs, score, steady)
 
         frames += score
-        if (frames.size < config.framesPerPosition) return null
-        val mean = frames.average()
-        if (stage == Stage.CENTRE || stage == Stage.PROBE) {
-            if (mean > 0) { noiseSum += (frames.max() - frames.min()) / mean; noiseCount++ }
+        // The first reading doubles as the noise measurement: if its two frames already disagree, take more of them
+        // at this same ring so the noise level (which decides everything after) is estimated properly.
+        if (stage == Stage.CENTRE && !extendedCentre && frames.size == framesNeeded && frames.size >= 2) {
+            val mean = frames.average()
+            if (mean > 0 && (frames.max() - frames.min()) / mean > config.suspectSpread) {
+                extendedCentre = true
+                framesNeeded = max(framesNeeded, config.noiseProbeFrames)
+            }
         }
+        if (frames.size < framesNeeded) return null
+        val mean = frames.average()
+        recordNoise(mean)
         frames.clear()
         measured[current] = mean
         count++
         return decide(mean, nowMs)
     }
+
+    /** Per-frame noise (fraction of the reading) seen so far, and from it how many frames each position needs. */
+    internal val debugState: String get() = "sigma=%.3f needed=%d measured=%s".format(sigma, framesNeeded, measured)
+    private val sigma: Double get() = if (sigmaCount == 0) 0.0 else kotlin.math.sqrt(sigmaSum / sigmaCount)
+
+    private fun recordNoise(mean: Double) {
+        if (frames.size >= 2 && mean > 0) {
+            val variance = frames.sumOf { (it - mean) * (it - mean) } / (frames.size - 1)
+            sigmaSum += variance / (mean * mean) // pooled as variances: far steadier than averaging standard deviations
+            sigmaCount++
+            framesNeeded = framesFor(sigma).coerceIn(config.framesPerPosition, config.maxFramesPerPosition)
+        }
+    }
+
+    /** How many frames' average brings noise [perFrame] (fraction of the reading) down to the target. */
+    private fun framesFor(perFrame: Double): Int =
+        max(config.framesPerPosition, kotlin.math.ceil((perFrame / config.targetNoise) * (perFrame / config.targetNoise)).toInt())
+
+    /** Noise of a position's averaged reading - what the decisions below must stay clear of. */
+    private val effectiveNoise: Double get() = sigma / kotlin.math.sqrt(framesNeeded.toDouble())
+
 
     private fun decide(value: Double, nowMs: Long): FocusSearch.Command? = when (stage) {
         Stage.CENTRE -> {
@@ -114,7 +158,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         Stage.PROBE -> {
             if (value > bestValue) { bestRing = current; bestValue = value }
             if (queue.isNotEmpty()) move(queue.removeFirst(), nowMs)
-            else if (noiseCount > 0 && noiseSum / noiseCount > config.maxNoise) {
+            else if (sigma > config.maxSigma) {
                 stage = Stage.IDLE
                 FocusSearch.Command.Unreliable(centre)
             }
@@ -159,19 +203,23 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     }
 
     private fun climb(value: Double, nowMs: Long): FocusSearch.Command? {
+        // Never read a difference smaller than the noise of the averaged readings as a slope.
+        val improve = max(config.improve, 3 * effectiveNoise)
+        val gentle = max(config.gentle, 1.5 * effectiveNoise)
+        val flat = max(config.flat, 2 * effectiveNoise)
         when {
-            value > bestValue * (1 + config.improve) -> {
+            value > bestValue * (1 + improve) -> {
                 gentleStreak = 0
                 bestRing = current; bestValue = value
                 step = min(max(config.minStep, (step * config.stepGrowth).roundToInt()), (bound * config.maxStepFraction).roundToInt())
                 return climbFrom(current, nowMs)
             }
-            value > bestValue * (1 + config.gentle) && ++gentleStreak < config.gentleLimit -> {
+            value > bestValue * (1 + gentle) && ++gentleStreak < config.gentleLimit -> {
                 bestRing = current; bestValue = value
                 step = min(max(config.minStep, (step * 2.0).roundToInt()), (bound * config.maxStepFraction).roundToInt())
                 return climbFrom(current, nowMs)
             }
-            value < bestValue * (1 - config.flat) -> {
+            value < bestValue * (1 - flat) -> {
                 // Past the peak: fit through the nearest measured point on the far side of the best, the best, and this one.
                 val behind = measured.keys.filter { (it - bestRing) * climbDirection < 0 }.minByOrNull { abs(it - bestRing) }
                 val vertex = behind?.let { vertexOf(it, measured.getValue(it), bestRing, bestValue, current, value) }
@@ -200,6 +248,13 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     }
 
     private fun lock(ring: Int, nowMs: Long, confident: Boolean = true): FocusSearch.Command? {
+        if (sigma > config.noisySigma && measured.size >= 3) {
+            val contrast = measured.values.max() / measured.values.min().coerceAtLeast(1e-9)
+            if (contrast < config.minHillContrast) {
+                stage = Stage.IDLE
+                return FocusSearch.Command.Unreliable(centre)
+            }
+        }
         this.confident = confident
         val known = measured[ring]
         if (ring == current && known != null) {
