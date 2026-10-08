@@ -23,6 +23,22 @@ data class LensInfo(
     /** The focal length if the lens has just one. */
     val primeFocalMm: Float? get() = if (focalMinMm != null && focalMaxMm != null && !isZoom) focalMinMm else null
 
+    /**
+     * The widest aperture the lens can make with the zoom at [mm]. A variable-aperture zoom closes down as it zooms in
+     * (f/3.5 at 12 mm to f/5.6 at 32 mm); the steps in between are estimated in a straight line. With the position not
+     * known the narrowest end is assumed, because asking this lens for an aperture it cannot make can hang the camera.
+     */
+    fun widestApertureAt(mm: Float?): Float? {
+        if (isUnidentified) return null
+        val wide = maxApertureF ?: return null
+        val longEnd = apertureAtLongEndF ?: return wide
+        val lo = focalMinMm
+        val hi = focalMaxMm
+        if (!isZoom || mm == null || lo == null || hi == null) return longEnd
+        val t = ((mm - lo) / (hi - lo)).coerceIn(0f, 1f)
+        return wide + (longEnd - wide) * t
+    }
+
     companion object {
         private const val MIN_FOCAL = 2f
         private const val MAX_FOCAL = 1500f
@@ -72,4 +88,14 @@ object FocalLength {
 
     fun disagrees(planned: Float, actual: Float?): Boolean =
         actual != null && abs(actual - planned) / planned > DISAGREE_FRACTION
+}
+
+/** A zoom position typed by the user, checked against the lens' range. */
+object ZoomEntry {
+    fun parse(text: String, lens: LensInfo): Float? {
+        val lo = lens.focalMinMm ?: return null
+        val hi = lens.focalMaxMm ?: return null
+        val value = text.trim().removeSuffix("mm").trim().replace(',', '.').toFloatOrNull() ?: return null
+        return value.takeIf { it in lo..hi }
+    }
 }

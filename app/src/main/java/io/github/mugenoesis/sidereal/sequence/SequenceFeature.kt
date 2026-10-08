@@ -42,6 +42,8 @@ class SequenceFeature(
     private val shutterNameProvider: () -> String?,
     private val pointsProvider: () -> Pair<Attitude?, Attitude?>,
     private val lensProvider: () -> io.github.mugenoesis.sidereal.camera.LensInfo? = { null },
+    /** Where the user says a zoom lens is set; the camera cannot report it. */
+    private val zoomMmProvider: () -> Float? = { null },
     private val rampIo: RampIo? = null
 ) {
     companion object {
@@ -55,7 +57,7 @@ class SequenceFeature(
         contextProvider = ::shootContext,
         prepare = ::ensurePhotoMode,
         precondition = ::blockedReason,
-        detectedFocalMm = { lensProvider()?.primeFocalMm },
+        detectedFocalMm = { lensProvider()?.primeFocalMm ?: zoomMmProvider() },
         postRun = PostRun { plan, run, report ->
             // A fresh source each time: it owns the camera's playback mode for the length of the download.
             SeriesPostRunner(RealCardSource(activity.applicationContext), MediaStoreGallery(activity.applicationContext), ::frameProcessorFor)
@@ -171,8 +173,8 @@ class SequenceFeature(
             yawLimits = DJIConnectionManager.yawRangeDegrees(),
             pointA = a,
             pointB = b,
-            lensFocalMm = lensProvider()?.primeFocalMm,
-            lensZoomMm = lensProvider()?.takeIf { it.isZoom }?.let { it.focalMinMm!!..it.focalMaxMm!! },
+            lensFocalMm = lensProvider()?.primeFocalMm ?: zoomMmProvider(),
+            lensZoomMm = if (zoomMmProvider() != null) null else lensProvider()?.takeIf { it.isZoom }?.let { it.focalMinMm!!..it.focalMaxMm!! },
             ditherSeed = System.nanoTime()
         )
     }

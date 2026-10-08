@@ -350,8 +350,8 @@ class MainActivity : AppCompatActivity() {
         bindCameraSettingsViews()
         bindSequenceFeature()
         // Keep the face tracker's gains right for whatever lens is on: they were tuned on the 60 degree wide 15 mm.
-        lensController.info
-            .onEach { faceTrackingController.setLensFocalMm(it?.primeFocalMm) }
+        combine(lensController.info, lensController.zoomMm) { _, _ -> lensController.effectiveFocalMm() }
+            .onEach { faceTrackingController.setLensFocalMm(it) }
             .launchIn(lifecycleScope)
         bindCameraStatus()
         bindGamepad()
@@ -587,12 +587,16 @@ class MainActivity : AppCompatActivity() {
             .onEach { (line, state) ->
                 lensText.visibility = if (state is DJIConnectionManager.ConnectionState.ProductConnected) android.view.View.VISIBLE else android.view.View.GONE
                 lensText.text = line.text
-                lensText.isClickable = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.UNKNOWN
+                lensText.isClickable = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.UNKNOWN ||
+                    lensController.info.value?.isZoom == true && line.kind != io.github.mugenoesis.sidereal.camera.LensLine.Kind.NOT_EXTENDED
                 val warn = line.kind == io.github.mugenoesis.sidereal.camera.LensLine.Kind.NOT_EXTENDED
                 lensText.setTextColor(if (warn) 0xFFFFB74D.toInt() else android.graphics.Color.WHITE)
             }
             .launchIn(lifecycleScope)
-        lensText.setOnClickListener { identifyLensFromPhoto() }
+        lensText.setOnClickListener {
+            if (lensController.info.value?.isZoom == true && lensController.line.value.kind != io.github.mugenoesis.sidereal.camera.LensLine.Kind.UNKNOWN) askZoomPosition()
+            else identifyLensFromPhoto()
+        }
         // The ring's position is what tells a stowed zoom from an extended one, so keep an eye on it (it is a cheap call).
         lifecycleScope.launch {
             while (true) {
@@ -603,6 +607,35 @@ class MainActivity : AppCompatActivity() {
                 delay(LENS_RING_POLL_MS)
             }
         }
+    }
+
+    /**
+     * The camera cannot say where a zoom is set (its EXIF reads the wide end whatever the ring is at), so ask. The answer
+     * limits the aperture to what the lens can make at that zoom and sets the field of view the plans are made for.
+     */
+    private fun askZoomPosition() {
+        val lens = lensController.info.value?.takeIf { it.isZoom } ?: return
+        val lo = lens.focalMinMm!!
+        val hi = lens.focalMaxMm!!
+        fun mm(v: Float) = if (v % 1f == 0f) v.toInt().toString() else v.toString()
+        val input = android.widget.EditText(this).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            hint = "${mm(lo)}-${mm(hi)}"
+            lensController.zoomMm.value?.let { setText(mm(it)) }
+            setSelectAllOnFocus(true)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Where is the zoom set?")
+            .setMessage("Read it off the marks on the lens (${mm(lo)}-${mm(hi)} mm). The camera can't tell, and the app uses it to keep the aperture within what the lens can do and to plan panoramas.")
+            .setView(input)
+            .setPositiveButton("Set") { _, _ ->
+                val chosen = io.github.mugenoesis.sidereal.camera.ZoomEntry.parse(input.text.toString(), lens)
+                if (chosen == null) android.widget.Toast.makeText(this, "Enter a number from ${mm(lo)} to ${mm(hi)}", android.widget.Toast.LENGTH_SHORT).show()
+                else lensController.setZoomMm(chosen)
+            }
+            .setNeutralButton("Not sure") { _, _ -> lensController.setZoomMm(null) }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private var identifyingLens = false
@@ -630,6 +663,7 @@ class MainActivity : AppCompatActivity() {
             val message = when (result) {
                 is io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.Identified -> {
                     lensController.identifyFromPhoto(result.lensModel)
+                    if (lensController.info.value?.isZoom == true) askZoomPosition()
                     "Lens: ${result.lensModel}"
                 }
                 io.github.mugenoesis.sidereal.camera.LensIdentifier.Result.NoPhotos -> "No photos on the card - take one with this lens, then tap again"
@@ -672,6 +706,7 @@ class MainActivity : AppCompatActivity() {
                 }
             ),
             lensProvider = { lensController.info.value },
+            zoomMmProvider = { lensController.zoomMm.value },
             pointsProvider = {
                 fun TimedMoveController.Point?.toAttitude() = this?.let { Attitude(it.pitch.toFloat(), it.yaw.toFloat()) }
                 timedMoveController.capturedA.toAttitude() to timedMoveController.capturedB.toAttitude()
@@ -1242,9 +1277,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** The widest aperture the lens can do at every zoom position, if the lens is identified (see RampIo.apertureLimitF). */
-    private fun lensApertureLimitF(): Float? =
-        lensController.info.value?.takeIf { !it.isUnidentified && it.maxApertureF != null }?.let { it.apertureAtLongEndF ?: it.maxApertureF }
+    /**
+     * The widest aperture the lens can make at its current zoom, if the lens is identified (see RampIo.apertureLimitF).
+     * With a zoom's position not entered this is the narrowest end, so nothing the lens cannot do is ever offered.
+     */
+    private fun lensApertureLimitF(): Float? = lensController.info.value?.widestApertureAt(lensController.zoomMm.value)
 
     private fun stepAperture(delta: Int) {
         // The camera accepts an aperture the lens cannot make (f/4 at 32 mm on a 12-32 f/3.5-5.6), and then the next shot

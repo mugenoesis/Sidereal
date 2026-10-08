@@ -8,11 +8,14 @@ data class LensReading(
     val answered: Boolean,
     /** The focus ring's current position and its upper limit, if read. */
     val ring: Int?,
-    val ringMax: Int?
+    val ringMax: Int?,
+    /** Where the user says a zoom is set, and whether the zoom ring has been moved since they said so. */
+    val zoomMm: Float? = null,
+    val zoomMoved: Boolean = false
 )
 
 data class LensLine(val text: String, val kind: Kind) {
-    enum class Kind { CHECKING, KNOWN, UNKNOWN, NOT_EXTENDED }
+    enum class Kind { CHECKING, KNOWN, UNKNOWN, NOT_EXTENDED, ZOOM_UNSET }
 }
 
 /**
@@ -31,7 +34,13 @@ object LensDisplay {
         if (info == null || info.isUnidentified) return LensLine("Lens unknown - tap to identify", LensLine.Kind.UNKNOWN)
         val focal = focalText(info) ?: return LensLine(info.name!!, LensLine.Kind.KNOWN)
         val aperture = apertureText(info)
-        return LensLine(if (aperture == null) focal else "$focal $aperture", LensLine.Kind.KNOWN)
+        val base = if (aperture == null) focal else "$focal $aperture"
+        if (!info.isZoom) return LensLine(base, LensLine.Kind.KNOWN)
+        return when {
+            r.zoomMm != null -> LensLine("$base - at ${mm(r.zoomMm)} mm", LensLine.Kind.KNOWN)
+            r.zoomMoved -> LensLine("$base - zoom moved, tap to set", LensLine.Kind.ZOOM_UNSET)
+            else -> LensLine("$base - tap to set zoom", LensLine.Kind.ZOOM_UNSET)
+        }
     }
 
     /** The ring reads far outside its own range. A reading a step beyond the limit (it lags a zoom move) is normal. */

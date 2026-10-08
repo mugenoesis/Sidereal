@@ -100,4 +100,36 @@ class LensInfoTest {
         assertFalse(LensInfo.parse("DJI MFT 15mm F1.7 ASPH").isUnidentified)
         assertFalse(LensInfo.parse("Some adapter").isUnidentified)
     }
+
+    @Test fun `the widest aperture of a variable zoom follows the zoom position`() {
+        val lens = LensInfo.parse("LUMIX G VARIO 12-32/F3.5-5.6")
+        assertEquals(3.5f, lens.widestApertureAt(12f)!!, 0.01f)
+        assertEquals(5.6f, lens.widestApertureAt(32f)!!, 0.01f)
+        val mid = lens.widestApertureAt(22f)!!
+        assertTrue(mid > 3.5f && mid < 5.6f)
+    }
+
+    @Test fun `with the position unknown a variable zoom is held to its narrowest end`() {
+        assertEquals(5.6f, LensInfo.parse("LUMIX G VARIO 12-32/F3.5-5.6").widestApertureAt(null)!!, 0.01f)
+    }
+
+    @Test fun `constant aperture lenses have the same widest aperture everywhere`() {
+        assertEquals(2.8f, LensInfo.parse("OLYMPUS M.12-40mm F2.8 PRO").widestApertureAt(30f)!!, 0.01f)
+        assertEquals(1.7f, LensInfo.parse("DJI MFT 15mm F1.7 ASPH").widestApertureAt(null)!!, 0.01f)
+    }
+
+    @Test fun `an unidentified lens has no aperture limit`() {
+        assertNull(LensInfo.parse("Unknown").widestApertureAt(20f))
+    }
+
+    @Test fun `typed zoom positions are read and checked against the lens range`() {
+        val lens = LensInfo.parse("LUMIX G VARIO 12-32/F3.5-5.6")
+        assertEquals(18f, ZoomEntry.parse("18", lens)!!, 0.01f)
+        assertEquals(24.5f, ZoomEntry.parse(" 24.5 mm ", lens)!!, 0.01f)
+        assertEquals(24.5f, ZoomEntry.parse("24,5", lens)!!, 0.01f)
+        assertNull(ZoomEntry.parse("", lens))
+        assertNull(ZoomEntry.parse("abc", lens))
+        assertNull(ZoomEntry.parse("50", lens))
+        assertNull(ZoomEntry.parse("8", lens))
+    }
 }

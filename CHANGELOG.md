@@ -6,6 +6,12 @@
 - The app no longer assumes the 15 mm lens. It reads the lens name from the camera and takes the focal length from it
   for panorama planning, dither size and the stitcher's starting field of view. New *Focal length* option in the
   panorama tray (Auto, or 7.5-100 mm); a zoom lens asks you to set it.
+- Lenses from other makers: the lens line shows "Lens unknown - tap to identify", which reads the lens name from the
+  newest photo's EXIF. A zoom then asks where it is set (tap the line to change it); the answer feeds the aperture
+  limit, panorama planning and the face tracker's gains, and is forgotten if the zoom ring moves.
+- A stowed collapsible zoom is detected ("Lens not extended") and the lens line is shown from connecting.
+- The ramp and the aperture stepper never ask for an aperture the lens can't make at its zoom (the Panasonic 12-32mm
+  hangs the camera on f/4 at 32 mm).
 - Dither now scales with the field of view (a few dozen pixels on any lens) instead of a fixed number of degrees.
 - The stitcher reads the focal length from the photos' EXIF and corrects its starting field of view if the plan used
   a different lens.

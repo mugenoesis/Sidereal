@@ -21,11 +21,12 @@ class LensDisplayTest {
 
     @Test fun `a zoom shows its range, and the aperture at both ends when it varies`() {
         val line = show(LensInfo.parse("LUMIX G VARIO 12-32/F3.5-5.6"), ring = 1000, ringMax = 1570)
-        assertEquals("12-32 mm f/3.5-5.6", line.text)
+        assertEquals("12-32 mm f/3.5-5.6 - tap to set zoom", line.text)
+        assertEquals(LensLine.Kind.ZOOM_UNSET, line.kind)
     }
 
     @Test fun `a zoom with one aperture shows it once`() {
-        assertEquals("12-40 mm f/2.8", show(LensInfo.parse("OLYMPUS M.12-40mm F2.8 PRO")).text)
+        assertEquals("12-40 mm f/2.8 - tap to set zoom", show(LensInfo.parse("OLYMPUS M.12-40mm F2.8 PRO")).text)
     }
 
     @Test fun `half millimetres are kept`() {

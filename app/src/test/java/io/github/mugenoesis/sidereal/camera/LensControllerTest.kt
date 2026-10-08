@@ -2,6 +2,7 @@ package io.github.mugenoesis.sidereal.camera
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LensControllerTest {
@@ -76,10 +77,10 @@ class LensControllerTest {
         val c = controller { cb -> cb("Unknown") }
         c.refresh()
         c.identifyFromPhoto("LUMIX G VARIO 12-32/F3.5-5.6")
-        assertEquals("12-32 mm f/3.5-5.6", c.line.value.text)
+        assertTrue(c.line.value.text, c.line.value.text.startsWith("12-32 mm f/3.5-5.6"))
         c.refresh()
         assertEquals(32f, c.info.value!!.focalMaxMm)
-        assertEquals("12-32 mm f/3.5-5.6", c.line.value.text)
+        assertTrue(c.line.value.text, c.line.value.text.startsWith("12-32 mm f/3.5-5.6"))
     }
 
     @Test fun `a lens the camera does name replaces one identified from a photo`() {
@@ -95,6 +96,76 @@ class LensControllerTest {
     @Test fun `identifying from a photo ends the checking state`() {
         val c = controller { _ -> }
         c.identifyFromPhoto("LUMIX G VARIO 12-32/F3.5-5.6")
+        assertEquals(LensLine.Kind.ZOOM_UNSET, c.line.value.kind)
+    }
+
+    private val panasonic = "LUMIX G VARIO 12-32/F3.5-5.6"
+
+    @Test fun `a zoom with no position entered asks for one`() {
+        val c = controller { cb -> cb(panasonic) }
+        c.refresh()
+        assertEquals(LensLine.Kind.ZOOM_UNSET, c.line.value.kind)
+        assertTrue(c.line.value.text, c.line.value.text.contains("tap to set"))
+        assertNull(c.zoomMm.value)
+        assertNull(c.effectiveFocalMm())
+    }
+
+    @Test fun `an entered zoom position is shown and used`() {
+        val c = controller { cb -> cb(panasonic) }
+        c.refresh()
+        c.setZoomMm(25f)
         assertEquals(LensLine.Kind.KNOWN, c.line.value.kind)
+        assertEquals("12-32 mm f/3.5-5.6 - at 25 mm", c.line.value.text)
+        assertEquals(25f, c.effectiveFocalMm())
+    }
+
+    @Test fun `a prime ignores an entered zoom position`() {
+        val c = controller { cb -> cb("DJI MFT 15mm F1.7 ASPH") }
+        c.refresh()
+        c.setZoomMm(25f)
+        assertEquals(15f, c.effectiveFocalMm())
+        assertEquals("15 mm f/1.7", c.line.value.text)
+    }
+
+    @Test fun `a position outside the lens' range is refused`() {
+        val c = controller { cb -> cb(panasonic) }
+        c.refresh()
+        c.setZoomMm(50f)
+        assertNull(c.zoomMm.value)
+        c.setZoomMm(5f)
+        assertNull(c.zoomMm.value)
+    }
+
+    @Test fun `clearing forgets the position`() {
+        val c = controller { cb -> cb(panasonic) }
+        c.refresh()
+        c.setZoomMm(18f)
+        c.setZoomMm(null)
+        assertNull(c.effectiveFocalMm())
+    }
+
+    @Test fun `moving the zoom ring after entering a position is noticed from the ring's limit`() {
+        var max = 2633 // 25 mm
+        val c = LensController({ cb -> cb(panasonic) }, { cb -> cb(900, max) })
+        c.refresh(); c.refreshRing()
+        c.setZoomMm(25f)
+        max = 2640 // the limit wobbles a little
+        c.refreshRing()
+        assertEquals(25f, c.effectiveFocalMm())
+        max = 3837 // now at 32 mm
+        c.refreshRing()
+        assertNull(c.effectiveFocalMm())
+        assertEquals(LensLine.Kind.ZOOM_UNSET, c.line.value.kind)
+        assertTrue(c.line.value.text, c.line.value.text.contains("moved"))
+    }
+
+    @Test fun `a different lens forgets the position`() {
+        var answer = panasonic
+        val c = controller { cb -> cb(answer) }
+        c.refresh()
+        c.setZoomMm(25f)
+        answer = "OLYMPUS M.14-42mm F3.5-5.6 EZ"
+        c.refresh()
+        assertNull(c.effectiveFocalMm())
     }
 }

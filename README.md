@@ -181,10 +181,17 @@ Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume th
   starting field of view. *Focal length* in the panorama options is *Auto* (what the camera reports, else 15 mm) or a
   value you choose. The stitcher also reads the focal length stored in the photos and corrects itself if the plan used a
   different one.
-- **Zoom lenses.** A zoom reports its range but not where it is set, so the panorama options ask you to set the focal
-  length; until you do, it plans for the wide end (extra overlap, never gaps).
-- **Aperture.** The day-to-night ramp opens the lens to the widest aperture the camera accepts, so it works with
-  whatever the lens offers; a lens without aperture control is left alone.
+- **Other makers' lenses.** The camera calls any lens that is not DJI's "Unknown". The lens line on screen then reads
+  *Lens unknown - tap to identify*: tapping it reads the lens name from the newest photo on the card (take one first
+  if the card is empty).
+- **Zoom lenses.** Neither the camera nor the photos say where a zoom is set (the photos claim the wide end whatever
+  the ring is at), so the app asks: tap the lens line and enter the mm from the marks on the lens. If you move the zoom
+  ring afterwards the app notices (the focus ring's range changes with the zoom) and asks again. Until it knows, it
+  plans panoramas for the wide end (extra overlap, never gaps) and assumes the narrowest aperture the zoom can reach.
+- **Aperture.** The day-to-night ramp opens the lens to the widest aperture it can make at its current zoom, and the
+  aperture stepper hides apertures the lens can't make. This matters: on the Panasonic 12-32mm the camera accepts f/4
+  at 32 mm, which the lens can't make, and the camera then locks up until it is power-cycled. A lens the app can't
+  identify is left alone.
 - **Autofocus.** The software autofocus reads the focus ring's range from the camera, but its settings were tuned on
   the 15 mm lens, so another lens may lock slower or less precisely.
 
