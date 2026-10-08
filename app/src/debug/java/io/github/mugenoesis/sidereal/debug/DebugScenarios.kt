@@ -261,6 +261,39 @@ object DebugScenarios {
                     Log.i(TAG, "LENS key $name = $v")
                 }
             }
+            "camera_dump" -> {
+                // Read-only: every value the camera will give for every CameraKey, and the pushed system state. Used to find
+                // out what the camera says about the lens (stowed, extended, which zoom) by diffing two dumps.
+                val tag = args["tag"] ?: "dump"
+                val km = dji.sdk.sdkmanager.DJISDKManager.getInstance().keyManager
+                val keys = dji.keysdk.CameraKey::class.java.fields
+                    .filter { java.lang.reflect.Modifier.isStatic(it.modifiers) && it.type == String::class.java }
+                    .mapNotNull { f -> (f.get(null) as? String)?.let { f.name to it } }
+                var ok = 0
+                for ((fieldName, keyName) in keys) {
+                    val v = kotlinx.coroutines.withTimeoutOrNull(1500) {
+                        kotlinx.coroutines.suspendCancellableCoroutine<String> { cont ->
+                            try {
+                                km?.getValue(dji.keysdk.CameraKey.create(keyName), object : dji.keysdk.callback.GetCallback {
+                                    override fun onSuccess(value: Any) { if (cont.isActive) cont.resume(if (value is Array<*>) value.joinToString(",") else value.toString()) }
+                                    override fun onFailure(e: dji.common.error.DJIError) { if (cont.isActive) cont.resume("FAIL ${e.description}") }
+                                }) ?: cont.resume("no key manager")
+                            } catch (e: Exception) { if (cont.isActive) cont.resume("EXC ${e.message}") }
+                        }
+                    } ?: "timeout"
+                    if (!v.startsWith("FAIL") && v != "timeout" && !v.startsWith("EXC")) ok++
+                    Log.i(TAG, "CAMKEY $tag $fieldName = ${v.take(160)}")
+                }
+                Log.i(TAG, "CAMKEY $tag summary: ${keys.size} keys, $ok answered")
+                val st = DJIConnectionManager.cameraSystemState.value
+                if (st != null) {
+                    st.javaClass.methods
+                        .filter { it.parameterCount == 0 && (it.name.startsWith("is") || it.name.startsWith("get")) && it.declaringClass != Any::class.java }
+                        .sortedBy { it.name }
+                        .forEach { m -> Log.i(TAG, "CAMSTATE $tag ${m.name} = ${try { m.invoke(st) } catch (e: Exception) { "EXC" }}") }
+                } else Log.i(TAG, "CAMSTATE $tag none")
+                Log.i(TAG, "RESULT camera_dump $tag: DONE")
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {

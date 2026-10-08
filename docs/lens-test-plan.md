@@ -24,23 +24,41 @@ opens to whatever widest aperture the camera accepts. This plan checks those on 
 
 ## Session 1: the Panasonic 12-32mm (do this first)
 
-You set the zoom ring; I read the results. Take the zoom to **12 mm, 20 mm and 32 mm** in turn (the ring is marked;
-set it exactly on a mark and leave it there for the whole run at that focal length).
+The lens is on the camera from the start and the zoom ring is moved one step at a time, in this order. The ring is marked
+**stowed, 12, 14, 18, 24, 32** (there is no 20 mark). One person moves the ring, the other runs the commands; wait for
+the "move it now" before each move.
 
-1. Camera **off**; swap the lens. The 12-32 is collapsible: turn the ring out of the locked position to a shooting
-   position, otherwise the camera will not use it. Switch the camera on and open the app.
-2. Tell me the lens is on, and set to 12 mm. I run `tools/lens_test.sh panasonic-12-32-at-12mm` (about four minutes)
-   and read the lens name the camera reports, the apertures it accepts and the autofocus results.
-3. In the panorama options *Focal length* will say *Auto* and a zoom warning should appear (the lens is reported as
-   12-32 mm). Set *Focal length* to 12 mm, and I shoot a panorama and read the stitcher's log.
-4. Repeat 2 and 3 at 20 mm and 32 mm. At 32 mm also try face tracking, and note how it behaves, because the app cannot
-   know the zoom and uses the 15 mm's tracking gains.
-5. Leave *Focal length* on *Auto* for one more panorama at 32 mm: the planned grid will be for 12 mm (too many frames,
-   which is safe) and the stitcher should log that the frames were shot at 32 mm and correct itself.
+| Step | Ring at | Why |
+|---|---|---|
+| 0 | **Stowed** (lens retracted, camera on) | A real use case: a Lumix body says "please rotate the zoom ring to extend the lens". What does the camera tell the app, and what should the app tell the person? |
+| 1 | **12** | Widest; f/3.5. First full run. |
+| 2 | **14** | A mark close to 12: do the numbers actually move? |
+| 3 | **18** | Mid. |
+| 4 | **24** | Mid-long. |
+| 5 | **32** | Longest; the widest aperture has dropped to about f/5.6; face tracking check. |
 
-What good looks like: the camera reports the lens by name with "12-32mm"; f/3.5 accepted at 12 mm and f/5.6 at 32 mm;
-panoramas stitch without gaps at every focal length; the stitcher's `fov` scale stays close to 1.0 at each; and
-autofocus locks within about 10 s at all three.
+At **every** step run `tools/lens_step.sh panasonic-12-32-<step>` (about a minute). It writes down every value the camera
+will give (335 keys and the pushed camera state), takes one photo and reads the focal length, aperture and lens name
+out of its EXIF. Diffing the dumps between steps shows whether the camera exposes the zoom position at all, and the
+EXIF line says what the lens really is at each mark.
+
+**Step 0 asks specifically:** does `LENS_IS_INSTALLED`, `HAS_ERROR`, the focus status, the live view or a photo attempt
+behave differently when the lens is stowed? Does the camera refuse to shoot? Does the lens name still come back? Whatever
+it reports is what the app can use to warn "lens not extended" the way the camera body does.
+
+**Steps 1, 3 and 5 also get** `tools/lens_test.sh panasonic-12-32-<mm>mm` (about four minutes: apertures accepted, the
+sharpness curve, autofocus), and a panorama with *Focal length* set to the mark, then one at 32 with it left on *Auto*.
+
+**Can the app show the real focal length for every lens?** The camera does not report the zoom position live (the lens
+name is fixed text and the optical-zoom calls say "unsupported"). Every photo does carry the true focal length in its
+EXIF, so the options are, in order of effort: read it from the last photo after a sequence is downloaded (free, already
+partly done in the stitcher); remember the last value per lens; or measure it from the live view by turning the gimbal a
+known angle and seeing how far the picture moves. This session decides which is worth building: the dumps tell us if a
+live source exists, the EXIF lines tell us how accurate the lens' own number is.
+
+What good looks like at the end: the lens is reported by name with "12-32mm"; f/3.5 accepted at 12 mm and about f/5.6 at
+32 mm; the EXIF focal length is close to each mark; panoramas stitch without gaps with *Focal length* set to the mark, and
+the stitcher corrects itself when left on *Auto*; autofocus locks within about 10 s at 12, 18 and 32 mm.
 
 ## 0. Before you start
 
