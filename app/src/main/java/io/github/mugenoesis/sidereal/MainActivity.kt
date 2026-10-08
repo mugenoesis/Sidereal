@@ -560,6 +560,10 @@ class MainActivity : AppCompatActivity() {
             shutterButton = findViewById(R.id.btnShutter),
             shutterNameProvider = { exposureController.readout.value?.shutterSpeed?.name },
             rampIo = io.github.mugenoesis.sidereal.sequence.RampIo(
+                refreshRanges = { exposureController.refreshKeyBasedEvTelemetry() },
+                currentAperture = { exposureController.readout.value?.getAperture()?.name },
+                apertureNames = { SettingsDefinitions.Aperture.values().map { it.name } },
+                setAperture = { name, done -> exposureController.setApertureByNameForRamp(name, done) },
                 shutterOptions = {
                     exposureController.shutterRange.value.orEmpty().mapNotNull { s ->
                         io.github.mugenoesis.sidereal.camera.ShutterLogic.exposureSeconds(s.name)?.let { io.github.mugenoesis.sidereal.sequence.ShutterOption(s.name, it) }

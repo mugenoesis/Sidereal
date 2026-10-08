@@ -225,6 +225,16 @@ object DebugScenarios {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.endSharpnessProbe() }
                 Log.i(TAG, "AFCURVE $tag $out")
             }
+            "aperture_probe" -> {
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                Log.i(TAG, "APERTURE adjustableSupported=${camera.isAdjustableApertureSupported}")
+                Log.i(TAG, "APERTURE setMode MANUAL -> ${callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }}")
+                delay(1500)
+                for (name in (args["names"] ?: "F_1_DOT_7,F_4,F_1_DOT_7").split(',')) {
+                    Log.i(TAG, "APERTURE set $name -> ${callback<String?> { RealCameraGateway.setAperture(name) { e -> it(e) } }}")
+                    delay(1500)
+                }
+            }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()
             "drive_shoot" -> {

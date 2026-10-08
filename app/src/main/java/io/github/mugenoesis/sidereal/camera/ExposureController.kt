@@ -291,6 +291,11 @@ class ExposureController(private val gateway: CameraGateway = RealCameraGateway)
     fun setAperture(aperture: SettingsDefinitions.Aperture, onComplete: (String?) -> Unit = {}) =
         setApertureByName(aperture.name, onComplete)
 
+    /** Sets the aperture without the user-facing error toast: the ramp copes with a refusal itself and tries the next stop. */
+    fun setApertureByNameForRamp(apertureName: String, onComplete: (String?) -> Unit) {
+        gateway.setAperture(apertureName) { error -> onComplete(error) }
+    }
+
     internal fun setApertureByName(apertureName: String, onComplete: (String?) -> Unit = {}) {
         gateway.setAperture(apertureName) { error ->
             if (error != null) {

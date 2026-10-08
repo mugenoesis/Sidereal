@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 - faster autofocus in daylight
+## 0.2.1 - daylight fixes: faster autofocus, day-to-night ramp
 
 ### Improved
 - Software continuous autofocus is about 2.5x faster in good light (fast shutter, low ISO): it now locks in roughly
@@ -8,6 +8,14 @@
   has landed near the subject the app climbs straight to the top (a few measurements) instead of scanning a whole
   window of the focus ring. Dim light still uses the scanning search, which is what low light needs. Measured on the
   real camera on a near subject (locked within 3-4% of the sharpest possible focus) and a far outdoor scene.
+
+### Fixed
+- The day-to-night exposure ramp silently did nothing (shot at a fixed exposure) if the app had been opened while the
+  camera was in Program mode, because the camera only reports its shutter range in Manual. It now reloads the range
+  after switching to Manual.
+- The ramp now opens the lens to its widest aperture when it starts (the camera had been left at f/8 in bright
+  light, which would have cost four and a half stops once it got dark) and shortens the shutter by the same amount so
+  the first frame matches the scene. Checked on the camera: f/8 1/15 became f/1.7 1/320, brightness unchanged.
 
 ## 0.2.0 - photos on the phone: download, stitch, timelapse video
 
