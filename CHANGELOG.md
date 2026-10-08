@@ -1,12 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Fewer permissions: no camera, gallery-read, draw-over-apps, kill-background-processes or running-tasks permissions
+  (the last three come from the DJI SDK's own manifest and are removed). First start now asks for three permissions
+  instead of five. Checked on a fresh install on the camera: registration, live view, shooting and downloads all work.
+- The download options (*Make video*, *Save frames*, *Stitch*) sit near the top of the sequence tray, and its scrollbar
+  stays visible, so they are not hidden below the fold.
+- If the DJI SDK's first registration fails with "metadata received from server is invalid" (what it says when there is
+  no internet), the app now explains that it needs the internet once, and retries by itself when it is back.
+- Added a privacy policy and the Google Play listing material (`docs/`, `store/`).
+
 ## 0.2.1 - daylight fixes: faster autofocus, day-to-night ramp
 
 ### Improved
 - Software continuous autofocus is about 2.5x faster whenever the picture is clean (low ISO, which includes dim rooms
   in daylight, not only bright sun): it now locks in roughly 5-8 seconds instead of 14. In daylight the preview's sharpness is a smooth hill, so after the camera's own autofocus
   has landed near the subject the app climbs straight to the top (a few measurements) instead of scanning a whole
-  window of the focus ring. High ISO (above 800) still uses the scanning search, which is what noisy low light needs, and the quick climb hands over to it by itself if it finds the picture too noisy to climb. Measured on the
+  window of the focus ring. The quick climb now works up to ISO 6400 by averaging more frames when the picture is noisy; above that (ISO 12800 and up) the scanning search is used, and the climb hands over to it by itself if it finds the picture too noisy or finds no hill at all. Measured on the
   real camera on a near subject (locked within 3-4% of the sharpest possible focus) and a far outdoor scene.
 
 ### Fixed

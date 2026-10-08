@@ -1,0 +1,1 @@
+Control a DJI Osmo Pro gimbal camera: manual shooting, timelapse, panorama.

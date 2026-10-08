@@ -8,7 +8,8 @@ package io.github.mugenoesis.sidereal.dji
 object RegistrationText {
 
     fun needsInternet(sdkMessage: String): Boolean =
-        sdkMessage.contains("internet", ignoreCase = true)
+        sdkMessage.contains("internet", ignoreCase = true) ||
+            sdkMessage.contains("metadata received from server", ignoreCase = true)
 
     fun describe(sdkMessage: String): String =
         if (needsInternet(sdkMessage)) {

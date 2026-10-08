@@ -28,9 +28,14 @@ class FocusLightTest {
         assertFalse(FocusLight.isBright("SHUTTER_SPEED_2", 100))
     }
 
-    @Test fun `a high ISO means noise even with a quick shutter`() {
-        assertFalse(FocusLight.isBright("SHUTTER_SPEED_1_250", 3200))
-        assertFalse(FocusLight.isBright("SHUTTER_SPEED_1_1000", 6400))
+    @Test fun `moderately high ISO is still climbable because more frames are averaged`() {
+        assertTrue(FocusLight.isBright("SHUTTER_SPEED_1_250", 3200))
+        assertTrue(FocusLight.isBright("SHUTTER_SPEED_1_1000", 6400))
+    }
+
+    @Test fun `very high ISO means noise the quick climb cannot average away`() {
+        assertFalse(FocusLight.isBright("SHUTTER_SPEED_1_1000", 12800))
+        assertFalse(FocusLight.isBright("SHUTTER_SPEED_1_4000", 25600))
     }
 
     @Test fun `nothing known is treated as dim`() {

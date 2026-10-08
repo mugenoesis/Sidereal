@@ -290,7 +290,6 @@ class MainActivity : AppCompatActivity() {
     // similarly only relevant below API 33 (targetSdk here is 33) -
     // READ_MEDIA_IMAGES/READ_MEDIA_VIDEO are what actually matter on 33+.
     private val requiredPermissions = arrayOf(
-        Manifest.permission.CAMERA,
         Manifest.permission.RECORD_AUDIO,
         Manifest.permission.ACCESS_FINE_LOCATION
     ) + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -300,16 +299,12 @@ class MainActivity : AppCompatActivity() {
         arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
     } else {
         emptyArray()
-    } + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
-    } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-        // Matches the manifest's own maxSdkVersion="28" cap on
-        // WRITE_EXTERNAL_STORAGE (P = API 28) - requesting it on a newer
-        // device the manifest doesn't grant it for would be a no-op at
-        // best, so this only asks for it where it actually applies.
+    } + if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+        // Matches the manifest's own maxSdkVersion="28" caps. From Android 10 on, our own gallery saves and lookups
+        // need no storage permission at all (scoped storage), so none is requested there.
         arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
     } else {
-        arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        emptyArray()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

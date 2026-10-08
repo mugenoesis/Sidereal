@@ -40,6 +40,16 @@ class SmoothFocusClimbTest {
         1750 to 5837, 1800 to 5703, 1850 to 5454, 1900 to 5025, 1950 to 4756, 2000 to 4515
     )
 
+    // Dark scene at ISO 6400 (real, step 100): frame-to-frame noise about 5%, peak near ring 1500 over a flat noisy floor.
+    private val darkIso6400 = (0..2000 step 50).associateWith { ring ->
+        val pts = mapOf(0 to 21, 100 to 27, 200 to 25, 300 to 27, 400 to 31, 500 to 40, 600 to 41, 700 to 53, 800 to 69, 900 to 91,
+            1000 to 137, 1100 to 237, 1200 to 473, 1300 to 1029, 1400 to 2616, 1500 to 4853, 1600 to 4344, 1700 to 2130, 1800 to 888,
+            1900 to 445, 2000 to 252)
+        val lo = ring / 100 * 100; val hi = minOf(lo + 100, 2000)
+        val a = pts.getValue(lo).toDouble(); val b = pts.getValue(hi).toDouble()
+        (if (hi == lo) a else a + (b - a) * (ring - lo) / (hi - lo)).toInt()
+    }
+
     private fun sharpness(curve: Map<Int, Int>, ring: Int): Double {
         val lo = (ring / 50 * 50).coerceAtMost(2000)
         val hi = (lo + 50).coerceAtMost(2000)
@@ -226,5 +236,68 @@ class SmoothFocusClimbTest {
             assertTrue("seed $seed -> ${r.ring} (${share(room, r.ring)})", share(room, r.ring) >= 0.94)
             assertTrue("seed $seed took ${r.ms} ms", r.ms <= 6_500)
         }
+    }
+
+    private fun runNoisy(curve: Map<Int, Int>, seed: Int, sigma: Double, rndSeed: Long): FocusSearch.Command? {
+        val rnd = java.util.Random(rndSeed)
+        val search = SmoothFocusClimb(bound)
+        lastSearch = search
+        var now = 0L
+        var ring = search.begin(seed, now).ring
+        repeat(400) {
+            now += 150
+            val v = sharpness(curve, ring) * (1 + sigma * rnd.nextGaussian())
+            when (val c = search.onFrame(now, v.coerceAtLeast(0.0), true)) {
+                is FocusSearch.Command.MoveTo -> ring = c.ring
+                null -> {}
+                else -> return c
+            }
+        }
+        return null
+    }
+
+    private var lastSearch: SmoothFocusClimb? = null
+
+    @Test
+    fun `at moderate noise it averages more frames and still climbs to the hill`() {
+        for (rndSeed in 1L..12L) for (seed in listOf(1450, 1600, 1300)) {
+            val c = runNoisy(darkIso6400, seed, sigma = 0.05, rndSeed = rndSeed)
+            assertTrue("seed $seed rnd $rndSeed -> $c", c is FocusSearch.Command.Locked)
+            val ring = (c as FocusSearch.Command.Locked).ring
+            assertTrue("seed $seed rnd $rndSeed locked at $ring (${share(darkIso6400, ring)})", share(darkIso6400, ring) >= 0.6)
+        }
+    }
+
+    @Test
+    fun `extreme noise is handed to the scanning search`() {
+        for (rndSeed in 1L..8L) {
+            val c = runNoisy(darkIso6400, 1450, sigma = 0.3, rndSeed = rndSeed)
+            assertTrue("rnd $rndSeed -> $c", c is FocusSearch.Command.Unreliable)
+        }
+    }
+
+    @Test
+    fun `noise on a perfectly flat picture is handed to the scanning search, not locked`() {
+        val flat = (0..2000 step 50).associateWith { 100 }
+        // The noise level is itself estimated from a handful of frames, so an unlucky run can underestimate it:
+        // require it to work nearly always rather than every time.
+        val handedOver = (1L..16L).count { runNoisy(flat, 800, sigma = 0.06, rndSeed = it) is FocusSearch.Command.Unreliable }
+        assertTrue("handed over $handedOver of 16", handedOver >= 14)
+    }
+
+    @Test
+    fun `a noisy seed down on the rising floor still walks up to the hill`() {
+        for (rndSeed in 1L..8L) {
+            val c = runNoisy(darkIso6400, 300, sigma = 0.06, rndSeed = rndSeed)
+            if (c is FocusSearch.Command.Locked) assertTrue("rnd $rndSeed locked at ${c.ring}", share(darkIso6400, c.ring) >= 0.5)
+            else assertTrue("rnd $rndSeed -> $c", c is FocusSearch.Command.Unreliable)
+        }
+    }
+
+    @Test
+    fun `a clean seed on a flat floor far from the peak still locks - there is no way to tell it from a plateau`() {
+        // documented limitation: clean light is trusted to have a sensible seed (hardware autofocus)
+        val c = runNoisy(far, 1500, sigma = 0.005, rndSeed = 1)
+        assertTrue(c is FocusSearch.Command.Locked)
     }
 }

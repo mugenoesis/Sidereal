@@ -30,4 +30,12 @@ class RegistrationTextTest {
     fun `any other error is shown as the SDK reported it`() {
         assertEquals("DJI SDK error: Invalid app key", RegistrationText.describe("Invalid app key"))
     }
+
+    @Test
+    fun `the metadata-from-server error is also an internet problem`() {
+        // seen on a fresh install while joined to the Osmo's WiFi (no internet): the SDK words it differently
+        val msg = "The metadata received from server is invalid, please reconnect to the server and try."
+        assertTrue(RegistrationText.needsInternet(msg))
+        assertTrue(RegistrationText.describe(msg).contains("internet", ignoreCase = true))
+    }
 }
