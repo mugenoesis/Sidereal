@@ -32,3 +32,10 @@ Conclusion: the camera asks the lens for an aperture it cannot make at that zoom
 - The ramp opens the aperture only as wide as the lens' widest aperture at its longest zoom (f/5.6 here), and leaves the aperture alone for a lens it cannot identify.
 - The aperture stepper hides apertures an identified lens cannot make.
 - Not covered: the Panasonic is still "Unknown" to the app, and program mode at 32 mm still picks f/4 on its own.
+
+## Checked on the camera (2026-10-08, later)
+
+- Tap the "Lens unknown" line: the newest photo's EXIF names the lens ("LUMIX G VARIO 12-32/F3.5-5.6") and the line becomes "12-32 mm f/3.5-5.6". The phone's own EXIF reader does not know the LensModel tag, so the app reads it itself.
+- The app asks where the zoom is set; entering 32 gives "12-32 mm f/3.5-5.6 - at 32 mm".
+- Stowing the lens: the line changes to "Lens not extended - rotate the zoom ring" within a few seconds and stays.
+- Extending to 12 mm: the warning clears and the line says "zoom moved, tap to set" (the 32 mm entry is dropped because the focus ring's range changed). Entering 12 gives "at 12 mm".
