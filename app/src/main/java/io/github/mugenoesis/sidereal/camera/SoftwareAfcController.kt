@@ -33,7 +33,9 @@ import kotlinx.coroutines.flow.StateFlow
 class SoftwareAfcController(
     private val focusController: FocusController,
     /** True in good light (fast shutter, low ISO): the preview's sharpness is then a smooth hill and the quick climb can be used. */
-    private val brightLight: () -> Boolean = { false }
+    private val brightLight: () -> Boolean = { false },
+    /** What the light decision was based on, for the log (e.g. "1/10 s ISO 100"). */
+    private val lightDescription: () -> String? = { null }
 ) {
 
     companion object {
@@ -261,7 +263,7 @@ class SoftwareAfcController(
                 }
                 val bright = brightLight()
                 val fresh: FocusSearcher = if (bright) SmoothFocusClimb(bound) else FocusSearch(bound)
-                Log.i(TAG, "AFC using the ${if (bright) "quick climb (good light)" else "scanning search"}")
+                Log.i(TAG, "AFC using the ${if (bright) "quick climb (clean light)" else "scanning search"}${lightNote()}")
                 search = fresh
                 val first = fresh.begin(seed, System.currentTimeMillis())
                 Log.i(TAG, "AFC search begins: seed=$seed bound=$bound first move=${first.ring}")
@@ -320,9 +322,17 @@ class SoftwareAfcController(
                 sceneWatcher = SceneChangeDetector(signature)
                 Log.i(TAG, "t=$now LOCKED ring=${command.ring} score=${command.score.toInt()} confident=${command.confident}")
             }
+            is FocusSearch.Command.Unreliable -> {
+                Log.i(TAG, "t=$now the picture is too noisy for the quick climb - using the scanning search from ring ${command.seed}")
+                val scanning = FocusSearch(bound())
+                search = scanning
+                focusController.setFocusRingValue(scanning.begin(command.seed, now).ring)
+            }
             null -> Log.v(TAG, "t=$now score=${score.toInt()}")
         }
     }
+
+    private fun lightNote(): String = lightDescription()?.let { " ($it)" } ?: ""
 
     private fun bound(): Int = focusController.focusRingUpperBound.value ?: 0
 

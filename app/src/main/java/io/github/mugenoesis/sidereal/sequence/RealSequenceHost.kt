@@ -38,6 +38,9 @@ class RealSequenceHost(
         const val TAG = "RealSequenceHost"
         const val POLL_MS = 50L
         const val MOVE_ATTEMPTS = 2
+
+        /** The enum starts at f/1 though the lens stops at f/1.7: the camera refuses the impossible ones, so walk down the list. */
+        const val APERTURE_ATTEMPTS = 12
     }
 
     private var freeModeRequested = false
@@ -107,6 +110,17 @@ class RealSequenceHost(
         if (modeError != null) Log.w(TAG, "beginRamp: setExposureMode(MANUAL) failed: $modeError")
         io.setMetering(true)
         metering = true
+        // The shutter range is only readable in Manual, so if the app started with the camera in Program there is
+        // none yet: ask again now that it is in Manual, and wait for it.
+        val rangesDeadline = nowMs() + 4_000
+        io.refreshRanges()
+        while (io.shutterOptions().isEmpty() && nowMs() < rangesDeadline) {
+            delay(500)
+            if (io.shutterOptions().isEmpty()) io.refreshRanges()
+        }
+        // A ramp that ends in the dark can only get brighter if the lens starts wide open. The camera leaves whatever
+        // Program mode last chose (f/8 in bright light was seen), which would cost up to four and a half stops at night.
+        val gainedStops = openApertureWide(io)
         var names: Pair<String, String>? = null
         val deadline = nowMs() + 5_000
         while (names == null && nowMs() < deadline) {
@@ -119,13 +133,45 @@ class RealSequenceHost(
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "beginRamp: ${e.message}, shooting at fixed exposure"); return
         }
-        val start = try { built.nearest(names.first, names.second) } catch (e: IllegalArgumentException) {
+        var start = try { built.nearest(names.first, names.second) } catch (e: IllegalArgumentException) {
             Log.w(TAG, "beginRamp: ${e.message}, shooting at fixed exposure"); return
+        }
+        if (gainedStops > 0.2) {
+            // The wider lens lets in more light: shorten the exposure by the same amount so the first frame matches the scene.
+            val compensated = built.settingFor(start.stops - gainedStops)
+            Log.i(TAG, "beginRamp: aperture opened by ${"%.1f".format(gainedStops)} stops, ${start.shutterName} ${start.isoName} -> ${compensated.shutterName} ${compensated.isoName}")
+            if (compensated.isoName != start.isoName) {
+                val e = suspendCancellableCoroutine<String?> { cont -> gateway.setIso(compensated.isoName) { if (cont.isActive) cont.resume(it) } }
+                if (e != null) Log.w(TAG, "beginRamp: setIso(${compensated.isoName}) failed: $e")
+            }
+            if (compensated.shutterName != start.shutterName) {
+                val e = suspendCancellableCoroutine<String?> { cont -> gateway.setShutterSpeed(compensated.shutterName) { if (cont.isActive) cont.resume(it) } }
+                if (e != null) Log.w(TAG, "beginRamp: setShutterSpeed(${compensated.shutterName}) failed: $e")
+            }
+            delay(400)
+            start = compensated
         }
         ladder = built
         ramp = ExposureRamp(built, config, start)
         rampShutterMs = Math.round(start.shutterSec * 1000)
         Log.i(TAG, "beginRamp: baseline ${start.shutterName} ${start.isoName}, ${built.minStops}..${built.maxStops} stops")
+    }
+
+    /** Opens the lens to its widest aperture; returns the light gained in stops (0 if it was already wide or could not be set). */
+    private suspend fun openApertureWide(io: RampIo): Double {
+        val before = io.currentAperture() ?: return 0.0
+        for (candidate in ApertureMath.widestFirst(io.apertureNames()).take(APERTURE_ATTEMPTS)) {
+            val gained = ApertureMath.stopsGained(before, candidate) ?: continue
+            if (gained <= 0.05) return 0.0 // already at least this wide
+            val error = suspendCancellableCoroutine<String?> { cont -> io.setAperture(candidate) { if (cont.isActive) cont.resume(it) } }
+            if (error == null) {
+                delay(700)
+                Log.i(TAG, "beginRamp: aperture $before -> $candidate")
+                return gained
+            }
+            Log.w(TAG, "beginRamp: aperture $candidate rejected: $error")
+        }
+        return 0.0
     }
 
     override suspend fun adaptExposure(): String? {

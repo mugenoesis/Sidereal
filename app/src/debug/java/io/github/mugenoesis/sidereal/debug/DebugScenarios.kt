@@ -213,6 +213,7 @@ object DebugScenarios {
                 callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.beginSharpnessProbe() }
                 val out = StringBuilder()
+                val spreads = ArrayList<Double>()
                 var ringPos = 0
                 while (ringPos <= 2035) {
                     callback<String?> { RealCameraGateway.setFocusRingValue(ringPos) { e -> it(e) } }
@@ -220,10 +221,23 @@ object DebugScenarios {
                     val samples = ArrayList<Double>()
                     repeat(4) { samples += ctrl.lastSharpness.value; delay(160) }
                     out.append("$ringPos:${samples.sorted()[samples.size / 2].toInt()} ")
+                    val mean = samples.average()
+                    if (mean > 0) spreads += (samples.max() - samples.min()) / mean
                     ringPos += step
                 }
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { ctrl.endSharpnessProbe() }
                 Log.i(TAG, "AFCURVE $tag $out")
+                Log.i(TAG, "AFNOISE $tag meanSpread=${"%.3f".format(spreads.average())} maxSpread=${"%.3f".format(spreads.max())}")
+            }
+            "aperture_probe" -> {
+                val camera = DJIConnectionManager.camera ?: error("no camera")
+                Log.i(TAG, "APERTURE adjustableSupported=${camera.isAdjustableApertureSupported}")
+                Log.i(TAG, "APERTURE setMode MANUAL -> ${callback<String?> { RealCameraGateway.setExposureMode("MANUAL") { e -> it(e) } }}")
+                delay(1500)
+                for (name in (args["names"] ?: "F_1_DOT_7,F_4,F_1_DOT_7").split(',')) {
+                    Log.i(TAG, "APERTURE set $name -> ${callback<String?> { RealCameraGateway.setAperture(name) { e -> it(e) } }}")
+                    delay(1500)
+                }
             }
             "focus_sweep" -> focusSweep(args)
             "probe_camera" -> probeCamera()

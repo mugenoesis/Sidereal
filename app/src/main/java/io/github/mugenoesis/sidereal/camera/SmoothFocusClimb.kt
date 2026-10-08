@@ -38,7 +38,12 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         val maxMeasurements: Int = 14,
         val minStep: Int = 8,
         val dropFraction: Double = 0.5,
-        val dropConfirmFrames: Int = 4
+        val dropConfirmFrames: Int = 4,
+        /**
+         * Two frames of a still picture at the same ring differing by more than this (as a fraction of their mean,
+         * averaged over the first positions) means noise, not a hill: measured 1-6% in clean light, 20-30% at ISO 25600.
+         */
+        val maxNoise: Double = 0.15
     )
 
     private enum class Stage { IDLE, CENTRE, PROBE, CLIMB, VERIFY, LOCKING, LOCKED }
@@ -58,6 +63,8 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     private var bestValue = 0.0
     private var count = 0
     private var gentleStreak = 0
+    private var noiseSum = 0.0
+    private var noiseCount = 0
     private var confident = true
 
     private var lockedRing = 0
@@ -70,6 +77,8 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         frames.clear()
         count = 0
         gentleStreak = 0
+        noiseSum = 0.0
+        noiseCount = 0
         confident = true
         belowStreak = 0
         stage = Stage.CENTRE
@@ -86,6 +95,9 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         frames += score
         if (frames.size < config.framesPerPosition) return null
         val mean = frames.average()
+        if (stage == Stage.CENTRE || stage == Stage.PROBE) {
+            if (mean > 0) { noiseSum += (frames.max() - frames.min()) / mean; noiseCount++ }
+        }
         frames.clear()
         measured[current] = mean
         count++
@@ -102,6 +114,10 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         Stage.PROBE -> {
             if (value > bestValue) { bestRing = current; bestValue = value }
             if (queue.isNotEmpty()) move(queue.removeFirst(), nowMs)
+            else if (noiseCount > 0 && noiseSum / noiseCount > config.maxNoise) {
+                stage = Stage.IDLE
+                FocusSearch.Command.Unreliable(centre)
+            }
             else if (bestRing == centre) refineAtTop(nowMs)
             else startClimb(nowMs)
         }

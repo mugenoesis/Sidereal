@@ -94,6 +94,8 @@ class MainActivity : AppCompatActivity() {
     private val focusController = FocusController()
     private val softwareAfcController = SoftwareAfcController(focusController, brightLight = {
         exposureController.readout.value?.let { FocusLight.isBright(it.shutterSpeed.name, it.iso) } ?: false
+    }, lightDescription = {
+        exposureController.readout.value?.let { "${it.shutterSpeed.name} ISO ${it.iso}" } ?: "no exposure readout"
     })
     private val meteringController = MeteringController()
     private val whiteBalanceController = WhiteBalanceController()
@@ -560,6 +562,10 @@ class MainActivity : AppCompatActivity() {
             shutterButton = findViewById(R.id.btnShutter),
             shutterNameProvider = { exposureController.readout.value?.shutterSpeed?.name },
             rampIo = io.github.mugenoesis.sidereal.sequence.RampIo(
+                refreshRanges = { exposureController.refreshKeyBasedEvTelemetry() },
+                currentAperture = { exposureController.readout.value?.getAperture()?.name },
+                apertureNames = { SettingsDefinitions.Aperture.values().map { it.name } },
+                setAperture = { name, done -> exposureController.setApertureByNameForRamp(name, done) },
                 shutterOptions = {
                     exposureController.shutterRange.value.orEmpty().mapNotNull { s ->
                         io.github.mugenoesis.sidereal.camera.ShutterLogic.exposureSeconds(s.name)?.let { io.github.mugenoesis.sidereal.sequence.ShutterOption(s.name, it) }
