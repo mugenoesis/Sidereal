@@ -82,6 +82,15 @@ object FocalLength {
         return value.takeIf { it in 2f..1500f }
     }
 
+    /**
+     * The EXIF focal length of a photo, unless the photo's lens is a zoom: a third-party zoom on this camera writes one value
+     * (12.0 on the Panasonic 12-32) whatever the ring is at, so it says nothing about the zoom.
+     */
+    fun trustedFromExif(rawFocal: String?, lensModel: String?): Float? {
+        if (LensInfo.parse(lensModel).isZoom) return null
+        return fromExif(rawFocal)
+    }
+
     /** The focal length that gives horizontal field of view [hFovDeg] on a Micro Four Thirds sensor (17.3 mm wide). */
     fun fromHorizontalFov(hFovDeg: Float, sensorWidthMm: Float = 17.3f): Float =
         (sensorWidthMm / 2.0 / kotlin.math.tan(Math.toRadians(hFovDeg / 2.0))).toFloat()

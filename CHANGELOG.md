@@ -12,6 +12,10 @@
 - A stowed collapsible zoom is detected ("Lens not extended") and the lens line is shown from connecting.
 - The ramp and the aperture stepper never ask for an aperture the lens can't make at its zoom (the Panasonic 12-32mm
   hangs the camera on f/4 at 32 mm).
+- The stitcher no longer trusts the EXIF focal length of a photo taken with a zoom lens (a third-party zoom writes the
+  wide end whatever the ring is at) and keeps the planned one.
+- Autofocus reads the focus ring's range again at each start (a zoom changes it) and corrects a stale first reading
+  before locking, which stopped it locking on the slope from far-blurred starts.
 - Dither now scales with the field of view (a few dozen pixels on any lens) instead of a fixed number of degrees.
 - The stitcher reads the focal length from the photos' EXIF and corrects its starting field of view if the plan used
   a different lens.

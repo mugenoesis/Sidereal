@@ -56,3 +56,16 @@ Conclusion: the camera asks the lens for an aperture it cannot make at that zoom
   ring 880-1100). The one miss locked at 55% of the peak on the shoulder in a dimmer scene; it did not repeat in the next
   five. Before the fixes the same starts locked on the slope (sharpness 340-390 against a peak of about 3300) in about
   one trial in four.
+
+## 18 mm (ring marked 18)
+
+- Camera: ring limit 2175, program-mode aperture f/4, EXIF focal length **still 12.0**. f/3.5 is refused by the camera
+  itself here ("Param Illegal"), f/4 and narrower accepted.
+- Autofocus: the sharpness peak is at ring 1700; all four locks (starts 0, 725, 1450, 2175) landed on 1674-1723
+  (over 95% of the peak) in 7-8 s.
+- Panorama, focal length on Auto with the zoom entered as 18: the plan says "18 mm". **Bug found:** the stitcher then read
+  the EXIF focal length (12.0), decided the plan was wrong and re-planned at 12 mm. It no longer trusts the EXIF focal
+  length when the photo's lens is a zoom.
+- A one-row panorama (1x3) cannot tell the field of view from the gimbal's rotation: the aligner pegged its field-of-view
+  scale at the 0.7 limit and was rejected. A two-row panorama (2x3) aligned on 121 matches, field of view x0.961
+  (about 18.7 mm real against the 18 mark), error 1.91 -> 0.39 degrees. Use two or more rows when checking the field of view.

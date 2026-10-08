@@ -10,6 +10,10 @@
 set -u
 LABEL="${1:?usage: tools/lens_test.sh <label> [yaw] [pitch]}"
 YAW="${2:-}"
+# The focus ring's upper limit (1570 at 12 mm on the Panasonic, 2035 on the DJI 15 mm) and the apertures to try; read the
+# ring limit from the lens_step.sh report. The aperture list must hold only what the lens can make at its zoom.
+RING_MAX="${RING_MAX:-2035}"
+APERTURES="${APERTURES:-F_1_DOT_4,F_1_DOT_7,F_1_DOT_8,F_2,F_2_DOT_8,F_3_DOT_5,F_4,F_5_DOT_6,F_8,F_11}"
 PITCH="${3:--3}"
 ADB="${ADB:-$HOME/Android/Sdk/platform-tools/adb}"
 PKG=io.github.mugenoesis.sidereal
@@ -36,18 +40,18 @@ logs "LENS" | tee -a "$REPORT"
 
 echo "== 2. aperture: which values the camera accepts (widest first)" | tee -a "$REPORT"
 "$ADB" logcat -c
-cmd aperture_probe --es names "F_1_DOT_4,F_1_DOT_7,F_1_DOT_8,F_2,F_2_DOT_8,F_3_DOT_5,F_4,F_5_DOT_6,F_8,F_11"
+cmd aperture_probe --es names "$APERTURES"
 sleep 24
 logs "APERTURE" | tee -a "$REPORT"
 cmd reset_camera; sleep 3
 
 echo "== 3. sharpness over the whole focus ring (ground truth for autofocus)" | tee -a "$REPORT"
-"$ADB" logcat -c; cmd af_curve --es tag "$LABEL" --es step 50
+"$ADB" logcat -c; cmd af_curve --es tag "$LABEL" --es step 50 --es max "$RING_MAX"
 wait_for "AFNOISE" 120 || echo "(timed out)" | tee -a "$REPORT"
 logs "AFCURVE|AFNOISE" | tee -a "$REPORT"
 
 echo "== 4. software autofocus from blurred starts (time to lock, where it locked)" | tee -a "$REPORT"
-"$ADB" logcat -c; cmd afc_trials --es tag "$LABEL" --es starts "0,700,1400,2000"
+"$ADB" logcat -c; cmd afc_trials --es tag "$LABEL" --es starts "0,$((RING_MAX/3)),$((RING_MAX*2/3)),$RING_MAX"
 wait_for "RESULT afc_trials" 240 || echo "(timed out)" | tee -a "$REPORT"
 "$ADB" logcat -d | grep -E "AFTRIAL |AFC using" | sed -E 's/^.{19}//; s/ +[0-9]+ +[0-9]+ [A-Z] / /' | tee -a "$REPORT"
 

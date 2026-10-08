@@ -132,4 +132,16 @@ class LensInfoTest {
         assertNull(ZoomEntry.parse("50", lens))
         assertNull(ZoomEntry.parse("8", lens))
     }
+
+    @Test fun `a zoom lens' EXIF focal length is not trusted, a prime's is`() {
+        // The Panasonic 12-32 writes 12.0 into every photo whatever the zoom ring is at.
+        assertNull(FocalLength.trustedFromExif("12.0", "LUMIX G VARIO 12-32/F3.5-5.6"))
+        assertEquals(45f, FocalLength.trustedFromExif("45/1", "OLYMPUS M.45mm F1.8")!!, 0.01f)
+        assertEquals(15f, FocalLength.trustedFromExif("15", "DJI MFT 15mm F1.7 ASPH")!!, 0.01f)
+    }
+
+    @Test fun `with no lens name in the photo the EXIF focal length is used as before`() {
+        assertEquals(15f, FocalLength.trustedFromExif("15", null)!!, 0.01f)
+        assertNull(FocalLength.trustedFromExif(null, "OLYMPUS M.45mm F1.8"))
+    }
 }

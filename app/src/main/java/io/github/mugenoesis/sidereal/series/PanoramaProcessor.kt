@@ -63,7 +63,9 @@ class PanoramaProcessor(
         // The pictures know what lens they were taken with. If it is not the one the panorama was planned for (the app
         // assumed 15 mm until it could read the lens), start from the real field of view: the alignment only corrects
         // within a few percent.
-        val taken = try { FocalLength.fromExif(ExifInterface(first.path).getAttribute(ExifInterface.TAG_FOCAL_LENGTH)) } catch (e: Exception) { null }
+        val taken = try {
+            FocalLength.trustedFromExif(ExifInterface(first.path).getAttribute(ExifInterface.TAG_FOCAL_LENGTH), io.github.mugenoesis.sidereal.camera.ExifLensModel.read(first))
+        } catch (e: Exception) { null }
         val planned = FocalLength.fromHorizontalFov(layout.hFovDeg)
         if (FocalLength.disagrees(planned, taken)) {
             val (h, v) = io.github.mugenoesis.sidereal.sequence.PanoramaPlanner.fovFor(taken!!)
