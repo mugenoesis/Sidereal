@@ -1,5 +1,9 @@
 package io.github.mugenoesis.sidereal.sequence
 
+import io.github.mugenoesis.sidereal.series.AfterRunProgress
+import io.github.mugenoesis.sidereal.series.PostRun
+import io.github.mugenoesis.sidereal.series.RunSummary
+import io.github.mugenoesis.sidereal.series.SeriesPlan
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
@@ -216,5 +220,114 @@ class SequenceControllerTest {
         c.adjust("frames", -1)
         c.start()
         assertEquals(SequenceState.Done, c.progress.value.state)
+    }
+
+    // --- after the run: downloading / stitching / video ---
+
+    private class RecordingPostRun(val result: String? = "Saved", val gate: CompletableDeferred<Unit>? = null) : PostRun {
+        var calls = 0
+        var plan: SeriesPlan? = null
+        var run: RunSummary? = null
+        override suspend fun run(plan: SeriesPlan, run: RunSummary, report: (AfterRunProgress) -> Unit): String? {
+            calls++
+            this.plan = plan
+            this.run = run
+            report(AfterRunProgress("Downloading", 1, 4))
+            gate?.await()
+            return result
+        }
+    }
+
+    private fun controllerWithPost(post: PostRun?, clock: () -> Long = { 1_000L }): SequenceController {
+        val scope = CoroutineScope(Job() + Dispatchers.Unconfined)
+        return SequenceController(
+            scope, { prompt -> ControllerFakeHost(prompt).also { host = it } }, { context }, {}, { null },
+            postRun = post, wallClock = clock
+        )
+    }
+
+    @Test
+    fun `a finished run with something to download hands its photos to the post run`() {
+        val post = RecordingPostRun()
+        val c = controllerWithPost(post)
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.adjust("frames", -1)
+        c.start()
+        assertEquals(1, post.calls)
+        assertEquals(SequenceMode.INTERVALOMETER, post.plan!!.mode)
+        assertEquals(15, post.run!!.capturesDone)
+        assertEquals(15, post.plan!!.tags.size)
+        assertEquals("Saved", c.message.value)
+        assertFalse(c.isRunning.value)
+        assertNull(c.afterRun.value)
+    }
+
+    @Test
+    fun `the run stays locked while the post run works and shows its progress`() {
+        val gate = CompletableDeferred<Unit>()
+        val c = controllerWithPost(RecordingPostRun(gate = gate))
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.start()
+        assertTrue(c.isRunning.value)
+        assertEquals(AfterRunProgress("Downloading", 1, 4), c.afterRun.value)
+        gate.complete(Unit)
+        assertFalse(c.isRunning.value)
+        assertNull(c.afterRun.value)
+    }
+
+    @Test
+    fun `nothing is downloaded when the mode's options say not to`() {
+        val post = RecordingPostRun()
+        val c = controllerWithPost(post)
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.adjust("saveFrames", +1)
+        c.start()
+        assertEquals(0, post.calls)
+    }
+
+    @Test
+    fun `a timelapse downloads nothing by default`() {
+        val post = RecordingPostRun()
+        val c = controllerWithPost(post)
+        c.setMode(SequenceMode.TIMELAPSE)
+        c.adjust("durationMin", -1)
+        c.start()
+        assertEquals(0, post.calls)
+    }
+
+    @Test
+    fun `a stopped run is not downloaded`() {
+        val post = RecordingPostRun()
+        val c = controllerWithPost(post)
+        c.setMode(SequenceMode.INTERVALOMETER)
+        host = null
+        c.start()
+        // finish normally first, then check a cancelled one separately
+        val closable = ClosableHost().also { it.gate = CompletableDeferred() }
+        val scope = CoroutineScope(Job() + Dispatchers.Unconfined)
+        val post2 = RecordingPostRun()
+        val c2 = SequenceController(scope, { closable }, { context }, {}, { null }, postRun = post2)
+        c2.start()
+        c2.stop()
+        assertEquals(0, post2.calls)
+    }
+
+    @Test
+    fun `the run span handed over is the wall clock time from start to the last photo`() {
+        var now = 10_000L
+        val post = RecordingPostRun()
+        val c = controllerWithPost(post, clock = { now.also { now += 5_000L } })
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.start()
+        assertEquals(10_000L, post.run!!.startedAtMs)
+        assertEquals(5_000L, post.run!!.spanMs)
+    }
+
+    @Test
+    fun `a post run that reports nothing leaves the message empty`() {
+        val c = controllerWithPost(RecordingPostRun(result = null))
+        c.setMode(SequenceMode.INTERVALOMETER)
+        c.start()
+        assertNull(c.message.value)
     }
 }
