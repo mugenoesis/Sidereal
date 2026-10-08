@@ -260,8 +260,9 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet (see *Lenses* above).
   autofocus, finds the sharpness peak (a quick climb in clean light, a scan in
   noisy low light), locks, and then leaves the ring alone until the scene
   changes. It hasn't been tested while recording video. At ISO 12800 and above
-  it can still lock off the peak, and in very noisy light a seed that landed
-  on a featureless patch can lock on nothing.
+  it can still lock off the peak, and in a dim room under flickering LED light
+  some runs (2 of 10 measured) lock off the peak or fall back to the slower
+  scan.
 - **Phone audio recording and sync:** records from the phone's mic or a
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
   and exports a merged MP4. The automatic starting offset is only as good

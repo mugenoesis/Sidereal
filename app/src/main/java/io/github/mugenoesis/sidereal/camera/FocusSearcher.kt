@@ -30,3 +30,15 @@ object FocusLight {
         return seconds == null || seconds <= SLOWEST_CLEAN_SHUTTER_SEC + 1e-9
     }
 }
+
+/**
+ * The camera's own autofocus gives the starting hint. When it fails it parks the ring at one end (ring 0 was seen on
+ * the real camera), and a climb that starts there finds a flat floor and "locks" on nothing. Treat a seed within 2% of
+ * either end as no hint at all, so the whole ring is scanned instead.
+ */
+object FocusSeed {
+    private const val END_FRACTION = 0.02
+
+    fun isTrusted(seed: Int?, bound: Int): Boolean =
+        seed != null && bound > 0 && seed >= bound * END_FRACTION && seed <= bound * (1 - END_FRACTION)
+}

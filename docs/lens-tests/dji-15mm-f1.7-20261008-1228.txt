@@ -1,0 +1,36 @@
+# Lens test: dji-15mm-f1.7  (2026-10-08T12:28:52+01:00)
+app version: versionName=0.2.1
+
+== 1. what the camera reports about the lens
+ LENS interchangeable=true adjustableAperture=true opticalZoom=false hybridZoom=false displayName=Zenmuse X5
+ LENS info=ok:DJI MFT 15mm F1.7 ASPH
+ LENS opticalZoomFocalLength=fail:The feature is unsupported.
+ LENS key LensInformation = DJI MFT 15mm F1.7 ASPH
+ LENS key ApertureRange = FAIL The feature is unsupported.
+ LENS key OpticalZoomFocalLength = FAIL The feature is unsupported.
+ LENS key OpticalZoomSpec = FAIL The feature is unsupported.
+== 2. aperture: which values the camera accepts (widest first)
+ APERTURE adjustableSupported=true
+ APERTURE setMode MANUAL -> null
+ APERTURE set F_1_DOT_4 -> Param Illegal
+ APERTURE set F_1_DOT_7 -> null
+ APERTURE set F_1_DOT_8 -> null
+ APERTURE set F_2 -> null
+ APERTURE set F_2_DOT_8 -> null
+ APERTURE set F_3_DOT_5 -> null
+ APERTURE set F_4 -> null
+ APERTURE set F_5_DOT_6 -> null
+ APERTURE set F_8 -> null
+ APERTURE set F_11 -> null
+== 3. sharpness over the whole focus ring (ground truth for autofocus)
+ AFCURVE dji-15mm-f1.7 0:125 50:130 100:140 150:151 200:169 250:197 300:221 350:256 400:308 450:357 500:407 550:476 600:531 650:638 700:733 750:828 800:879 850:906 900:921 950:907 1000:1078 1050:1110 1100:1218 1150:1454 1200:1673 1250:1715 1300:1747 1350:1681 1400:1603 1450:1701 1500:1624 1550:1543 1600:1652 1650:1585 1700:1569 1750:1662 1800:1715 1850:1601 1900:1591 1950:1681 2000:1616 
+ AFNOISE dji-15mm-f1.7 meanSpread=0.030 maxSpread=0.124
+== 4. software autofocus from blurred starts (time to lock, where it locked)
+ SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_80 ISO 800)
+ SiderealDebug: AFTRIAL dji-15mm-f1.7 start=0 locked=true lockMs=5998 ring=1758 sharp=2092
+ SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_80 ISO 800)
+ SiderealDebug: AFTRIAL dji-15mm-f1.7 start=700 locked=true lockMs=8741 ring=1761 sharp=2112
+ SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_80 ISO 800)
+ SiderealDebug: AFTRIAL dji-15mm-f1.7 start=1400 locked=true lockMs=18081 ring=1708 sharp=2066
+ SoftwareAfc: AFC using the quick climb (clean light) (SHUTTER_SPEED_1_80 ISO 800)
+ SiderealDebug: AFTRIAL dji-15mm-f1.7 start=2000 locked=true lockMs=6430 ring=1795 sharp=2416

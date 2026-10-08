@@ -35,7 +35,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         val gentleLimit: Int = 2,
         /** Within this fraction of the best is "flat"; below it is "past the peak". */
         val flat: Double = 0.03,
-        val maxMeasurements: Int = 14,
+        val maxMeasurements: Int = 20,
         val minStep: Int = 8,
         val dropFraction: Double = 0.5,
         val dropConfirmFrames: Int = 4,
@@ -45,20 +45,31 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         val maxFramesPerPosition: Int = 5,
         /** Above this per-frame noise (fraction of the reading) the picture counts as noisy and a lock must be earned (see [minHillContrast]). */
         val noisySigma: Double = 0.025,
-        /** Per-frame noise beyond this (measured: ~0.27 at ISO 25600, ~0.05 at ISO 6400) is too much to average away quickly. */
-        val maxSigma: Double = 0.1,
+        /**
+         * Per-frame noise beyond this is too much to average away quickly. Measured: ~0.27 at ISO 25600, ~0.05 at ISO 6400,
+         * and 0.10-0.15 at ISO 800 under flickering LED light (a slow shutter that does not match the mains frequency), where
+         * the hill is still unmistakable, so it must not be given up on.
+         */
+        val maxSigma: Double = 0.2,
         /**
          * In a noisy picture a real hill shows as the best reading standing well above the lowest one measured on the
          * way; if everything measured looks alike, the search was lost in the noise floor (or never found anything),
          * so the scanning search takes over rather than locking on nothing.
          */
         val minHillContrast: Double = 1.25,
+        /**
+         * Before locking, look this far either side (fraction of the ring). A seed that landed on a blurred floor looks
+         * like a plateau to the climb (nothing to climb locally); somewhere further along the ring is sharper.
+         */
+        val wideCheckFraction: Double = 0.2,
+        /** A wide-check position this much sharper than the candidate lock means the top is elsewhere: climb towards it. */
+        val wideCheckRise: Double = 1.25,
         /** Two frames of a still picture disagreeing by more than this (fraction of the reading) make the noise worth measuring properly. */
         val suspectSpread: Double = 0.02,
         val noiseProbeFrames: Int = 6
     )
 
-    private enum class Stage { IDLE, CENTRE, PROBE, CLIMB, VERIFY, LOCKING, LOCKED }
+    private enum class Stage { IDLE, CENTRE, PROBE, CLIMB, VERIFY, WIDE, LOCKING, LOCKED }
 
     private var stage = Stage.IDLE
     override val locked: Boolean get() = stage == Stage.LOCKED
@@ -79,6 +90,9 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     private var sigmaCount = 0
     private var framesNeeded = 2
     private var extendedCentre = false
+    private var wideChecked = false
+    private var pendingLock = 0
+    private var pendingConfident = true
     private var confident = true
 
     private var lockedRing = 0
@@ -95,6 +109,7 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         sigmaCount = 0
         framesNeeded = config.framesPerPosition
         extendedCentre = false
+        wideChecked = false
         confident = true
         belowStreak = 0
         stage = Stage.CENTRE
@@ -167,6 +182,9 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         }
         Stage.CLIMB -> climb(value, nowMs)
         Stage.VERIFY -> lock(measured.maxByOrNull { it.value }!!.key, nowMs)
+        Stage.WIDE -> {
+            if (queue.isNotEmpty()) move(queue.removeFirst(), nowMs) else finishWideCheck(nowMs)
+        }
         Stage.LOCKING -> {
             lockedRing = current
             lockedScore = value
@@ -248,6 +266,21 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
     }
 
     private fun lock(ring: Int, nowMs: Long, confident: Boolean = true): FocusSearch.Command? {
+        // First compare with positions well either side (once): a seed that landed on a floor looks like a plateau locally.
+        if (!wideChecked) {
+            val sides = wideCheckRings(ring)
+            if (sides.isNotEmpty()) {
+                wideChecked = true
+                pendingLock = ring
+                pendingConfident = confident
+                stage = Stage.WIDE
+                queue.clear()
+                queue.addAll(sides)
+                return move(queue.removeFirst(), nowMs)
+            }
+        }
+        // In a noisy picture, a lock has to be earned: with the wide samples in, something measured must stand clearly above
+        // the lowest, else this was never a hill (flat floor, noise), and the scanning search takes over.
         if (sigma > config.noisySigma && measured.size >= 3) {
             val contrast = measured.values.max() / measured.values.min().coerceAtLeast(1e-9)
             if (contrast < config.minHillContrast) {
@@ -264,6 +297,31 @@ class SmoothFocusClimb(private val bound: Int, private val config: Config = Conf
         }
         stage = Stage.LOCKING
         return move(ring, nowMs)
+    }
+
+    private fun wideCheckRings(ring: Int): List<Int> {
+        val d = (bound * config.wideCheckFraction).roundToInt()
+        if (d < config.minStep) return emptyList()
+        return listOf(ring - d, ring + d).map { it.coerceIn(0, bound) }
+            .filter { abs(it - ring) >= d / 2 && measured.keys.none { m -> abs(m - it) < config.minStep } }
+            .distinct()
+    }
+
+    /** The candidate lock was compared with a position well either side: lock if it holds, else climb towards the sharper one. */
+    private fun finishWideCheck(nowMs: Long): FocusSearch.Command? {
+        val candidate = measured[pendingLock] ?: return lock(pendingLock, nowMs, pendingConfident)
+        val sharper = measured.filterKeys { it != pendingLock && abs(it - pendingLock) >= bound * config.wideCheckFraction / 2 }
+            .maxByOrNull { it.value }
+        if (sharper != null && sharper.value > candidate * config.wideCheckRise) {
+            bestRing = sharper.key
+            bestValue = sharper.value
+            climbDirection = if (sharper.key > pendingLock) 1 else -1
+            step = max(step, (bound * config.probeFraction * 2).roundToInt())
+            gentleStreak = 0
+            stage = Stage.CLIMB
+            return climbFrom(sharper.key, nowMs)
+        }
+        return lock(pendingLock, nowMs, pendingConfident)
     }
 
     private fun move(ring: Int, nowMs: Long): FocusSearch.Command.MoveTo {

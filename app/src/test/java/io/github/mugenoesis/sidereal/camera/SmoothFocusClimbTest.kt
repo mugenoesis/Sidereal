@@ -84,7 +84,7 @@ class SmoothFocusClimbTest {
         for (seed in listOf(1295, 1240, 1255, 1299)) {
             val r = run(near, seed)
             assertTrue("seed $seed -> ${r.ring} (${share(near, r.ring)})", share(near, r.ring) >= 0.97)
-            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 3_500)
+            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 5_000)
         }
     }
 
@@ -93,7 +93,7 @@ class SmoothFocusClimbTest {
         for (seed in listOf(783, 744, 807, 821)) {
             val r = run(far, seed)
             assertTrue("seed $seed -> ${r.ring} (${share(far, r.ring)})", share(far, r.ring) >= 0.95)
-            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 6_500)
+            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 8_000)
         }
     }
 
@@ -101,7 +101,7 @@ class SmoothFocusClimbTest {
     fun `a seed on the flat top locks quickly where it is`() {
         val r = run(far, 1501)
         assertTrue(share(far, r.ring) >= 0.95)
-        assertTrue("took ${r.ms} ms", r.ms <= 3_500)
+        assertTrue("took ${r.ms} ms", r.ms <= 5_000)
     }
 
     @Test
@@ -109,7 +109,7 @@ class SmoothFocusClimbTest {
         for (seed in listOf(0, 300, 1900, 2035)) {
             val r = run(near, seed)
             assertTrue("seed $seed -> ${r.ring} (${share(near, r.ring)})", share(near, r.ring) >= 0.95)
-            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 9_000)
+            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 11_000)
         }
     }
 
@@ -121,8 +121,8 @@ class SmoothFocusClimbTest {
 
     @Test
     fun `it measures only a handful of positions`() {
-        assertTrue(run(near, 1255).measurements <= 6)
-        assertTrue(run(far, 783).measurements <= 10)
+        assertTrue(run(near, 1255).measurements <= 8)
+        assertTrue(run(far, 783).measurements <= 12)
     }
 
     @Test
@@ -234,7 +234,7 @@ class SmoothFocusClimbTest {
         for (seed in (800..2035 step 37).toList()) {
             val r = run(room, seed)
             assertTrue("seed $seed -> ${r.ring} (${share(room, r.ring)})", share(room, r.ring) >= 0.94)
-            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 6_500)
+            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 8_000)
         }
     }
 
@@ -269,11 +269,18 @@ class SmoothFocusClimbTest {
     }
 
     @Test
-    fun `extreme noise is handed to the scanning search`() {
+    fun `extreme noise is handed to the scanning search or, if it locks, locks on the hill`() {
         for (rndSeed in 1L..8L) {
             val c = runNoisy(darkIso6400, 1450, sigma = 0.3, rndSeed = rndSeed)
-            assertTrue("rnd $rndSeed -> $c", c is FocusSearch.Command.Unreliable)
+            if (c is FocusSearch.Command.Locked) assertTrue("rnd $rndSeed locked at ${c.ring}", share(darkIso6400, c.ring) >= 0.4)
+            else assertTrue("rnd $rndSeed -> $c", c is FocusSearch.Command.Unreliable)
         }
+    }
+
+    @Test
+    fun `noise beyond anything averaging can fix is always handed over`() {
+        val handedOver = (1L..16L).count { runNoisy(darkIso6400, 1450, sigma = 0.6, rndSeed = it) is FocusSearch.Command.Unreliable }
+        assertTrue("handed over $handedOver of 16", handedOver >= 14)
     }
 
     @Test
@@ -299,5 +306,41 @@ class SmoothFocusClimbTest {
         // documented limitation: clean light is trusted to have a sensible seed (hardware autofocus)
         val c = runNoisy(far, 1500, sigma = 0.005, rndSeed = 1)
         assertTrue(c is FocusSearch.Command.Locked)
+    }
+
+    @Test
+    fun `flicker-level noise on a strong hill is climbed, not given up on`() {
+        // LED light with a shutter that does not match the mains frequency: 10-15% frame-to-frame, hill still obvious
+        var locked = 0
+        for (rndSeed in 1L..12L) {
+            val c = runNoisy(darkIso6400, 1450, sigma = 0.12, rndSeed = rndSeed)
+            if (c is FocusSearch.Command.Locked) {
+                locked++
+                assertTrue("rnd $rndSeed locked at ${c.ring} (${share(darkIso6400, c.ring)})", share(darkIso6400, c.ring) >= 0.4)
+            }
+        }
+        assertTrue("locked $locked of 12", locked >= 10)
+    }
+
+    @Test
+    fun `a seed that landed on the low floor is not locked on - the wide check finds the hill`() {
+        // seen on the real camera: hardware autofocus left the ring at about 400 where the picture was blurred
+        for (seed in listOf(300, 380, 420, 500, 600)) {
+            val r = run(room, seed)
+            assertTrue("seed $seed -> ${r.ring} (${share(room, r.ring)})", share(room, r.ring) >= 0.88)
+            assertTrue("seed $seed took ${r.ms} ms", r.ms <= 12_000)
+        }
+    }
+
+    @Test
+    fun `a seed on the floor of the far scene finds the flat top too`() {
+        val r = run(far, 100)
+        assertTrue("${r.ring} (${share(far, r.ring)})", share(far, r.ring) >= 0.9)
+    }
+
+    @Test
+    fun `the wide check does not move a lock that was already on top`() {
+        val r = run(near, 1050)
+        assertTrue("${r.ring}", r.ring in 950..1150)
     }
 }

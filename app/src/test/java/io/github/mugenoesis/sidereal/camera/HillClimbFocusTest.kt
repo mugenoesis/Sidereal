@@ -40,4 +40,43 @@ class HillClimbFocusTest {
     fun `laplacianVariance rejects a pixel buffer of the wrong size`() {
         HillClimbFocus.laplacianVariance(IntArray(5), size = 10)
     }
+
+    // --- normalizedLaplacianVariance ---
+
+    private fun detailPicture(size: Int, level: Double): IntArray {
+        // fixed pattern of texture, then brightness scaled by [level]
+        val rnd = java.util.Random(11)
+        return IntArray(size * size) {
+            val base = 90 + (rnd.nextInt(60))
+            val v = (base * level).toInt().coerceIn(0, 255)
+            (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+        }
+    }
+
+    @Test
+    fun `normalized sharpness does not move when the whole picture flickers brighter or darker`() {
+        val size = 40
+        val normal = HillClimbFocus.normalizedLaplacianVariance(detailPicture(size, 1.0), size)
+        val dimmer = HillClimbFocus.normalizedLaplacianVariance(detailPicture(size, 0.6), size)
+        val brighter = HillClimbFocus.normalizedLaplacianVariance(detailPicture(size, 1.4), size)
+        assertEquals(normal, dimmer, normal * 0.04)
+        assertEquals(normal, brighter, normal * 0.04)
+        // while the plain measure follows the brightness squared
+        val plainRatio = HillClimbFocus.laplacianVariance(detailPicture(size, 0.6), size) / HillClimbFocus.laplacianVariance(detailPicture(size, 1.0), size)
+        assertTrue("plain ratio $plainRatio", plainRatio < 0.5)
+    }
+
+    @Test
+    fun `normalized sharpness still tells sharp from soft`() {
+        val size = 40
+        val checker = IntArray(size * size) { val v = if ((it % size + it / size) % 2 == 0) 200 else 60; (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+        val soft = IntArray(size * size) { val v = 100 + (it % size) * 2; (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+        assertTrue(HillClimbFocus.normalizedLaplacianVariance(checker, size) > 20 * HillClimbFocus.normalizedLaplacianVariance(soft, size))
+    }
+
+    @Test
+    fun `normalized sharpness of a black picture is zero, not a division by zero`() {
+        val size = 20
+        assertEquals(0.0, HillClimbFocus.normalizedLaplacianVariance(IntArray(size * size) { 0xFF000000.toInt() }, size), 1e-9)
+    }
 }

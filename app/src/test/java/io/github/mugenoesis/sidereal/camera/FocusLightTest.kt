@@ -51,4 +51,21 @@ class FocusLightTest {
         assertTrue(FocusLight.isBright("SHUTTER_SPEED_1_500", null))
         assertFalse(FocusLight.isBright("SHUTTER_SPEED_1_10", null))
     }
+
+    @Test fun `a seed pinned to either end of the ring is the camera failing, not a focus distance`() {
+        assertFalse(FocusSeed.isTrusted(0, 2035))
+        assertFalse(FocusSeed.isTrusted(12, 2035))
+        assertFalse(FocusSeed.isTrusted(2035, 2035))
+        assertFalse(FocusSeed.isTrusted(2020, 2035))
+    }
+
+    @Test fun `a seed anywhere else is trusted`() {
+        assertTrue(FocusSeed.isTrusted(60, 2035))
+        assertTrue(FocusSeed.isTrusted(1000, 2035))
+        assertTrue(FocusSeed.isTrusted(1975, 2035))
+    }
+
+    @Test fun `no seed at all is not trusted`() {
+        assertFalse(FocusSeed.isTrusted(null, 2035))
+    }
 }

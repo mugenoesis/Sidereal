@@ -261,11 +261,13 @@ class SoftwareAfcController(
                     seeding = false
                     return@post
                 }
-                val bright = brightLight()
+                val trusted = FocusSeed.isTrusted(seed, bound)
+                if (!trusted && seed != null) Log.w(TAG, "hardware AF left the ring at $seed (an end stop): ignoring it and scanning the whole ring")
+                val bright = brightLight() && trusted
                 val fresh: FocusSearcher = if (bright) SmoothFocusClimb(bound) else FocusSearch(bound)
                 Log.i(TAG, "AFC using the ${if (bright) "quick climb (clean light)" else "scanning search"}${lightNote()}")
                 search = fresh
-                val first = fresh.begin(seed, System.currentTimeMillis())
+                val first = fresh.begin(if (trusted) seed else null, System.currentTimeMillis())
                 Log.i(TAG, "AFC search begins: seed=$seed bound=$bound first move=${first.ring}")
                 focusController.setFocusRingValue(first.ring)
                 seeding = false
@@ -348,6 +350,6 @@ class SoftwareAfcController(
         val small = Bitmap.createScaledBitmap(crop, SAMPLE_SIZE, SAMPLE_SIZE, true)
         val pixels = IntArray(SAMPLE_SIZE * SAMPLE_SIZE)
         small.getPixels(pixels, 0, SAMPLE_SIZE, 0, 0, SAMPLE_SIZE, SAMPLE_SIZE)
-        return HillClimbFocus.laplacianVariance(pixels, SAMPLE_SIZE) to SceneSignature.of(pixels, SAMPLE_SIZE)
+        return HillClimbFocus.normalizedLaplacianVariance(pixels, SAMPLE_SIZE) to SceneSignature.of(pixels, SAMPLE_SIZE)
     }
 }

@@ -10,6 +10,19 @@
 - The stitcher reads the focal length from the photos' EXIF and corrects its starting field of view if the plan used
   a different lens.
 - The ramp opens the lens to the widest aperture the camera accepts rather than assuming f/1.7.
+- The face tracker's gains are scaled to the lens' field of view (they were tuned on the 60 degree wide 15 mm, and
+  would overshoot on a long lens).
+
+### Autofocus
+- The sharpness measure is divided by the picture's brightness squared, so lamps and screens that flicker (which
+  brighten and darken the whole preview) no longer look like noise. Frame-to-frame noise in an LED-lit room at ISO 800
+  and 1/80 s roughly halved.
+- Before locking, the quick climb also looks a fifth of the ring either side, so a start that landed on a blurred floor
+  (which looks like a plateau locally) climbs to the real peak instead of locking on nothing.
+- A hardware-autofocus start pinned at either end of the ring (it parks there when it fails) is ignored and the whole
+  ring is scanned.
+- Known weak spot: in a dim room under flickering LED light some runs (2 of 10 measured) still lock off the peak or
+  fall back to the slower scanning search (about 10 s typical, 20 s worst).
 
 ### Changed
 - Fewer permissions: no camera, gallery-read, draw-over-apps, kill-background-processes or running-tasks permissions

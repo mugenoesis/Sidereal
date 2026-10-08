@@ -133,6 +133,8 @@ workaround.
 
 ## 5. Likely problems to look for
 
+- **Flicker.** Under LED lamps or a monitor a slow shutter makes the preview flicker. The autofocus normalises for that,
+  but test in steady daylight first so a lens problem is not confused with a lighting problem.
 - The camera reports a name the parser does not understand (fallback to 15 mm; fix the parser).
 - A fast long lens' narrow autofocus peak is stepped over (smaller steps).
 - A variable-aperture zoom changing its widest aperture mid-sequence (document it; do not zoom during a run).

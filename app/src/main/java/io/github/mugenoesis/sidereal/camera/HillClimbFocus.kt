@@ -39,4 +39,21 @@ object HillClimbFocus {
         val mean = sum / count
         return sumSq / count - mean * mean
     }
+
+    /**
+     * [laplacianVariance] divided by the picture's mean brightness squared (scaled so a mid-grey picture is unchanged).
+     * Lamps and screens flicker, which brightens and darkens the whole preview from frame to frame and moves the plain
+     * measure by the square of that; the ratio does not move. Measured on the real camera: this is the difference
+     * between a usable and an unusable measurement under LED light with a slow shutter.
+     */
+    fun normalizedLaplacianVariance(pixels: IntArray, size: Int): Double {
+        val variance = laplacianVariance(pixels, size)
+        var sum = 0.0
+        for (p in pixels) sum += 0.299 * ((p shr 16) and 0xFF) + 0.587 * ((p shr 8) and 0xFF) + 0.114 * (p and 0xFF)
+        val mean = sum / pixels.size
+        if (mean < 1.0) return 0.0
+        return variance * (MID_GREY * MID_GREY) / (mean * mean)
+    }
+
+    private const val MID_GREY = 128.0
 }
