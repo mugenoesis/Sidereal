@@ -1,6 +1,7 @@
 package io.github.mugenoesis.sidereal.sequence
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -173,5 +174,104 @@ class SequencePlanFactoryTest {
     fun `an interval too short to leave any shutter time refuses to ramp and says why`() {
         val msg = error(rampSettings.copy(intervalSec = 3))
         assertTrue(msg, msg.contains("interval", ignoreCase = true))
+    }
+
+    @Test
+    fun `a panorama plan tags every capture with its row and column in shooting order`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.PANORAMA, yawSpanDeg = 120, pitchSpanDeg = 80, overlapPct = 30))
+        val series = plan.series
+        assertEquals(plan.captures, series.tags.size)
+        assertEquals("r1c1", series.tags.first())
+        assertEquals(series.tags.size, series.tags.toSet().size)
+        val layout = series.panorama!!
+        assertEquals(layout.nodes.size, plan.captures)
+        // snake order: the second row is visited right to left, so its first shot is the last column
+        val cols = layout.nodes.maxOf { it.col } + 1
+        assertEquals("r2c$cols", series.tags[cols])
+    }
+
+    @Test
+    fun `stacked panorama shots are tagged per shot at each node`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.PANORAMA, shotsPerNode = 3))
+        assertEquals("r1c1_s1", plan.series.tags[0])
+        assertEquals("r1c1_s3", plan.series.tags[2])
+        assertEquals("r1c2_s1", plan.series.tags[3])
+    }
+
+    @Test
+    fun `timelapse and intervalometer frames are numbered from one`() {
+        val t = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 1, intervalSec = 10, makeVideo = true, fps = 30))
+        assertEquals(listOf("f0001", "f0002", "f0003", "f0004", "f0005", "f0006"), t.series.tags)
+        assertTrue(t.series.makeVideo)
+        assertEquals(30, t.series.fps)
+        val i = ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, frames = 3))
+        assertEquals(listOf("f0001", "f0002", "f0003"), i.series.tags)
+    }
+
+    @Test
+    fun `calibration frames are tagged by kind`() {
+        assertEquals("dark001", ok(SequenceSettings(mode = SequenceMode.DARKS, calFrames = 3)).series.tags.first())
+        assertEquals("bias003", ok(SequenceSettings(mode = SequenceMode.BIAS, calFrames = 3)).series.tags.last())
+        assertEquals("flat002", ok(SequenceSettings(mode = SequenceMode.FLATS, calFrames = 3)).series.tags[1])
+    }
+
+    @Test
+    fun `the series plan carries what to do with the files afterwards`() {
+        val pano = ok(SequenceSettings(mode = SequenceMode.PANORAMA, saveFrames = false, stitch = true)).series
+        assertTrue(pano.stitch)
+        assertFalse(pano.keepFrames)
+        assertTrue(pano.needsDownload)
+        val off = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE)).series
+        assertFalse(off.needsDownload)
+        assertFalse(off.makeVideo)
+    }
+
+    @Test
+    fun `only a timelapse can make a video and only a panorama can stitch`() {
+        assertFalse(ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, makeVideo = true, stitch = true)).series.makeVideo)
+        assertFalse(ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, makeVideo = true, stitch = true)).series.stitch)
+        assertFalse(ok(SequenceSettings(mode = SequenceMode.PANORAMA, makeVideo = true)).series.makeVideo)
+    }
+
+    @Test
+    fun `the summary says what will happen to the photos afterwards`() {
+        val pano = ok(SequenceSettings(mode = SequenceMode.PANORAMA, yawSpanDeg = 120, pitchSpanDeg = 80))
+        assertTrue(pano.summary, pano.summary.contains("save"))
+        assertTrue(pano.summary, pano.summary.contains("stitch"))
+        val lapse = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 5, intervalSec = 10, makeVideo = true))
+        assertTrue(lapse.summary, lapse.summary.contains("video"))
+        assertFalse(lapse.summary, lapse.summary.contains("save"))
+        val plain = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 5, intervalSec = 10))
+        assertFalse(plain.summary, plain.summary.contains("download"))
+        assertFalse(plain.summary, plain.summary.contains("save"))
+    }
+
+    @Test
+    fun `the summary warns how long bringing the photos in will take`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, frames = 100))
+        assertTrue(plan.summary, plan.summary.contains("download"))
+        assertTrue(plan.summary, plan.summary.contains("5m 50s download")) // 100 photos at ~3.5s each
+    }
+
+    @Test
+    fun `a download that would take over half an hour is warned about`() {
+        // 600 frames at ~3.5s each is 35 minutes
+        val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 600, intervalSec = 60, makeVideo = true))
+        val warning = plan.warnings.firstOrNull { it.contains("download", ignoreCase = true) }
+        assertTrue(plan.warnings.toString(), warning != null)
+        assertTrue(warning!!, warning.contains("35m"))
+        assertTrue(warning, warning.contains("Make video"))
+    }
+
+    @Test
+    fun `a short download carries no warning`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.INTERVALOMETER, frames = 100))
+        assertTrue(plan.warnings.toString(), plan.warnings.none { it.contains("download", ignoreCase = true) })
+    }
+
+    @Test
+    fun `no download means no download warning however long the run`() {
+        val plan = ok(SequenceSettings(mode = SequenceMode.TIMELAPSE, durationMin = 600, intervalSec = 60))
+        assertTrue(plan.warnings.toString(), plan.warnings.none { it.contains("download", ignoreCase = true) })
     }
 }

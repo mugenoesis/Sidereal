@@ -63,4 +63,27 @@ class SequenceNotificationTextTest {
     fun `progress never exceeds 100`() {
         assertEquals(100, SequenceNotificationText.of("Timelapse", progress(done = 15, total = 12)).percent)
     }
+
+    @Test
+    fun `while photos are coming off the card the notification counts files`() {
+        val c = SequenceNotificationText.afterRun("Panorama", io.github.mugenoesis.sidereal.series.AfterRunProgress("Downloading", 6, 24))
+        assertEquals("Panorama · Downloading", c.title)
+        assertTrue(c.text, c.text.contains("6 of 24"))
+        assertEquals(25, c.percent)
+        assertFalse(c.indeterminate)
+    }
+
+    @Test
+    fun `work with no count yet is shown as indeterminate`() {
+        val c = SequenceNotificationText.afterRun("Panorama", io.github.mugenoesis.sidereal.series.AfterRunProgress("Finishing", 0, 0))
+        assertTrue(c.indeterminate)
+    }
+
+    @Test
+    fun `a finished run's outcome line is added to the final notification`() {
+        val c = SequenceNotificationText.of("Panorama", progress(state = SequenceState.Done, done = 12, total = 12), outcome = "Saved 12 photos to Pictures/Sidereal/Panorama_x")
+        assertEquals("Panorama finished", c.title)
+        assertTrue(c.text, c.text.contains("12/12"))
+        assertTrue(c.text, c.text.contains("Saved 12 photos"))
+    }
 }

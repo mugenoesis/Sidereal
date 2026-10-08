@@ -1,5 +1,8 @@
 package io.github.mugenoesis.sidereal.sequence
 
+import io.github.mugenoesis.sidereal.series.AfterRunProgress
+import io.github.mugenoesis.sidereal.series.PostRun
+import io.github.mugenoesis.sidereal.series.RunSummary
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -17,13 +20,17 @@ import kotlinx.coroutines.launch
  * @param contextProvider live camera/gimbal facts, or null when the Osmo isn't ready
  * @param prepare runs once before the first step (e.g. switch the camera to photo mode)
  * @param precondition returns a reason the sequence must not start right now (e.g. "stop recording first"), or null
+ * @param postRun brings the photos in and stitches / encodes them after a run that finished; the sequence stays
+ *   "running" (shutter locked) until it is done, because the camera is in playback mode meanwhile
  */
 class SequenceController(
     private val scope: CoroutineScope,
     private val hostFactory: (onPrompt: suspend (String) -> Unit) -> SequenceHost,
     private val contextProvider: () -> ShootContext?,
     private val prepare: suspend () -> Unit = {},
-    private val precondition: () -> String? = { null }
+    private val precondition: () -> String? = { null },
+    private val postRun: PostRun? = null,
+    private val wallClock: () -> Long = System::currentTimeMillis
 ) {
     private val _settings = MutableStateFlow(SequenceSettings())
     val settings: StateFlow<SequenceSettings> = _settings
@@ -41,6 +48,10 @@ class SequenceController(
     /** Why the last start didn't happen or the last run failed; cleared by the next start. */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
+
+    /** Set while the photos are being downloaded / stitched / encoded after a run. */
+    private val _afterRun = MutableStateFlow<AfterRunProgress?>(null)
+    val afterRun: StateFlow<AfterRunProgress?> = _afterRun
 
     private var job: Job? = null
     private var promptGate: CompletableDeferred<Unit>? = null
@@ -73,6 +84,8 @@ class SequenceController(
             is PlanResult.Ok -> result.plan
         }
 
+        val series = plan.series
+        val startedAtMs = wallClock()
         val host = hostFactory { text -> awaitPrompt(text) }
         val runner = SequenceRunner(host)
         runner.onProgress = { _progress.value = it }
@@ -82,7 +95,18 @@ class SequenceController(
             try {
                 prepare()
                 runner.run(plan.steps)
-                (runner.progress.value.state as? SequenceState.Failed)?.let { _message.value = it.reason }
+                val finished = runner.progress.value
+                (finished.state as? SequenceState.Failed)?.let { _message.value = it.reason }
+                val post = postRun
+                if (post != null && series.needsDownload && finished.state is SequenceState.Done && finished.capturesDone > 0) {
+                    val summary = RunSummary(startedAtMs, wallClock() - startedAtMs, finished.capturesDone, plan.captures)
+                    try {
+                        _afterRun.value = AfterRunProgress("Preparing", 0, 0)
+                        _message.value = post.run(series, summary) { _afterRun.value = it }
+                    } finally {
+                        _afterRun.value = null
+                    }
+                }
             } finally {
                 (host as? AutoCloseable)?.close()
                 _prompt.value = null

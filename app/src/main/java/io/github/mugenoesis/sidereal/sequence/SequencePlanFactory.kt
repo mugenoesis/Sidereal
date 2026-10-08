@@ -1,5 +1,9 @@
 package io.github.mugenoesis.sidereal.sequence
 
+import io.github.mugenoesis.sidereal.series.PanoramaLayout
+import io.github.mugenoesis.sidereal.series.SeriesNaming
+import io.github.mugenoesis.sidereal.series.SeriesPlan
+
 /** Live facts about the camera and gimbal that a plan depends on, gathered by the caller at the moment Start is pressed. */
 data class ShootContext(
     /** Shutter-open time right now, or null if unknown (AUTO). */
@@ -21,7 +25,9 @@ data class BuiltPlan(
     val captures: Int,
     val estimatedMs: Long,
     val summary: String,
-    val warnings: List<String>
+    val warnings: List<String>,
+    /** What happens to the photos afterwards (download, stitch, video) and how to label them. */
+    val series: SeriesPlan
 )
 
 sealed class PlanResult {
@@ -70,6 +76,8 @@ object SequencePlanFactory {
         return try {
             val steps: List<SequenceStep>
             var clipNote = ""
+            var tags: List<String>? = null
+            var panorama: PanoramaLayout? = null
             when (settings.mode) {
                 SequenceMode.INTERVALOMETER -> {
                     val config = IntervalConfig(
@@ -131,24 +139,70 @@ object SequencePlanFactory {
                     )
                     steps = plan.steps
                     clipNote = " · ${plan.rows}×${plan.cols} grid"
+                    val shots = settings.shotsPerNode
+                    tags = plan.nodes.flatMap { node -> (0 until shots).map { SeriesNaming.panoTag(node.row, node.col, it, shots) } }
+                    panorama = PanoramaLayout(plan.nodes.flatMap { node -> List(shots) { node } }, shots, hFov, vFov)
                 }
                 SequenceMode.DARKS -> steps = CalibrationPlanner.darks(settings.calFrames, exposureMs)
                 SequenceMode.BIAS -> steps = CalibrationPlanner.bias(settings.calFrames, context.shutterName)
                 SequenceMode.FLATS -> steps = CalibrationPlanner.flats(settings.calFrames, exposureMs)
             }
             val captures = steps.count { it is SequenceStep.Capture }
+            val series = SeriesPlan(
+                mode = settings.mode,
+                tags = tags ?: defaultTags(settings.mode, captures),
+                keepFrames = settings.keepsFrames(),
+                stitch = settings.mode == SequenceMode.PANORAMA && settings.stitch,
+                makeVideo = settings.mode == SequenceMode.TIMELAPSE && settings.makeVideo,
+                fps = settings.fps,
+                panorama = panorama
+            )
             val estimated = SequenceEstimate.durationMs(steps)
+            downloadWarning(series)?.let { warnings += it }
             PlanResult.Ok(
                 BuiltPlan(
                     steps = steps,
                     captures = captures,
                     estimatedMs = estimated,
-                    summary = "$captures frames · ${TimelapseMath.format(estimated)}$clipNote",
-                    warnings = warnings
+                    summary = "$captures frames · ${TimelapseMath.format(estimated)}$clipNote${afterNote(series)}",
+                    warnings = warnings,
+                    series = series
                 )
             )
         } catch (e: IllegalArgumentException) {
             PlanResult.Error(e.message ?: "Invalid settings")
+        }
+    }
+
+    /** Roughly how long one photo takes to come across the camera's WiFi, from real downloads of the X5's ~7 MB JPEGs. */
+    private const val DOWNLOAD_MS_PER_PHOTO = 3_500L
+
+    /** " · then save, stitch (+4m download)": what happens to the photos after the run, and what it costs in time. */
+    private fun afterNote(series: SeriesPlan): String {
+        if (!series.needsDownload) return ""
+        val steps = ArrayList<String>()
+        if (series.keepFrames) steps += "save"
+        if (series.stitch) steps += "stitch"
+        if (series.makeVideo) steps += "video"
+        val download = TimelapseMath.format(series.tags.size * DOWNLOAD_MS_PER_PHOTO)
+        return " · then ${steps.joinToString(", ")} (+$download download)"
+    }
+
+    private const val LONG_DOWNLOAD_MS = 30 * 60_000L
+
+    /** A heads-up when bringing the photos in will take a long time, with the options that cause it. */
+    private fun downloadWarning(series: SeriesPlan): String? {
+        if (!series.needsDownload) return null
+        val ms = series.tags.size * DOWNLOAD_MS_PER_PHOTO
+        if (ms < LONG_DOWNLOAD_MS) return null
+        val options = if (series.mode == SequenceMode.TIMELAPSE) "Make video and Save frames" else "Save photos and Stitch"
+        return "Downloading the photos afterwards will take about ${TimelapseMath.format(ms)} - turn off $options to leave them on the camera's card"
+    }
+
+    private fun defaultTags(mode: SequenceMode, captures: Int): List<String> = (1..captures).map {
+        when (mode) {
+            SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS -> SeriesNaming.calibrationTag(mode, it, captures)
+            else -> SeriesNaming.frameTag(it, captures)
         }
     }
 

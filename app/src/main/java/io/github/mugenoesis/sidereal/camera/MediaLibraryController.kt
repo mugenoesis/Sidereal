@@ -193,6 +193,36 @@ class MediaLibraryController {
     private suspend fun downloadOne(context: Context, mediaFile: MediaFile) {
         val fileName = mediaFile.fileName
         updateProgress(fileName, DownloadStatus.DOWNLOADING, 0, mediaFile.fileSize)
+
+        val tempFile = fetchToCache(context, mediaFile) { current, total ->
+            updateProgress(fileName, DownloadStatus.DOWNLOADING, current, total)
+        }
+
+        if (tempFile == null) {
+            updateProgress(fileName, DownloadStatus.FAILED, 0, mediaFile.fileSize)
+            if (!cancelRequested) _errorEvents.tryEmit("Download failed: $fileName")
+            return
+        }
+
+        val saved = try {
+            saveToMediaStore(context, tempFile, fileName, mediaFile.mediaType.name)
+        } catch (e: Exception) {
+            Log.w(TAG, "saveToMediaStore($fileName) failed: ${e.message}")
+            false
+        } finally {
+            tempFile.delete()
+        }
+
+        updateProgress(fileName, if (saved) DownloadStatus.DONE else DownloadStatus.FAILED, mediaFile.fileSize, mediaFile.fileSize)
+        if (!saved) _errorEvents.tryEmit("Couldn't save $fileName to gallery")
+    }
+
+    /**
+     * Downloads [mediaFile] into the app's cache directory and returns that file, or null if the transfer failed.
+     * The caller owns (and must delete) the file.
+     */
+    suspend fun fetchToCache(context: Context, mediaFile: MediaFile, onProgress: ((current: Long, total: Long) -> Unit)? = null): File? {
+        val fileName = mediaFile.fileName
         currentlyDownloading = mediaFile
 
         // See MediaFileNaming's doc comment - fetchFileData appends the
@@ -202,6 +232,7 @@ class MediaLibraryController {
         // the file either.)
         val destFileName = MediaFileNaming.downloadDestBaseName(fileName)
         val tempFile = File(context.cacheDir, MediaFileNaming.expectedDownloadedFileName(fileName))
+        tempFile.delete()
         var resultPath: String? = null
         val success = suspendCancellableCoroutine<Boolean> { cont ->
             mediaFile.fetchFileData(context.cacheDir, destFileName, object : DownloadListener<String> {
@@ -212,7 +243,7 @@ class MediaLibraryController {
                 override fun onRealtimeDataUpdate(bytes: ByteArray?, position: Long, isLast: Boolean) {}
 
                 override fun onProgress(total: Long, current: Long) {
-                    updateProgress(fileName, DownloadStatus.DOWNLOADING, current, total)
+                    onProgress?.invoke(current, total)
                 }
 
                 override fun onSuccess(result: String?) {
@@ -230,23 +261,10 @@ class MediaLibraryController {
         currentlyDownloading = null
 
         if (!success || !tempFile.exists()) {
-            Log.w(TAG, "downloadOne($fileName): success=$success resultPath=$resultPath tempFile=${tempFile.absolutePath} exists=${tempFile.exists()}")
-            updateProgress(fileName, DownloadStatus.FAILED, 0, mediaFile.fileSize)
-            if (!cancelRequested) _errorEvents.tryEmit("Download failed: $fileName")
-            return
+            Log.w(TAG, "fetchToCache($fileName): success=$success resultPath=$resultPath tempFile=${tempFile.absolutePath} exists=${tempFile.exists()}")
+            return null
         }
-
-        val saved = try {
-            saveToMediaStore(context, tempFile, fileName, mediaFile.mediaType)
-        } catch (e: Exception) {
-            Log.w(TAG, "saveToMediaStore($fileName) failed: ${e.message}")
-            false
-        } finally {
-            tempFile.delete()
-        }
-
-        updateProgress(fileName, if (saved) DownloadStatus.DONE else DownloadStatus.FAILED, mediaFile.fileSize, mediaFile.fileSize)
-        if (!saved) _errorEvents.tryEmit("Couldn't save $fileName to gallery")
+        return tempFile
     }
 
     private fun updateProgress(fileName: String, status: DownloadStatus, bytes: Long, total: Long) {
@@ -303,18 +321,21 @@ class MediaLibraryController {
         null
     }
 
-    private fun saveToMediaStore(context: Context, source: File, displayName: String, mediaType: MediaFile.MediaType): Boolean {
-        val isVideo = MediaTypeFilter.isVideo(mediaType.name)
-        val mimeType = MediaTypeFilter.mimeTypeFor(mediaType.name)
+    /**
+     * Copies [source] into the phone's gallery as [displayName]. [subFolder] puts it in its own folder under
+     * Pictures/Sidereal (or Movies/Sidereal) - Android 10 and newer only; older versions have no folder control, so
+     * the file name alone has to say what series it belongs to.
+     */
+    fun saveToMediaStore(context: Context, source: File, displayName: String, mediaTypeName: String, subFolder: String? = null): Boolean {
+        val isVideo = MediaTypeFilter.isVideo(mediaTypeName)
+        val mimeType = MediaTypeFilter.mimeTypeFor(mediaTypeName)
         val collection = collectionFor(isVideo)
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    if (isVideo) "${Environment.DIRECTORY_MOVIES}/Sidereal" else "${Environment.DIRECTORY_PICTURES}/Sidereal"
-                )
+                val root = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES
+                put(MediaStore.MediaColumns.RELATIVE_PATH, if (subFolder == null) "$root/Sidereal" else "$root/Sidereal/$subFolder")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
         }

@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - photos on the phone: download, stitch, timelapse video
+
+### New
+- After a sequence finishes, its photos can be brought onto the phone automatically into their own folder
+  (`Pictures/Sidereal/<Mode>_<date>_<time>/`). Every file is named with its place in the series ahead of the camera's
+  own name - `Panorama_2026-10-08_0131_r2c3_DJI_0398.JPG`, `Timelapse_..._f0042_...`, `Darks_..._dark007_...` - and a
+  RAW and its JPEG get the same label. New *Save photos* option per mode; on by default except for timelapse.
+- Panorama stitching on the phone (*Stitch*, on by default): placed by the gimbal's angles, refined by matching details
+  between frames, blended, cropped, and saved next to the frames.
+- Timelapse video (*Make video*, off by default): frames are encoded into an H.264 MP4 as they download, saved to
+  `Movies/Sidereal/<series>/`.
+- The plan summary says what will happen afterwards and roughly how long the download adds.
+- Progress for the download, stitching and encoding shows in the tray, the banner and the notification.
+- A warning appears in the tray when the download afterwards would take over half an hour, naming the options to turn off.
 
 ### Fixed
 - The on-camera media browser lists the newest files first instead of oldest first.
