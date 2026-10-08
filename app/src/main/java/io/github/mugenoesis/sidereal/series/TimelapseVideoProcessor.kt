@@ -3,6 +3,7 @@ package io.github.mugenoesis.sidereal.series
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -89,27 +90,39 @@ class TimelapseVideoProcessor(
         require(bounds.outWidth > 0 && bounds.outHeight > 0) { "can't read the first frame" }
 
         var lastError: Exception? = null
-        for ((maxW, maxH) in LADDER) {
+        sizes@ for ((maxW, maxH) in LADDER) {
             val (w, h) = VideoMath.outputSize(bounds.outWidth, bounds.outHeight, maxW, maxH)
-            val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
-                setInteger(MediaFormat.KEY_BIT_RATE, VideoMath.bitrate(w, h, fps))
-                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            }
-            val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findEncoderForFormat(format) ?: continue
-            try {
-                val encoder = MediaCodec.createByCodecName(name)
-                encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                encoder.start()
-                codec = encoder
-                width = w
-                height = h
-                Log.i(TAG, "encoding ${w}x$h @ $fps fps with $name")
-                break
-            } catch (e: Exception) {
-                lastError = e
-                Log.w(TAG, "$name can't do ${w}x$h: ${e.message}")
+            // High profile compresses noticeably better than Baseline at the same rate; fall back if the encoder won't.
+            for (profile in listOf(MediaCodecInfo.CodecProfileLevel.AVCProfileHigh, null)) {
+                val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
+                    setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+                    setInteger(MediaFormat.KEY_BIT_RATE, VideoMath.bitrate(w, h, fps))
+                    setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+                    if (profile != null) {
+                        setInteger(MediaFormat.KEY_PROFILE, profile)
+                        if (Build.VERSION.SDK_INT >= 23) setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel51)
+                    }
+                }
+                val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findEncoderForFormat(format) ?: continue
+                try {
+                    val encoder = MediaCodec.createByCodecName(name)
+                    try {
+                        encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                        encoder.start()
+                    } catch (e: Exception) {
+                        encoder.release()
+                        throw e
+                    }
+                    codec = encoder
+                    width = w
+                    height = h
+                    Log.i(TAG, "encoding ${w}x$h @ $fps fps with $name (${if (profile != null) "High" else "default"} profile)")
+                    break@sizes
+                } catch (e: Exception) {
+                    lastError = e
+                    Log.w(TAG, "$name can't do ${w}x$h profile=$profile: ${e.message}")
+                }
             }
         }
         if (codec == null) throw IllegalStateException(lastError?.message ?: "this phone has no H.264 encoder for the size")

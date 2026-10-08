@@ -73,7 +73,7 @@ class PanoramaProcessor(
             hFov = PanoramaAligner.effectiveFov(hFov, aligned.fovScale)
             vFov = PanoramaAligner.effectiveFov(vFov, aligned.fovScale)
         } else {
-            Log.i(TAG, "not enough to align on (${aligned?.matchCount} matches), using the gimbal angles")
+            Log.i(TAG, "not aligning (${aligned?.matchCount} matches, rms ${aligned?.rmsDegBefore} -> ${aligned?.rmsDegAfter} deg, fov x${aligned?.fovScale}), using the gimbal angles")
         }
         val nativePpd = (bounds.outWidth / 2.0) / tan(hFov / 2 * PI / 180) * PI / 180
 
