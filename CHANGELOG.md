@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 - media list order
 
 ### Fixed
 - The on-camera media browser lists the newest files first instead of oldest first.
