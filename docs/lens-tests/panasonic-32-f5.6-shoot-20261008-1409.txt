@@ -1,0 +1,14 @@
+ SHOOTPROBE panasonic-32-f5.6 setAperture(F_5_DOT_6) -> null
+ SHOOTPROBE panasonic-32-f5.6 setup ringMax=3830 ring=2063 aperture=F_5_DOT_6 shutter=SHUTTER_SPEED_1_60 iso=ISO_800 focusMode=MANUAL focusStatus=IDLE shootEnabled=true
+ SHOOTPROBE panasonic-32-f5.6 shot1 command at +249ms -> accepted
+ SHOOTPROBE panasonic-32-f5.6 shot1 +249ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-f5.6 shot1 +249ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f5.6 shot1 +1987ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-f5.6 shot1 +3108ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-f5.6 shot1 RESULT done in 3109ms
+ SHOOTPROBE panasonic-32-f5.6 shot2 command at +236ms -> accepted
+ SHOOTPROBE panasonic-32-f5.6 shot2 +236ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-f5.6 shot2 +236ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-f5.6 shot2 +1260ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-f5.6 shot2 +2479ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-f5.6 shot2 RESULT done in 2479ms

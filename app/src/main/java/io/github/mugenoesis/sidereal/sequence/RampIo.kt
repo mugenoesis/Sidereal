@@ -14,6 +14,13 @@ class RampIo(
     val refreshRanges: () -> Unit = {},
     /** The lens' current aperture enum name, if the camera reports one. */
     val currentAperture: () -> String? = { null },
+    /**
+     * The widest aperture (smallest f-number) the lens can do at EVERY zoom position, or null when the lens is not
+     * identified. The camera will accept an aperture the lens cannot make (f/4 on a zoom that only opens to f/5.6 at
+     * its long end), and then the next shot never finishes, so the ramp only goes as wide as this and, with null,
+     * leaves the aperture alone.
+     */
+    val apertureLimitF: () -> Float? = { null },
     /** The aperture enum names the app knows, in any order. */
     val apertureNames: () -> List<String> = { emptyList() },
     /** Sets the lens aperture; calls back with null on success or the reason it failed. */

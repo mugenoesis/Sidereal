@@ -160,7 +160,11 @@ class RealSequenceHost(
     /** Opens the lens to its widest aperture; returns the light gained in stops (0 if it was already wide or could not be set). */
     private suspend fun openApertureWide(io: RampIo): Double {
         val before = io.currentAperture() ?: return 0.0
-        for (candidate in ApertureMath.widestFirst(io.apertureNames()).take(APERTURE_ATTEMPTS)) {
+        val limit = io.apertureLimitF() ?: run {
+            Log.i(TAG, "beginRamp: lens not identified, leaving the aperture at $before")
+            return 0.0
+        }
+        for (candidate in ApertureMath.atOrNarrowerThan(io.apertureNames(), limit).take(APERTURE_ATTEMPTS)) {
             val gained = ApertureMath.stopsGained(before, candidate) ?: continue
             if (gained <= 0.05) return 0.0 // already at least this wide
             val error = suspendCancellableCoroutine<String?> { cont -> io.setAperture(candidate) { if (cont.isActive) cont.resume(it) } }

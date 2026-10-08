@@ -1,0 +1,7 @@
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 setup ringMax=3837 ring=2070 aperture=F_11 shutter=SHUTTER_SPEED_2 iso=ISO_200 focusMode=MANUAL focusStatus=IDLE shootEnabled=true
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 shot1 command at +245ms -> accepted
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 shot1 +245ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 shot1 +246ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 shot1 +2688ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 shot1 +3804ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-SHUTTER_SPEED_2 shot1 RESULT done in 3804ms

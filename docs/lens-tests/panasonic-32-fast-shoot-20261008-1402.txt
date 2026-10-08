@@ -1,0 +1,19 @@
+ SHOOTPROBE panasonic-32-fast setup ringMax=3837 ring=2070 aperture=F_11 shutter=SHUTTER_SPEED_1_60 iso=ISO_800 focusMode=MANUAL focusStatus=IDLE shootEnabled=true
+ SHOOTPROBE panasonic-32-fast shot1 command at +249ms -> accepted
+ SHOOTPROBE panasonic-32-fast shot1 +249ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-fast shot1 +249ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-fast shot1 +1374ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-fast shot1 +2188ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-fast shot1 RESULT done in 2188ms
+ SHOOTPROBE panasonic-32-fast shot2 command at +264ms -> accepted
+ SHOOTPROBE panasonic-32-fast shot2 +265ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-fast shot2 +265ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-fast shot2 +1285ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-fast shot2 +1996ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-fast shot2 RESULT done in 1996ms
+ SHOOTPROBE panasonic-32-fast shot3 command at +244ms -> accepted
+ SHOOTPROBE panasonic-32-fast shot3 +244ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-fast shot3 +244ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-fast shot3 +1268ms shooting=false storing=true
+ SHOOTPROBE panasonic-32-fast shot3 +1881ms shooting=false storing=false
+ SHOOTPROBE panasonic-32-fast shot3 RESULT done in 1881ms

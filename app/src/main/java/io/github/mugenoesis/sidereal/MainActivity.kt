@@ -614,6 +614,7 @@ class MainActivity : AppCompatActivity() {
                 refreshRanges = { exposureController.refreshKeyBasedEvTelemetry() },
                 currentAperture = { exposureController.readout.value?.getAperture()?.name },
                 apertureNames = { SettingsDefinitions.Aperture.values().map { it.name } },
+                apertureLimitF = { lensApertureLimitF() },
                 setAperture = { name, done -> exposureController.setApertureByNameForRamp(name, done) },
                 shutterOptions = {
                     exposureController.shutterRange.value.orEmpty().mapNotNull { s ->
@@ -1203,8 +1204,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** The widest aperture the lens can do at every zoom position, if the lens is identified (see RampIo.apertureLimitF). */
+    private fun lensApertureLimitF(): Float? =
+        lensController.info.value?.takeIf { !it.isUnidentified && it.maxApertureF != null }?.let { it.apertureAtLongEndF ?: it.maxApertureF }
+
     private fun stepAperture(delta: Int) {
-        val values = apertureStepValues
+        // The camera accepts an aperture the lens cannot make (f/4 at 32 mm on a 12-32 f/3.5-5.6), and then the next shot
+        // never finishes: offer only what the lens can really do.
+        val limit = lensApertureLimitF()
+        val values = if (limit == null) apertureStepValues else {
+            val allowed = io.github.mugenoesis.sidereal.sequence.ApertureMath.atOrNarrowerThan(apertureStepValues.map { it.name }, limit).toSet()
+            apertureStepValues.filter { it.name in allowed }.toTypedArray().ifEmpty { apertureStepValues }
+        }
         val current = selectedAperture ?: exposureController.readout.value?.getAperture() ?: values[0]
         val next = step(current, delta, values)
         selectedAperture = next

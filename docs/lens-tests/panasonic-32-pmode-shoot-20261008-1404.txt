@@ -1,0 +1,13 @@
+ SHOOTPROBE panasonic-32-pmode setup ringMax=3837 ring=2070 aperture=F_4 shutter=SHUTTER_SPEED_1_2 iso=ISO_200 focusMode=AUTO focusStatus=IDLE shootEnabled=true
+ SHOOTPROBE panasonic-32-pmode shot1 command at +240ms -> accepted
+ SHOOTPROBE panasonic-32-pmode shot1 +240ms shooting=true storing=true
+ SHOOTPROBE panasonic-32-pmode shot1 +240ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +5321ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +10396ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +15470ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +20543ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +25615ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +30684ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +35762ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 +40834ms keys: shootEnabled=false focusStatus=IDLE sdBusy=false
+ SHOOTPROBE panasonic-32-pmode shot1 RESULT STUCK after 45s (shooting=true storing=true)

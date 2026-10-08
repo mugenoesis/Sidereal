@@ -316,6 +316,7 @@ object DebugScenarios {
                     callback<String?> { RealCameraGateway.setIso(args["iso"] ?: "ISO_800") { e -> it(e) } }
                     callback<String?> { RealCameraGateway.setShutterSpeed(args["shutter"]!!) { e -> it(e) } }
                 }
+                args["aperture"]?.let { ap -> Log.i(TAG, "SHOOTPROBE $tag setAperture($ap) -> ${callback<String?> { RealCameraGateway.setAperture(ap) { e -> it(e) } }}"); delay(1000) }
                 if (args["focus"] == "manual") {
                     callback<String?> { RealCameraGateway.setFocusMode("MANUAL") { e -> it(e) } }
                 }
