@@ -56,6 +56,11 @@ partly done in the stitcher); remember the last value per lens; or measure it fr
 known angle and seeing how far the picture moves. This session decides which is worth building: the dumps tell us if a
 live source exists, the EXIF lines tell us how accurate the lens' own number is.
 
+**Status (2026-10-08).** Done on the Panasonic: stowed, 12, 18 and 32 mm (the 14 and 25 marks were only used to read the
+ring limit and the program-mode aperture). Everything found is written up in
+[lens-tests/panasonic-12-32-findings.md](lens-tests/panasonic-12-32-findings.md). Not done: face tracking at 32 mm, a
+panorama at 12 and 32 mm, a panorama with the focal length left on *Auto* and the zoom not entered.
+
 What good looks like at the end: the lens is reported by name with "12-32mm"; f/3.5 accepted at 12 mm and about f/5.6 at
 32 mm; the EXIF focal length is close to each mark; panoramas stitch without gaps with *Focal length* set to the mark, and
 the stitcher corrects itself when left on *Auto*; autofocus locks within about 10 s at 12, 18 and 32 mm.
