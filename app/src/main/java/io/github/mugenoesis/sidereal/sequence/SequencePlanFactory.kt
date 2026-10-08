@@ -1,5 +1,9 @@
 package io.github.mugenoesis.sidereal.sequence
 
+import io.github.mugenoesis.sidereal.series.PanoramaLayout
+import io.github.mugenoesis.sidereal.series.SeriesNaming
+import io.github.mugenoesis.sidereal.series.SeriesPlan
+
 /** Live facts about the camera and gimbal that a plan depends on, gathered by the caller at the moment Start is pressed. */
 data class ShootContext(
     /** Shutter-open time right now, or null if unknown (AUTO). */
@@ -21,7 +25,9 @@ data class BuiltPlan(
     val captures: Int,
     val estimatedMs: Long,
     val summary: String,
-    val warnings: List<String>
+    val warnings: List<String>,
+    /** What happens to the photos afterwards (download, stitch, video) and how to label them. */
+    val series: SeriesPlan
 )
 
 sealed class PlanResult {
@@ -70,6 +76,8 @@ object SequencePlanFactory {
         return try {
             val steps: List<SequenceStep>
             var clipNote = ""
+            var tags: List<String>? = null
+            var panorama: PanoramaLayout? = null
             when (settings.mode) {
                 SequenceMode.INTERVALOMETER -> {
                     val config = IntervalConfig(
@@ -131,12 +139,24 @@ object SequencePlanFactory {
                     )
                     steps = plan.steps
                     clipNote = " · ${plan.rows}×${plan.cols} grid"
+                    val shots = settings.shotsPerNode
+                    tags = plan.nodes.flatMap { node -> (0 until shots).map { SeriesNaming.panoTag(node.row, node.col, it, shots) } }
+                    panorama = PanoramaLayout(plan.nodes.flatMap { node -> List(shots) { node } }, shots, hFov, vFov)
                 }
                 SequenceMode.DARKS -> steps = CalibrationPlanner.darks(settings.calFrames, exposureMs)
                 SequenceMode.BIAS -> steps = CalibrationPlanner.bias(settings.calFrames, context.shutterName)
                 SequenceMode.FLATS -> steps = CalibrationPlanner.flats(settings.calFrames, exposureMs)
             }
             val captures = steps.count { it is SequenceStep.Capture }
+            val series = SeriesPlan(
+                mode = settings.mode,
+                tags = tags ?: defaultTags(settings.mode, captures),
+                keepFrames = settings.keepsFrames(),
+                stitch = settings.mode == SequenceMode.PANORAMA && settings.stitch,
+                makeVideo = settings.mode == SequenceMode.TIMELAPSE && settings.makeVideo,
+                fps = settings.fps,
+                panorama = panorama
+            )
             val estimated = SequenceEstimate.durationMs(steps)
             PlanResult.Ok(
                 BuiltPlan(
@@ -144,11 +164,19 @@ object SequencePlanFactory {
                     captures = captures,
                     estimatedMs = estimated,
                     summary = "$captures frames · ${TimelapseMath.format(estimated)}$clipNote",
-                    warnings = warnings
+                    warnings = warnings,
+                    series = series
                 )
             )
         } catch (e: IllegalArgumentException) {
             PlanResult.Error(e.message ?: "Invalid settings")
+        }
+    }
+
+    private fun defaultTags(mode: SequenceMode, captures: Int): List<String> = (1..captures).map {
+        when (mode) {
+            SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS -> SeriesNaming.calibrationTag(mode, it, captures)
+            else -> SeriesNaming.frameTag(it, captures)
         }
     }
 

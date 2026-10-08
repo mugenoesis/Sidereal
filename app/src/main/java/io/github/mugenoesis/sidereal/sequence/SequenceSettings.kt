@@ -42,7 +42,15 @@ data class SequenceSettings(
     val ramp: Boolean = false,
     /** How much of the scene's darkening is kept in the frames, percent (0 = night as bright as day, 100 = fixed exposure). */
     val keepDarkPct: Int = 50,
-    val maxIso: Int = 3200
+    val maxIso: Int = 3200,
+    /** Download the run's photos into a labelled folder on the phone (every mode but timelapse, which is off by default - it is a lot of data). */
+    val saveFrames: Boolean = true,
+    /** Timelapse's own "download the frames": off unless asked, because hundreds of full-size photos take a long time. */
+    val saveTimelapseFrames: Boolean = false,
+    /** Join the panorama's frames into one picture on the phone. */
+    val stitch: Boolean = true,
+    /** Encode the timelapse's frames into a video on the phone. */
+    val makeVideo: Boolean = false
 ) {
     companion object {
         private val FRAMES = listOf(1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500, 1000)
@@ -78,7 +86,7 @@ data class SequenceSettings(
     }
 
     fun fields(): List<FieldSpec> = when (mode) {
-        SequenceMode.INTERVALOMETER -> listOf(framesField(), intervalField(), settleField(), toggle("dither", "Dither", dither))
+        SequenceMode.INTERVALOMETER -> listOf(framesField(), intervalField(), settleField(), toggle("dither", "Dither", dither), toggle("saveFrames", "Save to phone", saveFrames))
         SequenceMode.TIMELAPSE -> listOf(
             FieldSpec("durationMin", "Duration", formatMinutes(durationMin)),
             intervalField(),
@@ -86,18 +94,24 @@ data class SequenceSettings(
             settleField(),
             toggle("motion", "A→B move", motion),
             toggle("ramp", "Day→night ramp", ramp)
-        ) + if (ramp) listOf(
+        ) + (if (ramp) listOf(
             FieldSpec("keepDarkPct", "Keep darkness", "$keepDarkPct%"),
             FieldSpec("maxIso", "Max ISO", "ISO $maxIso")
-        ) else emptyList()
+        ) else emptyList()) + listOf(
+            toggle("saveTimelapseFrames", "Save frames", saveTimelapseFrames),
+            toggle("makeVideo", "Make video", makeVideo)
+        )
         SequenceMode.PANORAMA -> listOf(
             FieldSpec("yawSpanDeg", "Yaw span", "$yawSpanDeg°"),
             FieldSpec("pitchSpanDeg", "Pitch span", "$pitchSpanDeg°"),
             FieldSpec("overlapPct", "Overlap", "$overlapPct%"),
             FieldSpec("shotsPerNode", "Shots/frame", "$shotsPerNode"),
-            settleField()
+            settleField(),
+            toggle("saveFrames", "Save frames", saveFrames),
+            toggle("stitch", "Stitch", stitch)
         )
-        SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS -> listOf(FieldSpec("calFrames", "Frames", "$calFrames"))
+        SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS ->
+            listOf(FieldSpec("calFrames", "Frames", "$calFrames"), toggle("saveFrames", "Save to phone", saveFrames))
     }
 
     private fun framesField() = FieldSpec("frames", "Frames", "$frames")
@@ -122,6 +136,18 @@ data class SequenceSettings(
         "ramp" -> copy(ramp = !ramp)
         "keepDarkPct" -> copy(keepDarkPct = step(KEEP_DARK_PCT, keepDarkPct, direction))
         "maxIso" -> copy(maxIso = step(MAX_ISO, maxIso, direction))
+        "saveFrames" -> copy(saveFrames = !saveFrames)
+        "saveTimelapseFrames" -> copy(saveTimelapseFrames = !saveTimelapseFrames)
+        "stitch" -> copy(stitch = !stitch)
+        "makeVideo" -> copy(makeVideo = !makeVideo)
         else -> this
     }
+
+    /** Whether the run's frames stay on the phone as individual photos, per this mode's own option. */
+    fun keepsFrames(): Boolean = if (mode == SequenceMode.TIMELAPSE) saveTimelapseFrames else saveFrames
+
+    /** Whether the photos have to come off the camera after this run: to keep them, or to build a video / panorama from them. */
+    fun downloadsFrames(): Boolean = keepsFrames() ||
+        (mode == SequenceMode.PANORAMA && stitch) ||
+        (mode == SequenceMode.TIMELAPSE && makeVideo)
 }

@@ -45,12 +45,12 @@ class SequenceSettingsTest {
     @Test
     fun `each mode exposes only the fields that mean something for it`() {
         fun ids(mode: SequenceMode) = base.copy(mode = mode).fields().map { it.id }
-        assertEquals(listOf("frames", "intervalSec", "settleMs", "dither"), ids(SequenceMode.INTERVALOMETER))
-        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp"), ids(SequenceMode.TIMELAPSE))
-        assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "shotsPerNode", "settleMs"), ids(SequenceMode.PANORAMA))
-        assertEquals(listOf("calFrames"), ids(SequenceMode.DARKS))
-        assertEquals(listOf("calFrames"), ids(SequenceMode.BIAS))
-        assertEquals(listOf("calFrames"), ids(SequenceMode.FLATS))
+        assertEquals(listOf("frames", "intervalSec", "settleMs", "dither", "saveFrames"), ids(SequenceMode.INTERVALOMETER))
+        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp", "saveTimelapseFrames", "makeVideo"), ids(SequenceMode.TIMELAPSE))
+        assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "shotsPerNode", "settleMs", "saveFrames", "stitch"), ids(SequenceMode.PANORAMA))
+        assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.DARKS))
+        assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.BIAS))
+        assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.FLATS))
     }
 
     @Test
@@ -97,7 +97,7 @@ class SequenceSettingsTest {
     @Test
     fun `the ramp options only appear once the ramp is switched on`() {
         val on = base.copy(mode = SequenceMode.TIMELAPSE, ramp = true)
-        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp", "keepDarkPct", "maxIso"), on.fields().map { it.id })
+        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp", "keepDarkPct", "maxIso", "saveTimelapseFrames", "makeVideo"), on.fields().map { it.id })
         assertTrue(on.fields().first { it.id == "ramp" }.toggle)
     }
 
@@ -111,5 +111,54 @@ class SequenceSettingsTest {
         assertEquals("ISO 3200", on.fields().first { it.id == "maxIso" }.display)
         assertEquals(6400, on.adjust("maxIso", +1).maxIso)
         assertTrue(on.adjust("ramp", +1).ramp.not())
+    }
+
+    @Test
+    fun `saving frames and stitching are on by default, the timelapse video and its frames are off`() {
+        assertTrue(base.saveFrames)
+        assertTrue(base.stitch)
+        assertFalse(base.saveTimelapseFrames)
+        assertFalse(base.makeVideo)
+    }
+
+    @Test
+    fun `the download options are toggles that flip`() {
+        for (id in listOf("saveFrames", "stitch", "saveTimelapseFrames", "makeVideo")) {
+            val before = base.adjust(id, +1)
+            assertTrue("$id should be a toggle field", base.copy(mode = SequenceMode.TIMELAPSE).fields().plus(base.copy(mode = SequenceMode.PANORAMA).fields()).first { it.id == id }.toggle)
+            assertEquals(base, before.adjust(id, +1))
+        }
+    }
+
+    @Test
+    fun `a timelapse needs its frames downloaded only if asked to keep them or make a video`() {
+        val t = base.copy(mode = SequenceMode.TIMELAPSE)
+        assertFalse(t.downloadsFrames())
+        assertTrue(t.copy(saveTimelapseFrames = true).downloadsFrames())
+        assertTrue(t.copy(makeVideo = true).downloadsFrames())
+    }
+
+    @Test
+    fun `a panorama downloads when saving or stitching, and not when both are off`() {
+        val p = base.copy(mode = SequenceMode.PANORAMA)
+        assertTrue(p.downloadsFrames())
+        assertTrue(p.copy(saveFrames = false).downloadsFrames())
+        assertFalse(p.copy(saveFrames = false, stitch = false).downloadsFrames())
+    }
+
+    @Test
+    fun `calibration frames and the intervalometer download only when saving`() {
+        for (mode in listOf(SequenceMode.INTERVALOMETER, SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS)) {
+            assertTrue(base.copy(mode = mode).downloadsFrames())
+            assertFalse(base.copy(mode = mode, saveFrames = false).downloadsFrames())
+        }
+    }
+
+    @Test
+    fun `frames are kept on the phone per the mode's own save option`() {
+        assertTrue(base.copy(mode = SequenceMode.PANORAMA).keepsFrames())
+        assertFalse(base.copy(mode = SequenceMode.PANORAMA, saveFrames = false).keepsFrames())
+        assertFalse(base.copy(mode = SequenceMode.TIMELAPSE).keepsFrames())
+        assertTrue(base.copy(mode = SequenceMode.TIMELAPSE, saveTimelapseFrames = true).keepsFrames())
     }
 }

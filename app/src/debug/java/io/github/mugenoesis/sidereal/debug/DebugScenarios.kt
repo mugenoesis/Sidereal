@@ -229,6 +229,20 @@ object DebugScenarios {
                 }
                 media.exit()
             }
+            "media_times" -> {
+                val media = io.github.mugenoesis.sidereal.camera.MediaLibraryController()
+                media.enterAndLoad()
+                for (i in 1..30) {
+                    delay(1000)
+                    if (media.loadState.value == io.github.mugenoesis.sidereal.camera.MediaLoadState.LOADED) break
+                }
+                Log.i(TAG, "MEDIATIMES phoneNow=${System.currentTimeMillis()}")
+                for (f in media.files.value.take(8)) {
+                    Log.i(TAG, "MEDIATIMES ${f.fileName} type=${f.mediaType.name} timeCreated=${f.timeCreated} date=${f.dateCreated} size=${f.fileSize} index=${f.index}")
+                }
+                Log.i(TAG, "MEDIATIMES total=${media.files.value.size} state=${media.loadState.value}")
+                media.exit()
+            }
             "seq_modes" -> seqModes()
             "set_standard" -> {
                 val target = args["standard"] ?: "PAL"
