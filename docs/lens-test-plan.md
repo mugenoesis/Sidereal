@@ -1,12 +1,13 @@
 # Lens test plan
 
-Sidereal was built and tested with one lens, the **DJI MFT 15mm f/1.7**. Two more are on their way, chosen because
+Sidereal was built and tested with one lens, the **DJI MFT 15mm f/1.7**. Three more are lined up, chosen because
 together they cover most of what the app's lens-dependent features need to handle:
 
 | Lens | Why it is a good test |
 |---|---|
 | **Olympus M.Zuiko 45mm f/1.8** (prime, about 21 x 16 degrees on this sensor) | A long, fast lens. Shallow depth of field means a narrow autofocus peak; a narrow view stresses panorama planning, dither size, stitching and the face tracker's gains. |
 | **Olympus M.Zuiko 14-42mm f/3.5-5.6 EZ** (power zoom, about 60 down to 23 degrees) | A zoom, so the camera cannot say where it is set; and a variable aperture, so the widest aperture changes with the zoom. |
+| **Panasonic Lumix G Vario 12-32mm f/3.5-5.6** (mechanical zoom ring, collapsible, about 73 down to 30 degrees) | **On hand, so it goes first.** A wide zoom with a variable aperture and a plain mechanical zoom ring, so a focal length can be set exactly and held. It is the cheapest way to prove the zoom handling (the zoom warning, the *Focal length* option, the stitcher's EXIF correction) before the Olympus lenses arrive. |
 
 Both are Micro Four Thirds lenses the Zenmuse X5 is expected to support. **Confirm that first** (section 1), because
 the camera, not Sidereal, decides what it will talk to.
@@ -20,6 +21,26 @@ opens to whatever widest aperture the camera accepts. This plan checks those on 
 - **45mm:** the lens is reported as a prime at 45 mm, so everything adapts by itself (*Focal length: Auto*).
 - **14-42mm:** the lens is reported as a zoom (14-42 mm). The panorama options then show a warning and plan for 14 mm
   until you set the *Focal length*; the stitcher then corrects itself from the focal length stored in each photo.
+
+## Session 1: the Panasonic 12-32mm (do this first)
+
+You set the zoom ring; I read the results. Take the zoom to **12 mm, 20 mm and 32 mm** in turn (the ring is marked;
+set it exactly on a mark and leave it there for the whole run at that focal length).
+
+1. Camera **off**; swap the lens. The 12-32 is collapsible: turn the ring out of the locked position to a shooting
+   position, otherwise the camera will not use it. Switch the camera on and open the app.
+2. Tell me the lens is on, and set to 12 mm. I run `tools/lens_test.sh panasonic-12-32-at-12mm` (about four minutes)
+   and read the lens name the camera reports, the apertures it accepts and the autofocus results.
+3. In the panorama options *Focal length* will say *Auto* and a zoom warning should appear (the lens is reported as
+   12-32 mm). Set *Focal length* to 12 mm, and I shoot a panorama and read the stitcher's log.
+4. Repeat 2 and 3 at 20 mm and 32 mm. At 32 mm also try face tracking, and note how it behaves, because the app cannot
+   know the zoom and uses the 15 mm's tracking gains.
+5. Leave *Focal length* on *Auto* for one more panorama at 32 mm: the planned grid will be for 12 mm (too many frames,
+   which is safe) and the stitcher should log that the frames were shot at 32 mm and correct itself.
+
+What good looks like: the camera reports the lens by name with "12-32mm"; f/3.5 accepted at 12 mm and f/5.6 at 32 mm;
+panoramas stitch without gaps at every focal length; the stitcher's `fov` scale stays close to 1.0 at each; and
+autofocus locks within about 10 s at all three.
 
 ## 0. Before you start
 
