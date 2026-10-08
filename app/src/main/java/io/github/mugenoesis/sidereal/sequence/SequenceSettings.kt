@@ -87,28 +87,29 @@ data class SequenceSettings(
 
     fun fields(): List<FieldSpec> = when (mode) {
         SequenceMode.INTERVALOMETER -> listOf(framesField(), intervalField(), settleField(), toggle("dither", "Dither", dither), toggle("saveFrames", "Save photos", saveFrames))
+        // The "what happens to the photos afterwards" options sit near the top: the tray scrolls, and these are the
+        // ones people should not have to hunt for.
         SequenceMode.TIMELAPSE -> listOf(
             FieldSpec("durationMin", "Duration", formatMinutes(durationMin)),
             intervalField(),
             FieldSpec("fps", "Clip fps", "$fps fps"),
+            toggle("makeVideo", "Make video", makeVideo),
+            toggle("saveTimelapseFrames", "Save frames", saveTimelapseFrames),
             settleField(),
             toggle("motion", "A→B move", motion),
             toggle("ramp", "Day→night ramp", ramp)
-        ) + (if (ramp) listOf(
+        ) + if (ramp) listOf(
             FieldSpec("keepDarkPct", "Keep darkness", "$keepDarkPct%"),
             FieldSpec("maxIso", "Max ISO", "ISO $maxIso")
-        ) else emptyList()) + listOf(
-            toggle("saveTimelapseFrames", "Save frames", saveTimelapseFrames),
-            toggle("makeVideo", "Make video", makeVideo)
-        )
+        ) else emptyList()
         SequenceMode.PANORAMA -> listOf(
             FieldSpec("yawSpanDeg", "Yaw span", "$yawSpanDeg°"),
             FieldSpec("pitchSpanDeg", "Pitch span", "$pitchSpanDeg°"),
             FieldSpec("overlapPct", "Overlap", "$overlapPct%"),
-            FieldSpec("shotsPerNode", "Shots/frame", "$shotsPerNode"),
-            settleField(),
+            toggle("stitch", "Stitch", stitch),
             toggle("saveFrames", "Save frames", saveFrames),
-            toggle("stitch", "Stitch", stitch)
+            FieldSpec("shotsPerNode", "Shots/frame", "$shotsPerNode"),
+            settleField()
         )
         SequenceMode.DARKS, SequenceMode.BIAS, SequenceMode.FLATS ->
             listOf(FieldSpec("calFrames", "Frames", "$calFrames"), toggle("saveFrames", "Save photos", saveFrames))

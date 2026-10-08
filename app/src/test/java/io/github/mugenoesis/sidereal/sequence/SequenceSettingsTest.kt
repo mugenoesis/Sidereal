@@ -46,8 +46,8 @@ class SequenceSettingsTest {
     fun `each mode exposes only the fields that mean something for it`() {
         fun ids(mode: SequenceMode) = base.copy(mode = mode).fields().map { it.id }
         assertEquals(listOf("frames", "intervalSec", "settleMs", "dither", "saveFrames"), ids(SequenceMode.INTERVALOMETER))
-        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp", "saveTimelapseFrames", "makeVideo"), ids(SequenceMode.TIMELAPSE))
-        assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "shotsPerNode", "settleMs", "saveFrames", "stitch"), ids(SequenceMode.PANORAMA))
+        assertEquals(listOf("durationMin", "intervalSec", "fps", "makeVideo", "saveTimelapseFrames", "settleMs", "motion", "ramp"), ids(SequenceMode.TIMELAPSE))
+        assertEquals(listOf("yawSpanDeg", "pitchSpanDeg", "overlapPct", "stitch", "saveFrames", "shotsPerNode", "settleMs"), ids(SequenceMode.PANORAMA))
         assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.DARKS))
         assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.BIAS))
         assertEquals(listOf("calFrames", "saveFrames"), ids(SequenceMode.FLATS))
@@ -97,7 +97,7 @@ class SequenceSettingsTest {
     @Test
     fun `the ramp options only appear once the ramp is switched on`() {
         val on = base.copy(mode = SequenceMode.TIMELAPSE, ramp = true)
-        assertEquals(listOf("durationMin", "intervalSec", "fps", "settleMs", "motion", "ramp", "keepDarkPct", "maxIso", "saveTimelapseFrames", "makeVideo"), on.fields().map { it.id })
+        assertEquals(listOf("durationMin", "intervalSec", "fps", "makeVideo", "saveTimelapseFrames", "settleMs", "motion", "ramp", "keepDarkPct", "maxIso"), on.fields().map { it.id })
         assertTrue(on.fields().first { it.id == "ramp" }.toggle)
     }
 

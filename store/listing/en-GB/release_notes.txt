@@ -1,0 +1,1 @@
+First release on Google Play. Manual camera and gimbal control for the DJI Osmo Pro, timelapse with day-to-night ramp, panoramas, photos downloaded and stitched on the phone, timelapse video, and a Wear OS remote.

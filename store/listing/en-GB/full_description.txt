@@ -1,0 +1,36 @@
+Sidereal is a full manual camera and gimbal controller for the DJI Osmo Pro with a Zenmuse X5 camera, over the camera's own WiFi. It is built for people who shoot timelapse, panoramas and night sky, and who want the settings and automation a real camera app should have.
+
+You need the camera: Sidereal controls an Osmo Pro with a Zenmuse X5 and does nothing without one. It is independent software and is not made by, endorsed by or affiliated with DJI. DJI and Osmo are trademarks of DJI.
+
+CAMERA
+• Exposure modes P / A / S / M with ISO, shutter, aperture and EV
+• Focus modes, tap to focus, and a continuous autofocus the camera lacks (locks in about 5-8 seconds in good light), plus a star focus assistant for night sky
+• White balance, metering modes and spot metering, live histogram
+• Photo and video formats, resolution and frame rate, burst and bracketing, self-timer, grid and AE lock
+• Red night display that keeps your eyes dark adapted
+
+GIMBAL
+• Virtual joystick, A to B timed moves, face tracking, and game controller support with remappable buttons
+
+SEQUENCES
+• Intervalometer with dithering, and dark / bias / flat calibration frames
+• Timelapse with an optional day-to-night exposure ramp that follows the light through sunset
+• Matrix panorama that plans the grid for your lens and overlap
+• Long runs keep going with the screen off, and wait out a dropped connection instead of giving up
+
+PHOTOS ON YOUR PHONE
+• When a sequence finishes, its photos can come straight onto the phone into their own folder, named by position in the series (row and column for panoramas, frame number for timelapses), with RAW and JPEG paired
+• Panoramas can be stitched on the phone into one picture, placed from the gimbal angles and refined from the pictures themselves
+• Timelapses can be turned into an MP4 as the frames download
+• Each is an option, and the app tells you roughly how long the download will take before you start
+
+WATCH REMOTE (Wear OS)
+• Live view, shutter, aim the gimbal by dragging, and status on your wrist
+
+ALSO
+• Browse and download from the camera's card, record audio on the phone and sync it to the video, and play camera sounds on the phone
+
+HOW IT CONNECTS
+Switch on the Osmo, join its WiFi from the app, and the live view appears. The first launch needs the internet once, so DJI's software can register the app; after that no internet is needed. The app asks for location only because Android requires it to read the WiFi network name, and for the microphone only if you record audio.
+
+Sidereal is open source and free of ads and tracking. Source and feedback: github.com/mugenoesis/Sidereal

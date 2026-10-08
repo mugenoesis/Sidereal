@@ -52,7 +52,12 @@ class SequenceTrayView @JvmOverloads constructor(
             val limit = (resources.displayMetrics.heightPixels * MAX_FIELDS_HEIGHT_FRACTION).toInt()
             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST))
         }
-    }.apply { isVerticalScrollBarEnabled = true }
+    }.apply {
+        isVerticalScrollBarEnabled = true
+        // Keep the bar showing: with more rows than fit, a bar that fades away hides that there is more below.
+        isScrollbarFadingEnabled = false
+        scrollBarStyle = SCROLLBARS_OUTSIDE_INSET
+    }
 
     init {
         orientation = VERTICAL
@@ -183,7 +188,7 @@ class SequenceTrayView @JvmOverloads constructor(
             row.addView(stepButton("+") { controller?.adjust(id, +1) }, LayoutParams(dp(30), dp(30)))
         }
         return row.also {
-            it.layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) }
+            it.layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(3) }
         }
     }
 
@@ -209,6 +214,6 @@ class SequenceTrayView @JvmOverloads constructor(
 
     private companion object {
         /** Share of the screen height the field rows may take before they scroll. */
-        const val MAX_FIELDS_HEIGHT_FRACTION = 0.5f
+        const val MAX_FIELDS_HEIGHT_FRACTION = 0.56f
     }
 }
