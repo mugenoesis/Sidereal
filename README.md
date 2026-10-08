@@ -26,7 +26,9 @@
 **Camera**
 - Exposure modes P / A / S / M with ISO, shutter, aperture and EV steppers
 - Focus modes, tap-to-focus, and a software continuous-autofocus mode
-  (contrast-detect scan-and-refine search) for lenses that don't support AFC
+  (contrast detection on the live view) for lenses that don't support AFC: a
+  quick climb to the sharpest focus in clean light (low ISO), a scanning
+  search in noisy low light
 - White balance, metering modes, and tap-to-spot-meter
 - Live histogram, with a red marker when the highlights are clipping
 - Camera sounds played on the phone (shutter click, self-timer beeps, record
@@ -44,7 +46,9 @@
 - Day-to-night ("holy grail") timelapse ramp: meters the live histogram
   before each frame and follows the light with shutter first, then ISO, in
   smooth third-stop steps. *Keep darkness* sets how much of the fading light
-  stays in the frames, and *Max ISO* caps the noise
+  stays in the frames, and *Max ISO* caps the noise. It opens the lens to f/1.7
+  when it starts (and shortens the shutter to match) so the night end of the
+  ramp has the full range, and it works however the app was opened
 - After a run, the photos can come off the camera by themselves into a
   folder that says what they are: `Pictures/Sidereal/Panorama_2026-10-08_0131/`
   holds `Panorama_2026-10-08_0131_r2c3_DJI_0398.JPG` and so on, with the
@@ -200,9 +204,13 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 - Sharpness, contrast and saturation range of −3 to +3
 - Live histogram: the camera's 64 luma buckets (video range) are checked
   against screenshots of the preview, and the display follows the exposure
-- Software autofocus: in good light it climbs straight to the sharpest focus
-  and locks in about 5–8 s; in dim light it scans for the peak and takes about
-  6–14 s. It searches again after you pan to a new scene
+- Software autofocus: whenever the picture is clean (ISO up to 6400, which
+  covers bright sun and a dim room in daylight) it climbs straight to the
+  sharpest focus and locks in about 5–8 s, averaging more frames when there is
+  noise; at higher ISO, or if the picture is too noisy to climb, it scans for
+  the peak instead and takes about 6–14 s. It searches again after you pan to
+  a new scene. Checked on the camera in bright sun, a dim room and a dark scene
+  at ISO 3200–12800
 - ISO and shutter readouts follow what the camera is set to
 - Camera sounds: shutter click, self-timer beeps, focus-lock beep and the
   on/off options (checked on the phone)
@@ -211,19 +219,21 @@ MFT 15mm f/1.7 lens. Other lenses haven't been tried yet.
 
 - **Face tracking:** follows a locked face, but it still needs tuning to be
   smooth and accurate.
-- **Day-to-night ramp:** checked on the camera by panning from a bright view
-  to a darker one and back, which it followed in smooth steps. It hasn't seen
-  a real sunset yet.
+- **Day-to-night ramp:** checked on the camera in daylight by panning from a
+  window to a dim room and back, which it followed in smooth steps, and from a
+  lens left at f/8 (it opened to f/1.7 and kept the picture's brightness). It
+  hasn't seen a real sunset yet.
 - **Long-running sequences:** a one-minute run kept shooting with the screen
   off, and the notification, wake lock and WiFi lock were released at the end.
   Runs of several hours, a real WiFi drop and recovery mid-run, and swiping
   the app away from recents haven't been tested. On Android 13 and newer the
   app asks for notification permission the first time you start a sequence.
 - **Software continuous autofocus:** seeds from the camera's own
-  autofocus, scans the lens ring for the sharpness peak, locks, and then
-  leaves the ring alone until the scene changes. It hasn't been tested while
-  recording video or in bright light, and a very blurred start can fall back
-  to a full scan that takes about 14 s.
+  autofocus, finds the sharpness peak (a quick climb in clean light, a scan in
+  noisy low light), locks, and then leaves the ring alone until the scene
+  changes. It hasn't been tested while recording video. At ISO 12800 and above
+  it can still lock off the peak, and in very noisy light a seed that landed
+  on a featureless patch can lock on nothing.
 - **Phone audio recording and sync:** records from the phone's mic or a
   Bluetooth mic alongside the video, and the Audio sync screen lines it up
   and exports a merged MP4. The automatic starting offset is only as good
@@ -293,6 +303,24 @@ app/src/main/java/io/github/mugenoesis/sidereal/
 └── media/      on-camera media library
 ```
 
+Outside the app code: `docs/` holds the privacy policy and `store/` the Google Play listing text, a console guide and
+the script that draws the store graphics from the app icon.
+
+## Privacy and permissions
+
+Sidereal has no accounts, analytics or ads, and nothing you shoot leaves your devices because of it. The
+[privacy policy](docs/privacy-policy.md) has the detail. The permissions it asks for, and why:
+
+- **Location** - only so Android lets it read the name of the WiFi network, to tell whether you are on the Osmo's WiFi.
+- **Nearby devices** - to show the name of a Bluetooth microphone for audio recording.
+- **Microphone** - only when you record audio on the phone.
+- **Notifications** - progress of a long sequence, and when it has finished.
+
+It deliberately asks for no camera, gallery-read, overlay or location-history access. (On Android 9 and older it also
+needs storage access, because those versions have no other way to save to the gallery.) The DJI SDK's own manifest
+requests a few more - drawing over other apps, ending other apps' processes, listing running tasks - which this app
+removes, since none is needed to talk to the Osmo.
+
 ## Support the project
 
 Sidereal is free and I build it in my spare time. The APK is free to download
@@ -302,8 +330,9 @@ development, or you can
 [buy me a coffee on Ko-fi](https://ko-fi.com/mugenoesis) any time. Bug reports
 and ideas are welcome as GitHub issues.
 
-The GitHub and Google Play builds will be signed differently, so to switch
-between them you'll have to uninstall one before installing the other.
+Whether the GitHub and Google Play builds can update each other depends on how
+the Play signing key is set up; until the Play version is out, assume that
+switching between them means uninstalling one first.
 
 ## License
 

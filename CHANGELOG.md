@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Fewer permissions: no camera, gallery-read, draw-over-apps, kill-background-processes or running-tasks permissions
+  (the last three come from the DJI SDK's own manifest and are removed). First start now asks for three permissions
+  instead of five. Checked on a fresh install on the camera: registration, live view, shooting and downloads all work.
+- The download options (*Make video*, *Save frames*, *Stitch*) sit near the top of the sequence tray, and its scrollbar
+  stays visible, so they are not hidden below the fold.
+- If the DJI SDK's first registration fails with "metadata received from server is invalid" (what it says when there is
+  no internet), the app now explains that it needs the internet once, and retries by itself when it is back.
+- Added a privacy policy and the Google Play listing material (`docs/`, `store/`).
+
 ## 0.2.1 - daylight fixes: faster autofocus, day-to-night ramp
 
 ### Improved
