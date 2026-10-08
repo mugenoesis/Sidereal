@@ -334,6 +334,10 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         bindCameraSettingsViews()
         bindSequenceFeature()
+        // Keep the face tracker's gains right for whatever lens is on: they were tuned on the 60 degree wide 15 mm.
+        lensController.info
+            .onEach { faceTrackingController.setLensFocalMm(it?.primeFocalMm) }
+            .launchIn(lifecycleScope)
         bindCameraStatus()
         bindGamepad()
         shootingControls = io.github.mugenoesis.sidereal.camera.ShootingControls(this, mediaFormatController)

@@ -52,6 +52,23 @@ class FaceTrackingController(
     // that's where raw frames actually arrive. This class only consumes
     // results and owns the follow-behavior state machine.
 
+    // Field of view of the lens on the camera, to keep the tracking gains right on lenses other than the 15 mm they were tuned on.
+    private companion object {
+        const val REFERENCE_H_FOV_DEG = 60.0
+        const val REFERENCE_V_FOV_DEG = 46.2
+    }
+
+    @Volatile private var yawGainScale = 1.0
+    @Volatile private var pitchGainScale = 1.0
+
+    /** Call with the lens' focal length (mm) when it is known, or null if not; scales the tracking gains to its field of view. */
+    fun setLensFocalMm(focalMm: Float?) {
+        if (focalMm == null) { yawGainScale = 1.0; pitchGainScale = 1.0; return }
+        val (h, v) = io.github.mugenoesis.sidereal.sequence.PanoramaPlanner.fovFor(focalMm)
+        yawGainScale = FaceTrackingMath.fovGainScale(h.toDouble(), REFERENCE_H_FOV_DEG)
+        pitchGainScale = FaceTrackingMath.fovGainScale(v.toDouble(), REFERENCE_V_FOV_DEG)
+    }
+
     private val _trackingState = MutableStateFlow(TrackingState.DISARMED)
     val trackingState: StateFlow<TrackingState> = _trackingState
 
@@ -481,7 +498,7 @@ class FaceTrackingController(
             activeYawPid.reset()
             0.0
         } else {
-            activeYawPid.update(errorX, dt)
+            activeYawPid.update(errorX, dt) * yawGainScale
         }
         // NOT negated, despite ManualGimbalController needing a pitch-axis
         // flip for its human-intent (joystick-drag-direction) mapping - that
@@ -494,7 +511,7 @@ class FaceTrackingController(
             activePitchPid.reset()
             0.0
         } else {
-            activePitchPid.update(errorY, dt)
+            activePitchPid.update(errorY, dt) * pitchGainScale
         }
 
         ensureFreeMode()

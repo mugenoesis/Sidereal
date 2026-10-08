@@ -188,7 +188,15 @@ Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume th
 - **Autofocus.** The software autofocus reads the focus ring's range from the camera, but its settings were tuned on
   the 15 mm lens, so another lens may lock slower or less precisely.
 
-None of this has been tried with another lens yet, so tell me how it goes.
+| Lens | Status |
+|---|---|
+| DJI MFT 15mm f/1.7 | Tested; everything in this README was checked on it |
+| Olympus M.Zuiko 45mm f/1.8 | Planned |
+| Olympus M.Zuiko 14-42mm f/3.5-5.6 EZ (power zoom) | Planned |
+| Anything else (Micro Four Thirds) | Untried; should work as above, tell me how it goes |
+
+The [lens test plan](docs/lens-test-plan.md) lists exactly what will be checked on the two Olympus lenses, and
+`tools/lens_test.sh` runs the parts that can be automated.
 
 ## Feature status
 
