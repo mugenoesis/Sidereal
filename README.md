@@ -202,9 +202,10 @@ Sidereal was built and tested with the DJI MFT 15mm f/1.7. It does not assume th
 | Lens | Status |
 |---|---|
 | DJI MFT 15mm f/1.7 | Tested; everything in this README was checked on it |
-| Panasonic Lumix G Vario 12-32mm f/3.5-5.6 | Testing next |
+| Panasonic Lumix G Vario 12-32mm f/3.5-5.6 | Tested at 12, 18 and 32 mm; see the [findings](docs/lens-tests/panasonic-12-32-findings.md) |
 | Olympus M.Zuiko 45mm f/1.8 | Planned |
 | Olympus M.Zuiko 14-42mm f/3.5-5.6 EZ (power zoom) | Planned |
+| Panasonic Lumix G Vario 35-100mm f/4-5.6 | Planned, later (the X5's longest practical reach) |
 | Anything else (Micro Four Thirds) | Untried; should work as above, tell me how it goes |
 
 The [lens test plan](docs/lens-test-plan.md) lists exactly what will be checked on the two Olympus lenses, and

@@ -65,6 +65,24 @@ What good looks like at the end: the lens is reported by name with "12-32mm"; f/
 32 mm; the EXIF focal length is close to each mark; panoramas stitch without gaps with *Focal length* set to the mark, and
 the stitcher corrects itself when left on *Auto*; autofocus locks within about 10 s at 12, 18 and 32 mm.
 
+## What to expect from lenses not yet tested
+
+Written after the Panasonic 12-32mm, to be checked against each new lens (a wrong guess here is a finding). Only the
+15mm and the 12-32mm have been measured; the rest is extrapolation, labelled as such.
+
+| Thing | Measured | Expected for other lenses |
+|---|---|---|
+| Lens name | The camera says "Unknown" for anything but DJI's own lens; the photos' EXIF names it (tap the lens line) | Same for the Olympus lenses and the Panasonic 35-100 |
+| EXIF focal length | Stuck at 12.0 on the 12-32 at every zoom | Do not rely on it for any zoom. A prime's may be right (the 15mm's is); check on the 45mm |
+| Field of view (17.3 mm sensor) | 15 mm 60 degrees, 32 mm 30 degrees | 45 mm about 21, 100 mm about 10. Panoramas need many more frames, dither shrinks with the view, face tracking gains must shrink (already scaled by focal length) |
+| Focus ring range | 2035 (15mm); 1570 at 12 mm up to 3824 at 32 mm on the 12-32 | Grows with the zoom, so a 100 mm end will be large. The app reads it again each time. A lens whose range changes with the zoom is also how the app notices the zoom ring moved |
+| Focus peak width | At 12 mm the hill is about 22% of the ring wide at half height; at 32 mm about 14% | Narrower the longer the lens and the wider the aperture. Expect the 45mm f/1.8 and the 35-100 at 100 mm to be the hardest to lock; the scanning search is the fallback |
+| Picture lag after a ring move | 330-410 ms plus the exposure time | The same camera, so the same. Autofocus waits for it (`FocusLight.settleMs`) |
+| Widest aperture | f/3.5 at 12 mm, f/4 at 18, f/5.6 at 32 mm on the 12-32 | Variable-aperture zooms close down as they zoom in: 14-42 f/3.5 to f/5.6, 35-100 f/4 to f/5.6. The app estimates the steps in a straight line and rounds towards the narrow side |
+| Asking for an aperture the lens cannot make | At 18 mm the camera refuses f/3.5; at 32 mm it accepts f/4, ignores it, and the next shot hangs the camera until it is power-cycled; program mode picks f/4 at 32 mm by itself and hangs | Likely the same on any variable-aperture zoom at its long end, and in program mode. Shoot long-end frames in manual until the lens is known to behave. A constant-aperture lens (the 45mm) has no such trap |
+| Stowed lens | A collapsible zoom (the 12-32) reports a ring position of about -26000 and no error | The Panasonic 35-100 is not collapsible; the Olympus EZ is a power zoom that retracts when the camera sleeps: check what the ring says then |
+| Handle sleep | Gimbal motors stop, camera sags, WiFi stays; wake from the phone takes about 2 s, the camera another 5 s | Not lens-related; but a heavier lens (the 35-100 is the heaviest) may sag faster or fail to balance, so balance and re-tune the gimbal for each lens |
+
 ## 0. Before you start
 
 - Mount the lens with the camera **off**; switch on; wait for the live view.
