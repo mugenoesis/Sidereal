@@ -1,9 +1,8 @@
 # Publishing Sidereal on Google Play
 
 Everything here is prepared in the repository; this page says what to build and what to type into Play Console.
-Listing text is in `store/listing/en-GB/` and the privacy policy in `docs/privacy-policy.md`. No pictures are kept in the
-repository: `python3 store/make_graphics.py` builds the 512 px icon and the feature graphic (drawn from the app icon,
-no photos) into `store/graphics/` when you need them.
+Listing text is in `store/listing/en-GB/`, the icon and feature graphic in `store/graphics/` (drawn from the app icon by
+`python3 store/make_graphics.py`; no photographs), and the privacy policy in `docs/privacy-policy.md`.
 
 ## 1. Build the bundles
 
